@@ -23,24 +23,24 @@ import 'search_screen.dart';
 class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
 
-  const FeedScreen({
-    super.key,
-    required this.onNavigateToFeeds,
-  });
+  const FeedScreen({super.key, required this.onNavigateToFeeds});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
 class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
+  // ── Repos & services ───────────────────────────────────────────────────────
   final _articleRepo = ArticleRepository();
   final _feedRepo = FeedRepository();
   final _folderRepo = FolderRepository();
   final _settingsRepo = SettingsRepository();
   final _shareService = ShareService();
 
+  // ── Scroll ─────────────────────────────────────────────────────────────────
   final ScrollController _scrollController = ScrollController();
 
+  // ── UI state ───────────────────────────────────────────────────────────────
   List<Folder> _folders = [];
   List<Article> _articles = [];
   Map<int, int> _folderUnreadCounts = {};
@@ -50,158 +50,211 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _refreshing = false;
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
-  int _loadGeneration = 0;
-  double _savedScrollOffset = 0.0;
 
-  Timer? _markReadDebounce;
+  // Race guard: only the latest tab-switch result is applied.
+  int _tabGeneration = 0;
+
+  // Mark-as-read-on-scroll debounce
+  Timer? _scrollDebounce;
   final Set<int> _pendingMarkRead = {};
   final List<GlobalKey?> _cardKeys = [];
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _init();
+    _boot();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _markReadDebounce?.cancel();
+    _scrollDebounce?.cancel();
     _scrollController.dispose();
     super.dispose();
   }
 
+  // On every resume (returning from browser, reader, or background), reload
+  // articles from the local DB to pick up any changes made by background
+  // refresh — without triggering a full network fetch and without touching
+  // the scroll position.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _loadAll(showLoading: false);
+    if (state == AppLifecycleState.resumed && !_loading) {
+      _reloadArticles();
     }
   }
 
-  Future<void> _init() async {
-    await _loadSettings();
-    await _loadAll();
-    _scrollController.addListener(_onScroll);
-    _silentRefresh();
-  }
+  // ── Boot ───────────────────────────────────────────────────────────────────
 
-  Future<void> _silentRefresh() async {
-    if (!mounted) return;
-    setState(() => _refreshing = true);
-    try {
-      await RefreshService(_settingsRepo).refreshAll();
-    } finally {
-      await _loadAll(showLoading: false);
-      if (mounted) setState(() => _refreshing = false);
-    }
-  }
-
-  Future<void> _loadSettings() async {
+  Future<void> _boot() async {
     final settings = await _settingsRepo.getAll();
     _markReadOnScroll = settings.markReadOnScroll;
+
+    // Show cached articles immediately.
+    await _loadArticles(showLoading: true);
+    _scrollController.addListener(_onScroll);
+
+    // Then fetch fresh articles from the network in the background.
+    // The refresh spinner in the FAB provides visual feedback.
+    _fetchAndReload();
   }
 
-  Future<void> _loadAll({bool showLoading = true}) async {
+  // ── Core data operations ───────────────────────────────────────────────────
+
+  /// Reads articles for the current tab from the local DB and updates state.
+  /// Always loads with includeRead: true so articles never disappear mid-session
+  /// when marked as read. Pass [unreadOnly: true] only for the post-mark-all-read
+  /// reload, where the intention is to show only freshly arrived articles.
+  Future<void> _loadArticles({
+    bool showLoading = false,
+    bool unreadOnly = false,
+  }) async {
     if (!mounted) return;
-    if (_scrollController.hasClients) {
-      _savedScrollOffset = _scrollController.offset;
-    }
     if (showLoading) setState(() => _loading = true);
 
-    // Fetch folders and feeds in parallel first (articles depend on folder list)
     final (folders, feeds) = await (
       _folderRepo.getAll(),
       _feedRepo.getAll(),
     ).wait;
 
-    final safeTabIndex = _selectedTabIndex.clamp(0, folders.length);
+    final safeTab = _selectedTabIndex.clamp(0, folders.length);
 
-    // Fetch articles and counts in parallel
     final (articles, folderCounts, allCount) = await (
-      _articlesForTab(safeTabIndex, folders),
+      _articlesForTab(safeTab, folders, unreadOnly: unreadOnly),
       _articleRepo.getAllFolderUnreadCounts(),
       _articleRepo.getUnreadCount(),
     ).wait;
 
-    if (mounted) {
-      setState(() {
-        _folders = folders;
-        _hasFeeds = feeds.isNotEmpty;
-        _selectedTabIndex = safeTabIndex;
-        _articles = articles;
-        _cardKeys
-          ..clear()
-          ..addAll(List.generate(articles.length, (_) => GlobalKey()));
-        _folderUnreadCounts = folderCounts;
-        _allUnreadCount = allCount;
-        _loading = false;
-      });
-      _updateBadge(allCount);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients && _savedScrollOffset > 0) {
-          _scrollController.jumpTo(
-            _savedScrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
-          );
-        }
-      });
+    if (!mounted) return;
+    setState(() {
+      _folders = folders;
+      _hasFeeds = feeds.isNotEmpty;
+      _selectedTabIndex = safeTab;
+      _articles = articles;
+      _cardKeys
+        ..clear()
+        ..addAll(List.generate(articles.length, (_) => GlobalKey()));
+      _folderUnreadCounts = folderCounts;
+      _allUnreadCount = allCount;
+      _loading = false;
+    });
+    AppBadgePlus.updateBadge(allCount);
+  }
+
+  /// Reloads articles from DB while preserving the current scroll position.
+  /// Used on app resume — picks up background-refresh results without jumping.
+  Future<void> _reloadArticles() async {
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    await _loadArticles();
+    _restoreScrollOffset(offset);
+  }
+
+  Future<List<Article>> _articlesForTab(
+    int tab,
+    List<Folder> folders, {
+    bool unreadOnly = false,
+  }) {
+    if (tab == 0) return _articleRepo.getAll(includeRead: !unreadOnly);
+    return _articleRepo.getForFolder(folders[tab - 1].id!, includeRead: !unreadOnly);
+  }
+
+  void _restoreScrollOffset(double offset) {
+    if (offset <= 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      if (max > 0) _scrollController.jumpTo(offset.clamp(0.0, max));
+    });
+  }
+
+  // ── Network refresh ────────────────────────────────────────────────────────
+
+  /// Fetches all feeds from the network then reloads the local DB into state.
+  /// Saves and restores the scroll position so the list doesn't jump.
+  Future<void> _fetchAndReload() async {
+    if (!mounted || _refreshing) return;
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    setState(() => _refreshing = true);
+    try {
+      await RefreshService(_settingsRepo).refreshAll();
+    } finally {
+      await _loadArticles();
+      if (mounted) setState(() => _refreshing = false);
+      _restoreScrollOffset(offset);
     }
   }
 
-  Future<List<Article>> _articlesForTab(int tabIndex, List<Folder> folders, {bool unreadOnly = false}) async {
-    if (tabIndex == 0) return _articleRepo.getAll(includeRead: !unreadOnly);
-    final folder = folders[tabIndex - 1];
-    return _articleRepo.getForFolder(folder.id!, includeRead: !unreadOnly);
-  }
-
+  /// Manual refresh — fetches only the current tab's feeds.
   Future<void> _refreshCurrentTab() async {
     if (_refreshing) return;
-    setState(() => _refreshing = true);
     HapticFeedback.lightImpact();
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    setState(() => _refreshing = true);
     try {
-      final refreshSvc = RefreshService(_settingsRepo);
+      final svc = RefreshService(_settingsRepo);
       if (_selectedTabIndex == 0) {
-        await refreshSvc.refreshAll();
+        await svc.refreshAll();
       } else {
-        final folder = _folders[_selectedTabIndex - 1];
-        final feeds = await _feedRepo.getByFolder(folder.id!);
-        for (final feed in feeds) {
-          await refreshSvc.refreshFeed(feed);
-        }
+        final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
+        for (final f in feeds) { await svc.refreshFeed(f); }
       }
     } finally {
-      await _loadAll();
+      await _loadArticles();
       if (mounted) setState(() => _refreshing = false);
+      _restoreScrollOffset(offset);
     }
   }
 
-  void _onScroll() {
-    if (!_markReadOnScroll) return;
-    if (_articles.isEmpty) return;
+  // ── Tab switching ──────────────────────────────────────────────────────────
 
-    final scrollOffset = _scrollController.offset;
+  Future<void> _onTabSelected(int index) async {
+    if (index == _selectedTabIndex) return;
+    final gen = ++_tabGeneration;
+    setState(() {
+      _selectedTabIndex = index;
+      _loading = true;
+    });
+    final articles = await _articlesForTab(index, _folders);
+    if (!mounted || gen != _tabGeneration) return;
+    setState(() {
+      _articles = articles;
+      _cardKeys
+        ..clear()
+        ..addAll(List.generate(articles.length, (_) => GlobalKey()));
+      _loading = false;
+    });
+    // New tab always starts at the top.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) _scrollController.jumpTo(0);
+    });
+  }
+
+  // ── Mark as read on scroll ─────────────────────────────────────────────────
+
+  void _onScroll() {
+    if (!_markReadOnScroll || _articles.isEmpty) return;
+    final offset = _scrollController.offset;
     double cumulative = 0.0;
     for (int i = 0; i < _articles.length; i++) {
       final key = i < _cardKeys.length ? _cardKeys[i] : null;
-      double cardHeight = 120.0;
+      double h = 120.0;
       if (key?.currentContext != null) {
         final box = key!.currentContext!.findRenderObject() as RenderBox?;
-        if (box != null && box.hasSize) cardHeight = box.size.height;
+        if (box != null && box.hasSize) h = box.size.height;
       }
-      // Mark read when the card's midpoint scrolls above the viewport top.
-      if (cumulative + cardHeight / 2 < scrollOffset) {
-        final article = _articles[i];
-        if (!article.isRead && article.id != null) {
-          _pendingMarkRead.add(article.id!);
-        }
+      if (cumulative + h / 2 < offset) {
+        final a = _articles[i];
+        if (!a.isRead && a.id != null) _pendingMarkRead.add(a.id!);
       } else {
         break;
       }
-      cumulative += cardHeight;
+      cumulative += h;
     }
-
-    _markReadDebounce?.cancel();
-    _markReadDebounce = Timer(const Duration(milliseconds: 250), _flushMarkRead);
+    _scrollDebounce?.cancel();
+    _scrollDebounce = Timer(const Duration(milliseconds: 250), _flushMarkRead);
   }
 
   Future<void> _flushMarkRead() async {
@@ -209,45 +262,139 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final ids = Set<int>.from(_pendingMarkRead);
     _pendingMarkRead.clear();
     await _articleRepo.markManyRead(ids.toList());
-    if (mounted) {
-      setState(() {
-        for (int i = 0; i < _articles.length; i++) {
-          if (ids.contains(_articles[i].id)) {
-            _articles[i] = _articles[i].copyWith(isRead: true);
+    if (!mounted) return;
+    setState(() {
+      for (int i = 0; i < _articles.length; i++) {
+        if (ids.contains(_articles[i].id)) {
+          _articles[i] = _articles[i].copyWith(isRead: true);
+        }
+      }
+      _allUnreadCount = (_allUnreadCount - ids.length).clamp(0, _allUnreadCount);
+    });
+    AppBadgePlus.updateBadge(_allUnreadCount);
+  }
+
+  // ── Article actions ────────────────────────────────────────────────────────
+
+  Future<void> _openArticle(Article article) async {
+    final settings = await _settingsRepo.getAll();
+    final wasUnread = article.id != null && !article.isRead;
+    if (wasUnread) await _articleRepo.markRead(article.id!);
+    if (!mounted) return;
+
+    // Save scroll position now, before any navigation or lifecycle events fire.
+    final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+
+    final uri = Uri.tryParse(article.url);
+    if (uri == null) return;
+
+    if (settings.readerMode) {
+      final domain = uri.host;
+      final cached = await _settingsRepo.get('reader_compat_$domain');
+      if (cached == 'fail') {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (cached == null) {
+          final isHtml = await _preflightIsHtml(uri);
+          if (!isHtml) {
+            await _settingsRepo.set('reader_compat_$domain', 'fail');
+            if (mounted) await launchUrl(uri, mode: LaunchMode.externalApplication);
+            return;
           }
         }
-        _allUnreadCount = (_allUnreadCount - ids.length).clamp(0, _allUnreadCount);
-      });
-      _updateBadge(_allUnreadCount);
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ReaderScreen(
+              article: article,
+              fontSize: settings.articleFontSize,
+              onExtractionSucceeded: () =>
+                  _settingsRepo.set('reader_compat_$domain', 'ok'),
+              onExtractionFailed: () =>
+                  _settingsRepo.set('reader_compat_$domain', 'fail'),
+            ),
+          ),
+        );
+      }
+    } else {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
-  }
 
-  void _updateBadge(int count) {
-    AppBadgePlus.updateBadge(count);
-  }
-
-  Future<void> _onTabSelected(int index) async {
-    if (index == _selectedTabIndex) return;
-    _savedScrollOffset = 0.0; // new tab always starts at top
-    setState(() {
-      _selectedTabIndex = index;
-      _loading = true;
-    });
-    final generation = ++_loadGeneration;
-    final articles = await _articlesForTab(index, _folders);
-    if (mounted && generation == _loadGeneration) {
+    // Update the article's read state in-place — no DB reload, no list rebuild.
+    // This keeps the list stable and the scroll position intact.
+    if (wasUnread && mounted) {
       setState(() {
-        _articles = articles;
-        _cardKeys
-          ..clear()
-          ..addAll(List.generate(articles.length, (_) => GlobalKey()));
-        _loading = false;
+        _articles = [
+          for (final a in _articles)
+            a.id == article.id ? a.copyWith(isRead: true) : a,
+        ];
+        _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
       });
+      AppBadgePlus.updateBadge(_allUnreadCount);
+    }
+
+    // Restore the exact scroll position the user was at before opening the article.
+    // This runs after the state update above so the list has the right height.
+    _restoreScrollOffset(scrollOffset);
+  }
+
+  Future<bool> _preflightIsHtml(Uri uri) async {
+    try {
+      final r = await http.head(uri).timeout(const Duration(seconds: 5));
+      return (r.headers['content-type'] ?? '').contains('text/html');
+    } catch (_) {
+      return true;
     }
   }
+
+  Future<void> _markRead(Article article) async {
+    if (article.id == null || article.isRead) return;
+    await _articleRepo.markRead(article.id!);
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    setState(() {
+      _articles = [
+        for (final a in _articles)
+          a.id == article.id ? a.copyWith(isRead: true) : a,
+      ];
+      _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
+    });
+    AppBadgePlus.updateBadge(_allUnreadCount);
+  }
+
+  Future<void> _markUnread(Article article) async {
+    if (article.id == null || !article.isRead) return;
+    await _articleRepo.markUnread(article.id!);
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    setState(() {
+      _articles = [
+        for (final a in _articles)
+          a.id == article.id ? a.copyWith(isRead: false) : a,
+      ];
+      _allUnreadCount++;
+    });
+    AppBadgePlus.updateBadge(_allUnreadCount);
+  }
+
+  Future<void> _toggleSaved(Article article) async {
+    if (article.id == null) return;
+    final nowSaved = !article.isSaved;
+    await _articleRepo.setSaved(article.id!, saved: nowSaved);
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    setState(() {
+      _articles = [
+        for (final a in _articles)
+          a.id == article.id ? a.copyWith(isSaved: nowSaved) : a,
+      ];
+    });
+  }
+
+  // ── Mark all read ──────────────────────────────────────────────────────────
 
   Future<void> _markAllRead() async {
-    // Show a one-time confirmation dialog the very first time this is tapped.
     final warned = (await _settingsRepo.get('mark_all_read_warned')) == 'true';
     if (!warned) {
       if (!mounted) return;
@@ -274,58 +421,37 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
 
     HapticFeedback.mediumImpact();
+
+    // Step 1 — Mark all as read in the DB.
     if (_selectedTabIndex == 0) {
       await _articleRepo.markAllRead();
     } else {
-      final folder = _folders[_selectedTabIndex - 1];
-      await _articleRepo.markAllReadForFolder(folder.id!);
+      await _articleRepo.markAllReadForFolder(_folders[_selectedTabIndex - 1].id!);
     }
 
-    // Clear the list immediately so the user sees it empty right away.
-    if (mounted) {
-      setState(() {
-        _articles = [];
-        _cardKeys.clear();
-        _allUnreadCount = 0;
-      });
-      _updateBadge(0);
-    }
+    // Step 2 — Clear the list immediately for instant feedback.
+    if (!mounted) return;
+    setState(() {
+      _articles = [];
+      _cardKeys.clear();
+      _allUnreadCount = 0;
+    });
+    AppBadgePlus.updateBadge(0);
 
-    // Refresh feeds to pick up any new articles published since last fetch.
-    if (mounted) setState(() => _refreshing = true);
+    // Step 3 — Fetch fresh articles from the network.
+    setState(() => _refreshing = true);
     try {
-      final refreshSvc = RefreshService(_settingsRepo);
+      final svc = RefreshService(_settingsRepo);
       if (_selectedTabIndex == 0) {
-        await refreshSvc.refreshAll();
+        await svc.refreshAll();
       } else {
-        final folder = _folders[_selectedTabIndex - 1];
-        final feeds = await _feedRepo.getByFolder(folder.id!);
-        for (final feed in feeds) {
-          await refreshSvc.refreshFeed(feed);
-        }
+        final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
+        for (final f in feeds) { await svc.refreshFeed(f); }
       }
     } finally {
-      // Reload unread-only so only freshly fetched articles appear.
-      if (mounted) {
-        final (articles, folderCounts, allCount) = await (
-          _articlesForTab(_selectedTabIndex, _folders, unreadOnly: true),
-          _articleRepo.getAllFolderUnreadCounts(),
-          _articleRepo.getUnreadCount(),
-        ).wait;
-        if (mounted) {
-          setState(() {
-            _articles = articles;
-            _cardKeys
-              ..clear()
-              ..addAll(List.generate(articles.length, (_) => GlobalKey()));
-            _folderUnreadCounts = folderCounts;
-            _allUnreadCount = allCount;
-            _refreshing = false;
-          });
-          _updateBadge(allCount);
-          _savedScrollOffset = 0.0;
-        }
-      }
+      // Step 4 — Reload unread-only: nothing previously read reappears.
+      await _loadArticles(unreadOnly: true);
+      if (mounted) setState(() => _refreshing = false);
     }
 
     if (mounted) {
@@ -335,138 +461,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openArticle(Article article) async {
-    // Always read fresh so Settings-tab changes take effect immediately.
-    final settings = await _settingsRepo.getAll();
-
-    final wasUnread = article.id != null && !article.isRead;
-    if (wasUnread) {
-      await _articleRepo.markRead(article.id!);
-    }
-
-    if (!mounted) return;
-
-    final uri = Uri.tryParse(article.url);
-    if (uri == null) return;
-
-    if (settings.readerMode) {
-      final domain = uri.host;
-      final cached = await _settingsRepo.get('reader_compat_$domain');
-
-      if (cached == 'fail') {
-        // Known incompatible domain — go straight to browser.
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return;
-      }
-
-      if (cached == null) {
-        // Unknown domain — pre-flight HEAD check before showing reader.
-        final isHtml = await _preflightIsHtml(uri);
-        if (!isHtml) {
-          await _settingsRepo.set('reader_compat_$domain', 'fail');
-          if (mounted) await launchUrl(uri, mode: LaunchMode.externalApplication);
-          return;
-        }
-      }
-
-      if (!mounted) return;
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ReaderScreen(
-            article: article,
-            fontSize: settings.articleFontSize,
-            onExtractionSucceeded: () =>
-                _settingsRepo.set('reader_compat_$domain', 'ok'),
-            onExtractionFailed: () =>
-                _settingsRepo.set('reader_compat_$domain', 'fail'),
-          ),
-        ),
-      );
-      // Apply read state after pop so the setState doesn't cause a scroll jump.
-      if (wasUnread && mounted) {
-        setState(() {
-          _articles = _articles.map((a) {
-            if (a.id == article.id) return a.copyWith(isRead: true);
-            return a;
-          }).toList();
-          _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
-        });
-      }
-    } else {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-      // App resume is handled by didChangeAppLifecycleState(resumed).
-      if (wasUnread && mounted) {
-        setState(() {
-          _articles = _articles.map((a) {
-            if (a.id == article.id) return a.copyWith(isRead: true);
-            return a;
-          }).toList();
-          _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
-        });
-      }
-    }
-  }
-
-  /// HEAD request to check if a URL serves HTML. Returns true if it does or
-  /// if the check itself fails (optimistic — let the extractor try).
-  Future<bool> _preflightIsHtml(Uri uri) async {
-    try {
-      final response =
-          await http.head(uri).timeout(const Duration(seconds: 5));
-      final ct = response.headers['content-type'] ?? '';
-      return ct.contains('text/html');
-    } catch (_) {
-      return true;
-    }
-  }
-
-  Future<void> _markRead(Article article) async {
-    if (article.id == null || article.isRead) return;
-    await _articleRepo.markRead(article.id!);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles.map((a) {
-          if (a.id == article.id) return a.copyWith(isRead: true);
-          return a;
-        }).toList();
-        _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
-      });
-    }
-  }
-
-
-  Future<void> _markUnread(Article article) async {
-    if (article.id == null || !article.isRead) return;
-    await _articleRepo.markUnread(article.id!);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles.map((a) {
-          if (a.id == article.id) return a.copyWith(isRead: false);
-          return a;
-        }).toList();
-        _allUnreadCount++;
-      });
-    }
-  }
-
-  Future<void> _toggleSaved(Article article) async {
-    if (article.id == null) return;
-    final nowSaved = !article.isSaved;
-    await _articleRepo.setSaved(article.id!, saved: nowSaved);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles.map((a) {
-          if (a.id == article.id) return a.copyWith(isSaved: nowSaved);
-          return a;
-        }).toList();
-      });
-    }
-  }
-
+  // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -539,15 +534,18 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   Widget _buildContent() {
     final l10n = AppLocalizations.of(context)!;
+
     if (!_hasFeeds) {
       return EmptyState(onAddFeed: widget.onNavigateToFeeds);
     }
+
     if (_loading) {
       return ListView.builder(
         itemCount: 8,
         itemBuilder: (_, __) => const ShimmerCard(),
       );
     }
+
     if (_articles.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refreshCurrentTab,
@@ -560,23 +558,27 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               l10n.noArticlesYet,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
                   ),
             ),
           ],
         ),
       );
     }
+
     return RefreshIndicator(
       onRefresh: _refreshCurrentTab,
       backgroundColor: Theme.of(context).colorScheme.surface,
       child: ListView.separated(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        cacheExtent: 300,
-        addAutomaticKeepAlives: false,
+        cacheExtent: 500,
         itemCount: _articles.length,
-        separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+        separatorBuilder: (_, __) =>
+            const Divider(height: 1, indent: 16, endIndent: 16),
         itemBuilder: (context, i) {
           final article = _articles[i];
           final cardKey = i < _cardKeys.length ? _cardKeys[i] : null;
