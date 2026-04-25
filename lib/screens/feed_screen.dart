@@ -216,6 +216,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   Future<void> _onTabSelected(int index) async {
     if (index == _selectedTabIndex) return;
+    _savedScrollOffset = 0.0; // new tab always starts at top
     setState(() {
       _selectedTabIndex = index;
       _loading = true;
