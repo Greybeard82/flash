@@ -1,34 +1,21 @@
-String formatRelativeTime(DateTime? dateTime) {
+import '../l10n/app_localizations.dart';
+
+String formatRelativeTime(DateTime? dateTime, AppLocalizations l10n) {
   if (dateTime == null) return '';
   final now = DateTime.now();
   final diff = now.difference(dateTime);
 
-  if (diff.inSeconds < 60) return 'just now';
-  if (diff.inMinutes < 60) {
-    final m = diff.inMinutes;
-    return '${m}m ago';
-  }
-  if (diff.inHours < 24) {
-    final h = diff.inHours;
-    return '${h}h ago';
-  }
-  if (diff.inDays < 7) {
-    final d = diff.inDays;
-    return d == 1 ? 'yesterday' : '${d}d ago';
-  }
-  if (diff.inDays < 30) {
-    final w = (diff.inDays / 7).floor();
-    return w == 1 ? '1 week ago' : '${w} weeks ago';
-  }
-  if (diff.inDays < 365) {
-    final mo = (diff.inDays / 30).floor();
-    return mo == 1 ? '1 month ago' : '${mo} months ago';
-  }
-  final y = (diff.inDays / 365).floor();
-  return y == 1 ? '1 year ago' : '${y} years ago';
+  if (diff.inSeconds < 60) return l10n.timeJustNow;
+  if (diff.inMinutes < 60) return l10n.timeMinAgo(diff.inMinutes);
+  if (diff.inHours < 24) return l10n.timeHourAgo(diff.inHours);
+  if (diff.inDays == 1) return l10n.timeYesterday;
+  if (diff.inDays < 7) return l10n.timeDaysAgo(diff.inDays);
+  if (diff.inDays < 30) return l10n.timeWeeksAgo((diff.inDays / 7).floor());
+  if (diff.inDays < 365) return l10n.timeMonthsAgo((diff.inDays / 30).floor());
+  return l10n.timeYearsAgo((diff.inDays / 365).floor());
 }
 
-String formatRelativeTimestamp(int? millis) {
+String formatRelativeTimestamp(int? millis, AppLocalizations l10n) {
   if (millis == null) return '';
-  return formatRelativeTime(DateTime.fromMillisecondsSinceEpoch(millis));
+  return formatRelativeTime(DateTime.fromMillisecondsSinceEpoch(millis), l10n);
 }

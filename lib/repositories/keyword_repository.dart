@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/keyword_block.dart';
+import '../utils/keyword_matcher.dart';
 
 class KeywordRepository {
   Future<Database> get _db async => AppDatabase.instance.database;
@@ -45,18 +46,10 @@ class KeywordRepository {
   static KeywordBlock? findMatch(
       String title, String? description, List<KeywordBlock> keywords) {
     if (keywords.isEmpty) return null;
-    final haystack =
-        '${title.toLowerCase()} ${(description ?? '').toLowerCase()}';
+    final haystack = KeywordMatcher.buildHaystack(title, description);
     for (final kw in keywords) {
-      final needle = kw.keyword.toLowerCase();
-      if (kw.wholeWord) {
-        final pattern = RegExp(
-          r'\b' + RegExp.escape(needle) + r'\b',
-          caseSensitive: false,
-        );
-        if (pattern.hasMatch(haystack)) return kw;
-      } else {
-        if (haystack.contains(needle)) return kw;
+      if (KeywordMatcher.matches(kw.keyword, haystack, wholeWord: kw.wholeWord)) {
+        return kw;
       }
     }
     return null;

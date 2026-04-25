@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../repositories/feed_repository.dart';
@@ -10,6 +9,7 @@ import '../services/rss_service.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../widgets/feed_card.dart';
+import '../l10n/app_localizations.dart';
 
 class FeedsScreen extends StatefulWidget {
   const FeedsScreen({super.key});
@@ -51,9 +51,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feeds'),
+        title: Text(l10n.categories),
         centerTitle: false,
       ),
       floatingActionButton: Column(
@@ -63,7 +64,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
           FloatingActionButton(
             heroTag: 'new_category',
             onPressed: _showAddFolderSheet,
-            tooltip: 'New category',
+            tooltip: l10n.newCategory,
             child: const Icon(Icons.new_label_outlined),
           ),
           const SizedBox(height: 12),
@@ -71,7 +72,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
             heroTag: 'add_feed',
             onPressed: _showAddFeedSheet,
             icon: const Icon(Icons.add),
-            label: const Text('Add feed'),
+            label: Text(l10n.addFeed),
           ),
         ],
       ),
@@ -79,7 +80,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _feeds.isEmpty && _folders.isEmpty
               ? _emptyFeedsState()
-              : _buildList(),
+              : RefreshIndicator(onRefresh: _load, child: _buildList()),
     );
   }
 
@@ -90,51 +91,74 @@ class _FeedsScreenState extends State<FeedsScreen> {
       grouped.putIfAbsent(feed.folderId, () => []).add(feed);
     }
 
-    final sections = <Widget>[];
-
-    for (final folder in _folders) {
-      final folderFeeds = grouped[folder.id] ?? [];
-      sections.add(_FolderSection(
-        folder: folder,
-        feeds: folderFeeds,
-        unreadCounts: _unreadCounts,
-        onRenameFolder: () => _showRenameFolderSheet(folder),
-        onDeleteFolder: () => _confirmDeleteFolder(folder),
-        onEditFeed: (feed) => _showEditFeedSheet(feed),
-        onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
-      ));
-    }
-
-    // Uncategorized or feeds whose folder doesn't exist in the list
+    // Uncategorized feeds pinned at the bottom, outside the reorderable list
     final folderIds = _folders.map((f) => f.id).toSet();
-    final orphanFeeds = _feeds.where((f) => !folderIds.contains(f.folderId)).toList();
-    if (orphanFeeds.isNotEmpty) {
-      sections.add(_FolderSection(
-        folder: null,
-        feeds: orphanFeeds,
-        unreadCounts: _unreadCounts,
-        onRenameFolder: null,
-        onDeleteFolder: null,
-        onEditFeed: (feed) => _showEditFeedSheet(feed),
-        onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
-      ));
-    }
+    final orphanFeeds =
+        _feeds.where((f) => !folderIds.contains(f.folderId)).toList();
 
-    return ListView(
+    return ReorderableListView(
       padding: const EdgeInsets.only(bottom: 80),
-      children: sections,
+      buildDefaultDragHandles: false,
+      onReorder: _onReorderFolders,
+      footer: orphanFeeds.isNotEmpty
+          ? _FolderSection(
+              key: const ValueKey('orphan'),
+              folder: null,
+              feeds: orphanFeeds,
+              unreadCounts: _unreadCounts,
+              onRenameFolder: null,
+              onDeleteFolder: null,
+              onEditFeed: (feed) => _showEditFeedSheet(feed),
+              onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
+              onReorderFeeds: null,
+              dragIndex: null,
+            )
+          : null,
+      children: [
+        for (int i = 0; i < _folders.length; i++)
+          _FolderSection(
+            key: ValueKey(_folders[i].id),
+            folder: _folders[i],
+            feeds: grouped[_folders[i].id] ?? [],
+            unreadCounts: _unreadCounts,
+            onRenameFolder: () => _showRenameFolderSheet(_folders[i]),
+            onDeleteFolder: () => _confirmDeleteFolder(_folders[i]),
+            onEditFeed: (feed) => _showEditFeedSheet(feed),
+            onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
+            onReorderFeeds: (feeds) => _reorderFeeds(_folders[i], feeds),
+            dragIndex: i,
+          ),
+      ],
     );
   }
 
+  void _onReorderFolders(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
+    setState(() {
+      final folder = _folders.removeAt(oldIndex);
+      _folders.insert(newIndex, folder);
+    });
+    _folderRepo.reorder(_folders);
+  }
+
+  Future<void> _reorderFeeds(Folder folder, List<Feed> feeds) async {
+    await _feedRepo.reorder(feeds);
+  }
+
   Widget _emptyFeedsState() {
+    final l10n = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.rss_feed, size: 64,
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3)),
+          Icon(Icons.rss_feed,
+              size: 64,
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withValues(alpha: 0.3)),
           const SizedBox(height: 16),
-          Text('No feeds yet.',
+          Text(l10n.noFeedsYet,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
@@ -169,11 +193,12 @@ class _FeedsScreenState extends State<FeedsScreen> {
   // ── Add folder ──
 
   void _showAddFolderSheet() {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _FolderNameSheet(
-        title: 'New category',
+        title: l10n.newCategory,
         onSave: (name) async {
           final position = await _folderRepo.getNextPosition();
           final now = DateTime.now().millisecondsSinceEpoch;
@@ -189,11 +214,12 @@ class _FeedsScreenState extends State<FeedsScreen> {
   // ── Rename folder ──
 
   void _showRenameFolderSheet(Folder folder) {
+    final l10n = AppLocalizations.of(context)!;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _FolderNameSheet(
-        title: 'Rename category',
+        title: l10n.renameCategory,
         initialValue: folder.name,
         onSave: (name) async {
           await _folderRepo.update(folder.copyWith(name: name));
@@ -206,13 +232,13 @@ class _FeedsScreenState extends State<FeedsScreen> {
   // ── Delete folder ──
 
   Future<void> _confirmDeleteFolder(Folder folder) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       builder: (ctx) => _ConfirmSheet(
-        title: 'Delete category',
-        message:
-            'Delete "${folder.name}"? All feeds and articles in this category will be deleted.',
-        confirmLabel: 'Delete',
+        title: l10n.deleteCategory,
+        message: l10n.deleteFolderMessage(folder.name),
+        confirmLabel: l10n.delete,
         isDestructive: true,
       ),
     );
@@ -240,13 +266,13 @@ class _FeedsScreenState extends State<FeedsScreen> {
   // ── Delete feed ──
 
   Future<void> _confirmDeleteFeed(Feed feed) async {
+    final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       builder: (ctx) => _ConfirmSheet(
-        title: 'Remove feed',
-        message:
-            'Remove "${feed.title}"? All cached articles will be deleted.',
-        confirmLabel: 'Remove',
+        title: l10n.removeFeed,
+        message: l10n.removeFeedMessage(feed.title),
+        confirmLabel: l10n.remove,
         isDestructive: true,
       ),
     );
@@ -254,7 +280,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       await _feedRepo.delete(feed.id!);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('"${feed.title}" removed')),
+          SnackBar(content: Text(l10n.feedRemoved(feed.title))),
         );
       }
       _load();
@@ -264,7 +290,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
 
 // ── Folder section ──
 
-class _FolderSection extends StatelessWidget {
+class _FolderSection extends StatefulWidget {
   final Folder? folder;
   final List<Feed> feeds;
   final Map<int, int> unreadCounts;
@@ -272,8 +298,11 @@ class _FolderSection extends StatelessWidget {
   final VoidCallback? onDeleteFolder;
   final ValueChanged<Feed> onEditFeed;
   final ValueChanged<Feed> onDeleteFeed;
+  final ValueChanged<List<Feed>>? onReorderFeeds;
+  final int? dragIndex;
 
   const _FolderSection({
+    super.key,
     required this.folder,
     required this.feeds,
     required this.unreadCounts,
@@ -281,52 +310,160 @@ class _FolderSection extends StatelessWidget {
     required this.onDeleteFolder,
     required this.onEditFeed,
     required this.onDeleteFeed,
+    required this.onReorderFeeds,
+    required this.dragIndex,
   });
 
   @override
+  State<_FolderSection> createState() => _FolderSectionState();
+}
+
+class _FolderSectionState extends State<_FolderSection>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = true;
+  late final AnimationController _chevronController;
+  late List<Feed> _localFeeds;
+
+  @override
+  void initState() {
+    super.initState();
+    _localFeeds = List.of(widget.feeds);
+    _chevronController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      value: 1.0, // starts expanded
+    );
+  }
+
+  @override
+  void didUpdateWidget(_FolderSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.feeds != widget.feeds) {
+      _localFeeds = List.of(widget.feeds);
+    }
+  }
+
+  @override
+  void dispose() {
+    _chevronController.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    if (_expanded) {
+      _chevronController.forward();
+    } else {
+      _chevronController.reverse();
+    }
+  }
+
+  void _onReorderFeeds(int oldIndex, int newIndex) {
+    if (newIndex > oldIndex) newIndex--;
+    setState(() {
+      final feed = _localFeeds.removeAt(oldIndex);
+      _localFeeds.insert(newIndex, feed);
+    });
+    widget.onReorderFeeds?.call(_localFeeds);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final name = folder?.name ?? 'Uncategorised';
+    final name = widget.folder?.name ?? l10n.uncategorised;
+    final canReorderFolders = widget.dragIndex != null;
+    final canReorderFeeds = widget.onReorderFeeds != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Folder header
+        // Folder header — tap to collapse, long-press for actions
         InkWell(
-          onLongPress: folder != null
+          onTap: _toggle,
+          onLongPress: widget.folder != null
               ? () => showModalBottomSheet(
                     context: context,
                     builder: (ctx) => _FolderActionsSheet(
-                      folder: folder!,
-                      onRename: onRenameFolder,
-                      onDelete: onDeleteFolder,
+                      folder: widget.folder!,
+                      onRename: widget.onRenameFolder,
+                      onDelete: widget.onDeleteFolder,
                     ),
                   )
               : null,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
             child: Row(
               children: [
                 Icon(Icons.label_outline_rounded,
-                    size: 16,
-                    color: theme.colorScheme.primary),
+                    size: 16, color: theme.colorScheme.primary),
                 const SizedBox(width: 6),
-                Text(
-                  name,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary,
+                Expanded(
+                  child: Text(
+                    name,
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
                 ),
+                RotationTransition(
+                  turns: Tween(begin: -0.25, end: 0.0)
+                      .animate(_chevronController),
+                  child: Icon(Icons.expand_more_rounded,
+                      size: 18,
+                      color: theme.colorScheme.primary.withValues(alpha: 0.7)),
+                ),
+                if (canReorderFolders) ...[
+                  const SizedBox(width: 4),
+                  ReorderableDragStartListener(
+                    index: widget.dragIndex!,
+                    child: Icon(Icons.drag_handle_rounded,
+                        size: 20,
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.35)),
+                  ),
+                ],
               ],
             ),
           ),
         ),
-        ...feeds.map((feed) => FeedCard(
-              feed: feed,
-              unreadCount: unreadCounts[feed.id] ?? 0,
-              onEdit: () => _showFeedMenu(context, feed),
-            )),
+        // Animated expand/collapse
+        AnimatedSize(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeInOut,
+          child: _expanded
+              ? canReorderFeeds && _localFeeds.isNotEmpty
+                  ? ReorderableListView(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      onReorder: _onReorderFeeds,
+                      children: [
+                        for (int i = 0; i < _localFeeds.length; i++)
+                          _ReorderableFeedRow(
+                            key: ValueKey(_localFeeds[i].id),
+                            feed: _localFeeds[i],
+                            unreadCount:
+                                widget.unreadCounts[_localFeeds[i].id] ?? 0,
+                            onEdit: () =>
+                                _showFeedMenu(context, _localFeeds[i]),
+                            dragIndex: i,
+                          ),
+                      ],
+                    )
+                  : Column(
+                      children: _localFeeds
+                          .map((feed) => FeedCard(
+                                feed: feed,
+                                unreadCount:
+                                    widget.unreadCounts[feed.id] ?? 0,
+                                onEdit: () => _showFeedMenu(context, feed),
+                              ))
+                          .toList(),
+                    )
+              : const SizedBox.shrink(),
+        ),
         const Divider(height: 1),
       ],
     );
@@ -337,9 +474,53 @@ class _FolderSection extends StatelessWidget {
       context: context,
       builder: (ctx) => _FeedActionsSheet(
         feed: feed,
-        onEdit: () => onEditFeed(feed),
-        onDelete: () => onDeleteFeed(feed),
+        onEdit: () => widget.onEditFeed(feed),
+        onDelete: () => widget.onDeleteFeed(feed),
       ),
+    );
+  }
+}
+
+// ── Reorderable feed row ──
+
+class _ReorderableFeedRow extends StatelessWidget {
+  final Feed feed;
+  final int unreadCount;
+  final VoidCallback onEdit;
+  final int dragIndex;
+
+  const _ReorderableFeedRow({
+    super.key,
+    required this.feed,
+    required this.unreadCount,
+    required this.onEdit,
+    required this.dragIndex,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: FeedCard(
+            feed: feed,
+            unreadCount: unreadCount,
+            onEdit: onEdit,
+          ),
+        ),
+        ReorderableDragStartListener(
+          index: dragIndex,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Icon(
+              Icons.drag_handle_rounded,
+              size: 20,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -382,7 +563,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   @override
   void initState() {
     super.initState();
-    if (widget.folders.isNotEmpty) _selectedFolder = widget.folders.first;
+    // _selectedFolder intentionally starts null — user must pick a category
   }
 
   @override
@@ -392,6 +573,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   }
 
   Future<void> _search() async {
+    final l10n = AppLocalizations.of(context)!;
     final query = _controller.text.trim();
     if (query.isEmpty) return;
 
@@ -409,36 +591,37 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
         setState(() {
           _results = results;
           _searching = false;
-          if (results.isEmpty) _error = 'No feeds found. Try a URL instead.';
+          if (results.isEmpty) _error = l10n.noFeedsFound;
         });
       }
     }
   }
 
   Future<void> _addByUrl(String url) async {
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _adding = true);
     try {
       // Ensure folder exists
-      final folderId = await _ensureFolder();
+      final folderId = await _ensureFolder(context);
       if (folderId == null) return;
 
       // Check duplicate
       final existing = await widget.feedRepo.getByUrl(url);
       if (existing != null) {
         setState(() {
-          _error = 'This feed is already added.';
+          _error = l10n.feedAlreadyAdded;
           _searching = false;
           _adding = false;
         });
         return;
       }
 
-      final rssService = RssService(
-          widget.articleRepo, widget.feedRepo, widget.settingsRepo);
+      final rssService =
+          RssService(widget.articleRepo, widget.feedRepo, widget.settingsRepo);
       final info = await rssService.validateFeedUrl(url);
       if (info == null) {
         setState(() {
-          _error = 'Could not parse feed at this URL.';
+          _error = l10n.couldNotParseFeed;
           _searching = false;
           _adding = false;
         });
@@ -478,7 +661,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to add feed: $e';
+          _error = l10n.failedToAddFeed(e.toString());
           _searching = false;
           _adding = false;
         });
@@ -490,18 +673,24 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
     await _addByUrl(result.feedUrl);
   }
 
-  Future<int?> _ensureFolder() async {
+  Future<int?> _ensureFolder(BuildContext context) async {
     if (_selectedFolder != null) return _selectedFolder!.id!;
-    // Create a default folder if none exists
+    // Reuse an existing folder if one already exists
+    final existing = await widget.folderRepo.getAll();
+    if (existing.isNotEmpty) return existing.first.id!;
+    // Create a default folder only when there are none at all
+    if (!context.mounted) return null;
+    final l10n = AppLocalizations.of(context)!;
     final now = DateTime.now().millisecondsSinceEpoch;
     final folder = await widget.folderRepo.insert(
-      Folder(name: 'My News', position: 0, createdAt: now),
+      Folder(name: l10n.defaultFolderName, position: 0, createdAt: now),
     );
     return folder.id;
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
 
@@ -523,25 +712,40 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Add a feed', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+          Text(l10n.addAFeed,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
 
-          // Folder picker
-          if (widget.folders.isNotEmpty)
-            DropdownButtonFormField<Folder>(
-              value: _selectedFolder,
-              decoration: const InputDecoration(
-                labelText: 'Add to category',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          // Folder picker — chips keep the keyboard open
+          if (widget.folders.isNotEmpty) ...[
+            Text(l10n.addToCategory,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    )),
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: widget.folders.map((f) {
+                  final selected = _selectedFolder?.id == f.id;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(f.name),
+                      selected: selected,
+                      onSelected: (_) =>
+                          setState(() => _selectedFolder = selected ? null : f),
+                    ),
+                  );
+                }).toList(),
               ),
-              items: widget.folders.map((f) => DropdownMenuItem(
-                value: f,
-                child: Text(f.name),
-              )).toList(),
-              onChanged: (f) => setState(() => _selectedFolder = f),
             ),
-          if (widget.folders.isNotEmpty) const SizedBox(height: 12),
+            const SizedBox(height: 12),
+          ],
 
           // Search field
           TextField(
@@ -550,9 +754,10 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
-              hintText: 'Search by name or paste a URL',
+              hintText: l10n.searchHint,
               border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.search),
                 onPressed: _search,
@@ -580,17 +785,19 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {
                   final r = _results[i];
+                  final l10n = AppLocalizations.of(context)!;
                   return ListTile(
                     title: Text(r.title),
                     subtitle: r.website != null ? Text(r.website!) : null,
                     trailing: r.subscribers != null
                         ? Text(
-                            '${_formatSubscribers(r.subscribers!)} followers',
+                            '${_formatSubscribers(r.subscribers!)} ${l10n.followers}',
                             style: theme.textTheme.labelSmall,
                           )
                         : null,
                     onTap: () => _addFromFeedly(r),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                   );
                 },
               ),
@@ -643,6 +850,7 @@ class _FolderNameSheetState extends State<_FolderNameSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
@@ -655,16 +863,17 @@ class _FolderNameSheetState extends State<_FolderNameSheet> {
           TextField(
             controller: _controller,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'Category name',
-              border: OutlineInputBorder(),
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              labelText: l10n.categoryName,
+              border: const OutlineInputBorder(),
             ),
             onSubmitted: (_) => _save(),
           ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _save,
-            child: const Text('Save'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -704,9 +913,8 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.feed.title);
-    _selectedFolder = widget.folders
-        .where((f) => f.id == widget.feed.folderId)
-        .firstOrNull;
+    _selectedFolder =
+        widget.folders.where((f) => f.id == widget.feed.folderId).firstOrNull;
   }
 
   @override
@@ -717,6 +925,7 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
@@ -724,33 +933,35 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Edit feed', style: Theme.of(context).textTheme.titleLarge),
+          Text(l10n.editFeed, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
-            decoration: const InputDecoration(
-              labelText: 'Feed name',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.feedName,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
           if (widget.folders.isNotEmpty)
             DropdownButtonFormField<Folder>(
-              value: _selectedFolder,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
+              initialValue: _selectedFolder,
+              decoration: InputDecoration(
+                labelText: l10n.category,
+                border: const OutlineInputBorder(),
               ),
-              items: widget.folders.map((f) => DropdownMenuItem(
-                value: f,
-                child: Text(f.name),
-              )).toList(),
+              items: widget.folders
+                  .map((f) => DropdownMenuItem(
+                        value: f,
+                        child: Text(f.name),
+                      ))
+                  .toList(),
               onChanged: (f) => setState(() => _selectedFolder = f),
             ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: _save,
-            child: const Text('Save'),
+            child: Text(l10n.save),
           ),
         ],
       ),
@@ -785,6 +996,7 @@ class _ConfirmSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -801,7 +1013,7 @@ class _ConfirmSheet extends StatelessWidget {
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.cancel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -838,13 +1050,14 @@ class _FolderActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: Text('Rename "${folder.name}"'),
+            title: Text(l10n.renameFolder(folder.name)),
             onTap: () {
               Navigator.pop(context);
               onRename?.call();
@@ -854,7 +1067,7 @@ class _FolderActionsSheet extends StatelessWidget {
             leading: Icon(Icons.delete_outline,
                 color: Theme.of(context).colorScheme.error),
             title: Text(
-              'Delete "${folder.name}"',
+              l10n.deleteFolder(folder.name),
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
             onTap: () {
@@ -881,13 +1094,14 @@ class _FeedActionsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('Edit'),
+            title: Text(l10n.edit),
             onTap: () {
               Navigator.pop(context);
               onEdit();
@@ -896,9 +1110,8 @@ class _FeedActionsSheet extends StatelessWidget {
           ListTile(
             leading: Icon(Icons.delete_outline,
                 color: Theme.of(context).colorScheme.error),
-            title: Text('Remove',
-                style:
-                    TextStyle(color: Theme.of(context).colorScheme.error)),
+            title: Text(l10n.remove,
+                style: TextStyle(color: Theme.of(context).colorScheme.error)),
             onTap: () {
               Navigator.pop(context);
               onDelete();

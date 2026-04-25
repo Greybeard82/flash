@@ -24,7 +24,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 1,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (db) async {
@@ -44,10 +44,11 @@ class AppDatabase {
     await db.execute(SchemaStatements.createArticlesFeedIdIndex);
     await db.execute(SchemaStatements.createArticlesIsReadIndex);
     await db.execute(SchemaStatements.createArticlesIsBlockedIndex);
-    await db.execute(SchemaStatements.createArticlesIsOpinionIndex);
     await db.execute(SchemaStatements.createArticlesPublishedAtIndex);
+    await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
+    await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
     await db.execute(SchemaStatements.createKeywordBlocklist);
-    await db.execute(SchemaStatements.createOpinionPatterns);
+    await db.execute(SchemaStatements.createKeywordAlerts);
     await db.execute(SchemaStatements.createArticleSummaries);
     await db.execute(SchemaStatements.createSettings);
 
@@ -61,22 +62,26 @@ class AppDatabase {
       });
     }
 
-    // Seed default opinion patterns
-    for (final p in defaultOpinionPatterns) {
-      batch.insert(TableNames.opinionPatterns, {
-        'pattern': p['pattern'],
-        'match_field': p['match_field'],
-        'is_default': 1,
-        'created_at': now,
-      });
-    }
-
     await batch.commit(noResult: true);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Future migrations go here
-    // if (oldVersion < 2) { ... }
+    if (oldVersion < 2) {
+      final cols = await db.rawQuery('PRAGMA table_info(${TableNames.articles})');
+      final hasIsSaved = cols.any((c) => c['name'] == 'is_saved');
+      if (!hasIsSaved) {
+        await db.execute(
+          'ALTER TABLE ${TableNames.articles} ADD COLUMN is_saved INTEGER NOT NULL DEFAULT 0',
+        );
+      }
+    }
+    if (oldVersion < 3) {
+      await db.execute(SchemaStatements.createKeywordAlerts);
+    }
+    if (oldVersion < 4) {
+      await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
+      await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
+    }
   }
 
   Future<void> close() async {

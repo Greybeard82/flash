@@ -17,18 +17,18 @@ const Color lightBg = Color(0xFFFFFFFF);
 const Color lightSurface = Color(0xFFF4F4F8);
 
 ThemeData flashLightTheme() {
-  final base = ColorScheme.light(
+  const base = ColorScheme.light(
     primary: lightAccent,
     onPrimary: Colors.white,
-    primaryContainer: const Color(0xFFF5E9C0),
-    onPrimaryContainer: const Color(0xFF3A2800),
+    primaryContainer: Color(0xFFF5E9C0),
+    onPrimaryContainer: Color(0xFF3A2800),
     secondary: lightAccentPressed,
     onSecondary: Colors.white,
     surface: lightBg,
-    onSurface: const Color(0xFF1A1A1A),
+    onSurface: Color(0xFF1A1A1A),
     surfaceContainerHighest: lightSurface,
-    outline: const Color(0xFFD0D0D0),
-    error: const Color(0xFFBA1A1A),
+    outline: Color(0xFFD0D0D0),
+    error: Color(0xFFBA1A1A),
     onError: Colors.white,
   );
 
@@ -36,17 +36,17 @@ ThemeData flashLightTheme() {
     useMaterial3: true,
     colorScheme: base,
     scaffoldBackgroundColor: lightBg,
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       backgroundColor: lightBg,
-      foregroundColor: const Color(0xFF1A1A1A),
+      foregroundColor: Color(0xFF1A1A1A),
       elevation: 0,
       scrolledUnderElevation: 1,
       surfaceTintColor: lightAccent,
     ),
-    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: lightSurface,
       selectedItemColor: lightAccent,
-      unselectedItemColor: const Color(0xFF888888),
+      unselectedItemColor: Color(0xFF888888),
       type: BottomNavigationBarType.fixed,
       elevation: 8,
     ),
@@ -95,36 +95,36 @@ ThemeData flashLightTheme() {
 }
 
 ThemeData flashDarkTheme() {
-  final base = ColorScheme.dark(
+  const base = ColorScheme.dark(
     primary: darkAccent,
-    onPrimary: const Color(0xFF1A1500),
-    primaryContainer: const Color(0xFF2A2200),
+    onPrimary: Color(0xFF1A1500),
+    primaryContainer: Color(0xFF2A2200),
     onPrimaryContainer: darkAccentPressed,
     secondary: darkAccentPressed,
-    onSecondary: const Color(0xFF1A1500),
+    onSecondary: Color(0xFF1A1500),
     surface: darkBg,
-    onSurface: const Color(0xFFE8E8E8),
+    onSurface: Color(0xFFE8E8E8),
     surfaceContainerHighest: darkSurface,
-    outline: const Color(0xFF3A4A5A),
-    error: const Color(0xFFFFB4AB),
-    onError: const Color(0xFF690005),
+    outline: Color(0xFF3A4A5A),
+    error: Color(0xFFFFB4AB),
+    onError: Color(0xFF690005),
   );
 
   return ThemeData(
     useMaterial3: true,
     colorScheme: base,
     scaffoldBackgroundColor: darkBg,
-    appBarTheme: AppBarTheme(
+    appBarTheme: const AppBarTheme(
       backgroundColor: darkBg,
-      foregroundColor: const Color(0xFFE8E8E8),
+      foregroundColor: Color(0xFFE8E8E8),
       elevation: 0,
       scrolledUnderElevation: 1,
       surfaceTintColor: darkAccent,
     ),
-    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: darkSurface,
       selectedItemColor: darkAccent,
-      unselectedItemColor: const Color(0xFF7A8A9A),
+      unselectedItemColor: Color(0xFF7A8A9A),
       type: BottomNavigationBarType.fixed,
       elevation: 8,
     ),

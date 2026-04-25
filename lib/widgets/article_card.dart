@@ -1,30 +1,121 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
+import '../utils/form_factor.dart';
+import '../utils/reading_time.dart';
 import 'radial_menu.dart';
 
 class ArticleCard extends StatelessWidget {
   final Article article;
   final VoidCallback onTap;
   final VoidCallback onMarkRead;
-  final VoidCallback onMarkUnread;
+  final VoidCallback? onMarkUnread;
   final VoidCallback onShare;
+  final VoidCallback onBookmark;
 
   const ArticleCard({
     super.key,
     required this.article,
     required this.onTap,
     required this.onMarkRead,
-    required this.onMarkUnread,
+    this.onMarkUnread,
     required this.onShare,
+    required this.onBookmark,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isRead = article.isRead;
+    final isTV = FormFactor.isTV;
+
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Source + timestamp row
+                Row(
+                  children: [
+                    _FaviconWidget(
+                      faviconPath: article.feedFaviconPath,
+                      feedTitle: article.feedTitle ?? '',
+                      dimmed: isRead,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        article.feedTitle ?? '',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: isRead ? 0.33 : 0.6),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      formatRelativeTimestamp(article.publishedAt, AppLocalizations.of(context)!),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: isRead ? 0.25 : 0.45),
+                      ),
+                    ),
+                    Builder(builder: (context) {
+                      final rt = readingTime(article.description);
+                      if (rt.isEmpty) return const SizedBox.shrink();
+                      return Row(children: [
+                        const SizedBox(width: 6),
+                        Text('· $rt',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: isRead ? 0.2 : 0.38),
+                            )),
+                      ]);
+                    }),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                // Title
+                Text(
+                  article.title,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+                    color: theme.colorScheme.onSurface
+                        .withValues(alpha: isRead ? 0.45 : 1.0),
+                    height: 1.35,
+                  ),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          // Thumbnail
+          _ThumbnailWidget(
+            article: article,
+            feedTitle: article.feedTitle ?? '',
+            dimmed: isRead,
+          ),
+        ],
+      ),
+    );
+
+    // On TV: no touchscreen, so skip Dismissible swipe and long-press radial menu.
+    // D-pad OK fires onTap; share/bookmark are reachable inside the preview sheet.
+    if (isTV) {
+      return InkWell(onTap: onTap, child: content);
+    }
 
     return Dismissible(
       key: ValueKey('article_${article.id}'),
@@ -38,92 +129,26 @@ class ArticleCard extends StatelessWidget {
       secondaryBackground: _swipeBackground(
         context,
         alignment: Alignment.centerRight,
-        color: Colors.orange.withValues(alpha: 0.15),
+        color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
         icon: Icons.mark_email_unread_rounded,
-        iconColor: Colors.orange,
+        iconColor: theme.colorScheme.onSurface.withValues(alpha: 0.5),
       ),
       confirmDismiss: (direction) async {
         if (direction == DismissDirection.startToEnd) {
           onMarkRead();
         } else {
-          onMarkUnread();
+          onMarkUnread?.call();
         }
-        return false; // Don't remove from list
+        return false;
       },
       child: GestureDetector(
-        onLongPress: () {
-          showRadialMenu(context: context, onShare: onShare);
-        },
-        child: InkWell(
-          onTap: onTap,
-          child: Opacity(
-            opacity: isRead ? 0.55 : 1.0,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Source + timestamp row
-                        Row(
-                          children: [
-                            _FaviconWidget(
-                              faviconPath: article.feedFaviconPath,
-                              feedTitle: article.feedTitle ?? '',
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                article.feedTitle ?? '',
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.6),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              formatRelativeTimestamp(article.publishedAt),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withValues(alpha: 0.45),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        // Title
-                        Text(
-                          article.title,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight:
-                                isRead ? FontWeight.w400 : FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
-                            height: 1.35,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Thumbnail
-                  _ThumbnailWidget(
-                    article: article,
-                    feedTitle: article.feedTitle ?? '',
-                  ),
-                ],
-              ),
-            ),
-          ),
+        onLongPress: () => showRadialMenu(
+          context: context,
+          onShare: onShare,
+          onBookmark: onBookmark,
+          article: article,
         ),
+        child: InkWell(onTap: onTap, child: content),
       ),
     );
   }
@@ -147,22 +172,14 @@ class ArticleCard extends StatelessWidget {
 class _FaviconWidget extends StatelessWidget {
   final String? faviconPath;
   final String feedTitle;
+  final bool dimmed;
 
-  const _FaviconWidget({required this.faviconPath, required this.feedTitle});
+  const _FaviconWidget({required this.faviconPath, required this.feedTitle, this.dimmed = false});
 
   @override
   Widget build(BuildContext context) {
-    if (faviconPath != null) {
-      final file = File(faviconPath!);
-      if (file.existsSync()) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Image.file(file, width: 14, height: 14, fit: BoxFit.cover),
-        );
-      }
-    }
     final letter = feedTitle.isNotEmpty ? feedTitle[0].toUpperCase() : '?';
-    return Container(
+    final placeholder = Container(
       width: 14,
       height: 14,
       decoration: BoxDecoration(
@@ -176,25 +193,46 @@ class _FaviconWidget extends StatelessWidget {
         ),
       ),
     );
+
+    final widget = faviconPath == null
+        ? placeholder
+        : ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.file(
+              File(faviconPath!),
+              width: 14,
+              height: 14,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => placeholder,
+            ),
+          );
+
+    if (!dimmed) return widget;
+    return ColorFiltered(
+      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.saturation),
+      child: Opacity(opacity: 0.4, child: widget),
+    );
   }
 }
 
 class _ThumbnailWidget extends StatelessWidget {
   final Article article;
   final String feedTitle;
+  final bool dimmed;
 
-  const _ThumbnailWidget({required this.article, required this.feedTitle});
+  const _ThumbnailWidget({required this.article, required this.feedTitle, this.dimmed = false});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Local cache first
+    // Local cache first — no existsSync(), Image.file handles missing files via errorBuilder
     if (article.thumbnailPath != null) {
-      final file = File(article.thumbnailPath!);
-      if (file.existsSync()) {
-        return _thumb(Image.file(file, fit: BoxFit.cover));
-      }
+      return _thumb(Image.file(
+        File(article.thumbnailPath!),
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _placeholder(theme),
+      ));
     }
 
     // Remote URL
@@ -203,7 +241,11 @@ class _ThumbnailWidget extends StatelessWidget {
         CachedNetworkImage(
           imageUrl: article.thumbnailUrl!,
           fit: BoxFit.cover,
-          placeholder: (_, __) => const SizedBox.shrink(),
+          memCacheWidth: 144,
+          maxWidthDiskCache: 144,
+          placeholder: (_, __) => ColoredBox(
+            color: theme.colorScheme.surfaceContainerHighest,
+          ),
           errorWidget: (_, __, ___) => _placeholder(theme),
         ),
       );
@@ -213,9 +255,14 @@ class _ThumbnailWidget extends StatelessWidget {
   }
 
   Widget _thumb(Widget child) {
-    return ClipRRect(
+    Widget clipped = ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(width: 72, height: 72, child: child),
+    );
+    if (!dimmed) return clipped;
+    return ColorFiltered(
+      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.saturation),
+      child: Opacity(opacity: 0.4, child: clipped),
     );
   }
 

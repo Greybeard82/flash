@@ -1,0 +1,158 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../l10n/app_localizations.dart';
+import '../models/article.dart';
+import '../repositories/article_repository.dart';
+import '../repositories/settings_repository.dart';
+import '../services/share_service.dart';
+import '../widgets/article_card.dart';
+import 'reader_screen.dart';
+
+class BookmarksScreen extends StatefulWidget {
+  const BookmarksScreen({super.key});
+
+  @override
+  State<BookmarksScreen> createState() => _BookmarksScreenState();
+}
+
+class _BookmarksScreenState extends State<BookmarksScreen> {
+  final _articleRepo = ArticleRepository();
+  final _settingsRepo = SettingsRepository();
+  final _shareService = ShareService();
+
+  List<Article> _articles = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final articles = await _articleRepo.getSaved();
+    if (mounted) {
+      setState(() {
+        _articles = articles;
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _openArticle(Article article) async {
+    final settings = await _settingsRepo.getAll();
+
+    if (article.id != null) {
+      await _articleRepo.markRead(article.id!);
+      if (mounted) {
+        setState(() {
+          _articles = _articles
+              .map((a) => a.id == article.id ? a.copyWith(isRead: true) : a)
+              .toList();
+        });
+      }
+    }
+
+    if (!mounted) return;
+    if (settings.readerMode) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ReaderScreen(article: article, fontSize: settings.articleFontSize),
+        ),
+      );
+    } else {
+      final uri = Uri.tryParse(article.url);
+      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _toggleSaved(Article article) async {
+    if (article.id == null) return;
+    await _articleRepo.setSaved(article.id!, saved: false);
+    HapticFeedback.lightImpact();
+    if (mounted) {
+      setState(() => _articles.removeWhere((a) => a.id == article.id));
+    }
+  }
+
+  Future<void> _markRead(Article article) async {
+    if (article.id == null) return;
+    await _articleRepo.markRead(article.id!);
+    HapticFeedback.lightImpact();
+    if (mounted) {
+      setState(() {
+        _articles = _articles
+            .map((a) => a.id == article.id ? a.copyWith(isRead: true) : a)
+            .toList();
+      });
+    }
+  }
+
+  Future<void> _markUnread(Article article) async {
+    if (article.id == null) return;
+    await _articleRepo.markUnread(article.id!);
+    HapticFeedback.lightImpact();
+    if (mounted) {
+      setState(() {
+        _articles = _articles
+            .map((a) => a.id == article.id ? a.copyWith(isRead: false) : a)
+            .toList();
+      });
+    }
+  }
+
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l10n.bookmarks),
+        centerTitle: false,
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _articles.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.bookmark_border_rounded,
+                          size: 48,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
+                      const SizedBox(height: 12),
+                      Text(
+                        l10n.noBookmarks,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.separated(
+                    itemCount: _articles.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, indent: 16, endIndent: 16),
+                    itemBuilder: (context, i) {
+                      final article = _articles[i];
+                      return ArticleCard(
+                        article: article,
+                        onTap: () => _openArticle(article),
+                        onMarkRead: () => _markRead(article),
+                        onMarkUnread: () => _markUnread(article),
+                        onShare: () => _shareService.shareArticle(article),
+                        onBookmark: () => _toggleSaved(article),
+                      );
+                    },
+                  ),
+                ),
+    );
+  }
+}

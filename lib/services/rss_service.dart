@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:dart_rss/dart_rss.dart';
 import 'package:http/http.dart' as http;
 import '../models/article.dart';
@@ -16,7 +17,7 @@ class RssService {
 
   RssService(this._articleRepo, this._feedRepo, this._settingsRepo);
 
-  Future<({Feed feed, int newCount})> fetchAndStore(
+  Future<({Feed feed, int newCount, List<({String title, String? description})> unblocked})> fetchAndStore(
     Feed feed, {
     List<KeywordBlock> keywords = const [],
   }) async {
@@ -29,7 +30,7 @@ class RssService {
         throw Exception('HTTP ${response.statusCode}');
       }
 
-      final body = response.body;
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
       var articles = _parse(body, feed);
 
       if (keywords.isNotEmpty) {
@@ -40,7 +41,7 @@ class RssService {
         }).toList();
       }
 
-      await _articleRepo.insertMany(articles);
+      final actualNewCount = await _articleRepo.insertMany(articles);
 
       // Auto-cleanup
       final globalLimit = int.tryParse(
@@ -62,7 +63,11 @@ class RssService {
         consecutiveFailures: 0,
         isDead: false,
       );
-      return (feed: updatedFeed, newCount: articles.length);
+      final unblocked = articles
+          .where((a) => !a.isBlocked)
+          .map((a) => (title: a.title, description: a.description))
+          .toList();
+      return (feed: updatedFeed, newCount: actualNewCount, unblocked: unblocked);
     } catch (e) {
       final failures = feed.consecutiveFailures + 1;
       final isDead = failures >= 7;
@@ -79,7 +84,8 @@ class RssService {
           lastFetchError: e.toString(),
           isDead: isDead,
         ),
-        newCount: 0
+        newCount: 0,
+        unblocked: <({String title, String? description})>[],
       );
     }
   }
@@ -116,12 +122,14 @@ class RssService {
           ? _parseDate(item.pubDate!)?.millisecondsSinceEpoch
           : null;
 
+      final title = stripHtml(item.title);
+      final description = stripHtml(item.description);
       articles.add(Article(
         feedId: feed.id!,
         guid: guid,
-        title: stripHtml(item.title),
+        title: title,
         url: item.link ?? '',
-        description: stripHtml(item.description),
+        description: description,
         thumbnailUrl: thumbnailUrl,
         publishedAt: publishedAt,
         fetchedAt: now,
@@ -153,12 +161,14 @@ class RssService {
                 : null;
       }
 
+      final title = stripHtml(item.title);
+      final description = stripHtml(item.summary ?? item.content);
       articles.add(Article(
         feedId: feed.id!,
         guid: guid,
-        title: stripHtml(item.title),
+        title: title,
         url: url,
-        description: stripHtml(item.summary ?? item.content),
+        description: description,
         thumbnailUrl: thumbnailUrl,
         publishedAt: publishedAt,
         fetchedAt: now,
@@ -211,7 +221,7 @@ class RssService {
 
     // [DayName,] DD Mon YYYY HH:MM:SS TZ
     int idx = 0;
-    if (parts[0].endsWith(',') || RegExp(r'^[A-Za-z]{3},$').hasMatch(parts[0])) {
+    if (int.tryParse(parts[0]) == null) {
       idx = 1;
     }
     final day = int.tryParse(parts[idx]) ?? 1;
@@ -233,7 +243,7 @@ class RssService {
         const Duration(seconds: 15),
       );
       if (response.statusCode != 200) return null;
-      final body = response.body;
+      final body = utf8.decode(response.bodyBytes, allowMalformed: true);
 
       try {
         final channel = RssFeed.parse(body);

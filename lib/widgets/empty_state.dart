@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 class EmptyState extends StatelessWidget {
   final VoidCallback onAddFeed;
@@ -7,6 +8,7 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Center(
       child: Padding(
@@ -21,7 +23,7 @@ class EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'Nothing here yet.',
+              l10n.nothingHereYet,
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
@@ -29,7 +31,7 @@ class EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add your first feed to get started.',
+              l10n.addFirstFeed,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
               ),
@@ -39,7 +41,7 @@ class EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onAddFeed,
               icon: const Icon(Icons.add),
-              label: const Text('Add a feed'),
+              label: Text(l10n.addAFeedButton),
               style: FilledButton.styleFrom(
                 minimumSize: const Size(200, 52),
               ),

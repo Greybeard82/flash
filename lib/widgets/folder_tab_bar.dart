@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/folder.dart';
 import 'unread_badge.dart';
 
@@ -43,9 +44,7 @@ class _FolderTabBarState extends State<FolderTabBar> {
 
   void _scrollToSelected() {
     if (!_scrollController.hasClients) return;
-    final idx = widget.selectedIndex;
-    // Rough estimate: each tab ~80px
-    final target = idx * 80.0;
+    final target = widget.selectedIndex * 80.0;
     _scrollController.animateTo(
       target.clamp(0.0, _scrollController.position.maxScrollExtent),
       duration: const Duration(milliseconds: 200),
@@ -61,14 +60,12 @@ class _FolderTabBarState extends State<FolderTabBar> {
 
     final tabs = <_TabItem>[
       _TabItem(
-        label: 'All',
+        label: AppLocalizations.of(context)!.allTab,
         unreadCount: widget.allUnreadCount,
-        folderId: null,
       ),
       ...widget.folders.map((f) => _TabItem(
             label: f.name,
             unreadCount: widget.folderUnreadCounts[f.id] ?? 0,
-            folderId: f.id,
           )),
     ];
 
@@ -101,13 +98,8 @@ class _FolderTabBarState extends State<FolderTabBar> {
 class _TabItem {
   final String label;
   final int unreadCount;
-  final int? folderId;
 
-  const _TabItem({
-    required this.label,
-    required this.unreadCount,
-    required this.folderId,
-  });
+  const _TabItem({required this.label, required this.unreadCount});
 }
 
 class _FolderTab extends StatelessWidget {
@@ -143,7 +135,6 @@ class _FolderTab extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Indicator at top (above the label, since tabs are at the bottom)
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               height: 3,

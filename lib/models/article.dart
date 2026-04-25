@@ -11,8 +11,7 @@ class Article {
   final int fetchedAt;
   final bool isRead;
   final bool isBlocked;
-  final bool isOpinion;
-  final String? opinionSource;
+  final bool isSaved;
   final String? blockedKeyword;
 
   // Joined fields (not stored in DB)
@@ -32,8 +31,7 @@ class Article {
     required this.fetchedAt,
     this.isRead = false,
     this.isBlocked = false,
-    this.isOpinion = false,
-    this.opinionSource,
+    this.isSaved = false,
     this.blockedKeyword,
     this.feedTitle,
     this.feedFaviconPath,
@@ -53,8 +51,7 @@ class Article {
       fetchedAt: map['fetched_at'] as int,
       isRead: (map['is_read'] as int? ?? 0) == 1,
       isBlocked: (map['is_blocked'] as int? ?? 0) == 1,
-      isOpinion: (map['is_opinion'] as int? ?? 0) == 1,
-      opinionSource: map['opinion_source'] as String?,
+      isSaved: (map['is_saved'] as int? ?? 0) == 1,
       blockedKeyword: map['blocked_keyword'] as String?,
       feedTitle: map['feed_title'] as String?,
       feedFaviconPath: map['feed_favicon_path'] as String?,
@@ -75,8 +72,7 @@ class Article {
       'fetched_at': fetchedAt,
       'is_read': isRead ? 1 : 0,
       'is_blocked': isBlocked ? 1 : 0,
-      'is_opinion': isOpinion ? 1 : 0,
-      'opinion_source': opinionSource,
+      'is_saved': isSaved ? 1 : 0,
       'blocked_keyword': blockedKeyword,
     };
   }
@@ -94,8 +90,7 @@ class Article {
     int? fetchedAt,
     bool? isRead,
     bool? isBlocked,
-    bool? isOpinion,
-    String? opinionSource,
+    bool? isSaved,
     String? blockedKeyword,
     String? feedTitle,
     String? feedFaviconPath,
@@ -113,8 +108,7 @@ class Article {
       fetchedAt: fetchedAt ?? this.fetchedAt,
       isRead: isRead ?? this.isRead,
       isBlocked: isBlocked ?? this.isBlocked,
-      isOpinion: isOpinion ?? this.isOpinion,
-      opinionSource: opinionSource ?? this.opinionSource,
+      isSaved: isSaved ?? this.isSaved,
       blockedKeyword: blockedKeyword ?? this.blockedKeyword,
       feedTitle: feedTitle ?? this.feedTitle,
       feedFaviconPath: feedFaviconPath ?? this.feedFaviconPath,
