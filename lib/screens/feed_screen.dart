@@ -83,6 +83,18 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     await _loadSettings();
     await _loadAll();
     _scrollController.addListener(_onScroll);
+    _silentRefresh();
+  }
+
+  Future<void> _silentRefresh() async {
+    if (!mounted) return;
+    setState(() => _refreshing = true);
+    try {
+      await RefreshService(_settingsRepo).refreshAll();
+    } finally {
+      await _loadAll(showLoading: false);
+      if (mounted) setState(() => _refreshing = false);
+    }
   }
 
   Future<void> _loadSettings() async {

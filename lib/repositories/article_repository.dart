@@ -236,8 +236,11 @@ class ArticleRepository {
   Future<int> getUnreadCount() async {
     final db = await _db;
     final result = await db.rawQuery('''
-      SELECT COUNT(*) as count FROM ${TableNames.articles}
-      WHERE is_read = 0 AND is_blocked = 0    ''');
+      SELECT COUNT(*) as count
+      FROM ${TableNames.articles} a
+      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
+      WHERE a.is_read = 0 AND a.is_blocked = 0
+    ''');
     return result.first['count'] as int;
   }
 
