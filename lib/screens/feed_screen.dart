@@ -51,6 +51,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
   int _loadGeneration = 0;
+  double _savedScrollOffset = 0.0;
 
   Timer? _markReadDebounce;
   final Set<int> _pendingMarkRead = {};
@@ -91,6 +92,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   Future<void> _loadAll({bool showLoading = true}) async {
     if (!mounted) return;
+    if (_scrollController.hasClients) {
+      _savedScrollOffset = _scrollController.offset;
+    }
     if (showLoading) setState(() => _loading = true);
 
     // Fetch folders and feeds in parallel first (articles depend on folder list)
@@ -122,13 +126,20 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         _loading = false;
       });
       _updateBadge(allCount);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients && _savedScrollOffset > 0) {
+          _scrollController.jumpTo(
+            _savedScrollOffset.clamp(0.0, _scrollController.position.maxScrollExtent),
+          );
+        }
+      });
     }
   }
 
   Future<List<Article>> _articlesForTab(int tabIndex, List<Folder> folders) async {
-    if (tabIndex == 0) return _articleRepo.getAll(includeRead: false);
+    if (tabIndex == 0) return _articleRepo.getAll(includeRead: true);
     final folder = folders[tabIndex - 1];
-    return _articleRepo.getForFolder(folder.id!, includeRead: false);
+    return _articleRepo.getForFolder(folder.id!, includeRead: true);
   }
 
   Future<void> _refreshCurrentTab() async {
