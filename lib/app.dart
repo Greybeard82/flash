@@ -210,7 +210,7 @@ class _AppShellState extends State<_AppShell> {
     // Phone: classic bottom navigation bar
     return PopScope(
       canPop: _currentIndex == 0,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, _) {
         if (!didPop) setState(() => _currentIndex = 0);
       },
       child: Scaffold(

@@ -5,9 +5,7 @@ import 'package:http/http.dart' as http;
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../models/keyword_block.dart';
-import '../repositories/feed_repository.dart';
-import '../repositories/folder_repository.dart';
-import '../repositories/keyword_repository.dart';
+import 'backup_serializer.dart';
 
 class DriveBackupService {
   static const _fileName = 'flash_backup.json';
@@ -52,29 +50,9 @@ class DriveBackupService {
     final api = await _getApi();
     if (api == null) throw Exception('Not signed in to Google');
 
-    final folderMap = {for (final f in folders) f.id!: f.name};
     final now = DateTime.now();
-
-    final data = {
-      'version': 1,
-      'backedUpAt': now.millisecondsSinceEpoch,
-      'folders': folders
-          .map((f) => {'name': f.name, 'position': f.position})
-          .toList(),
-      'feeds': feeds
-          .map((f) => {
-                'title': f.title,
-                'url': f.url,
-                'folderName': folderMap[f.folderId] ?? '',
-                'position': f.position,
-                'siteUrl': f.siteUrl,
-                'description': f.description,
-              })
-          .toList(),
-      'keywords': keywords
-          .map((k) => {'keyword': k.keyword, 'wholeWord': k.wholeWord})
-          .toList(),
-    };
+    final data = BackupSerializer.toMap(folders: folders, feeds: feeds, keywords: keywords);
+    data['backedUpAt'] = now.millisecondsSinceEpoch;
 
     final bytes = utf8.encode(jsonEncode(data));
     final media = drive.Media(Stream.fromIterable([bytes]), bytes.length);
@@ -111,63 +89,7 @@ class DriveBackupService {
       bytes.addAll(chunk);
     }
     final data = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
-
-    final folderRepo = FolderRepository();
-    final feedRepo = FeedRepository();
-    final keywordRepo = KeywordRepository();
-
-    // Wipe existing (folder delete cascades to feeds + articles via FK)
-    for (final f in await folderRepo.getAll()) {
-      await folderRepo.delete(f.id!);
-    }
-    for (final f in await feedRepo.getAll()) {
-      await feedRepo.delete(f.id!);
-    }
-    for (final k in await keywordRepo.getAll()) {
-      await keywordRepo.delete(k.id!);
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-
-    // Re-insert folders, capturing name → new id
-    final nameToId = <String, int>{};
-    for (final f in (data['folders'] as List)) {
-      final inserted = await folderRepo.insert(Folder(
-        name: f['name'] as String,
-        position: f['position'] as int? ?? 0,
-        createdAt: now,
-      ));
-      nameToId[f['name'] as String] = inserted.id!;
-    }
-
-    // Re-insert feeds
-    int feedCount = 0;
-    for (final f in (data['feeds'] as List)) {
-      final folderName = f['folderName'] as String? ?? '';
-      final folderId = nameToId[folderName];
-      if (folderId == null) continue;
-      await feedRepo.insert(Feed(
-        folderId: folderId,
-        title: f['title'] as String,
-        url: f['url'] as String,
-        siteUrl: f['siteUrl'] as String?,
-        description: f['description'] as String?,
-        position: f['position'] as int? ?? 0,
-        createdAt: now,
-      ));
-      feedCount++;
-    }
-
-    // Re-insert keywords
-    for (final k in (data['keywords'] as List? ?? [])) {
-      await keywordRepo.insert(KeywordBlock(
-        keyword: k['keyword'] as String,
-        wholeWord: k['wholeWord'] as bool? ?? false,
-        createdAt: now,
-      ));
-    }
-
-    return feedCount;
+    return BackupSerializer.restoreFromMap(data);
   }
 }
 
