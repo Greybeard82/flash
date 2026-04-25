@@ -136,10 +136,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<List<Article>> _articlesForTab(int tabIndex, List<Folder> folders) async {
-    if (tabIndex == 0) return _articleRepo.getAll(includeRead: true);
+  Future<List<Article>> _articlesForTab(int tabIndex, List<Folder> folders, {bool unreadOnly = false}) async {
+    if (tabIndex == 0) return _articleRepo.getAll(includeRead: !unreadOnly);
     final folder = folders[tabIndex - 1];
-    return _articleRepo.getForFolder(folder.id!, includeRead: true);
+    return _articleRepo.getForFolder(folder.id!, includeRead: !unreadOnly);
   }
 
   Future<void> _refreshCurrentTab() async {
@@ -267,7 +267,54 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       final folder = _folders[_selectedTabIndex - 1];
       await _articleRepo.markAllReadForFolder(folder.id!);
     }
-    await _loadAll();
+
+    // Clear the list immediately so the user sees it empty right away.
+    if (mounted) {
+      setState(() {
+        _articles = [];
+        _cardKeys.clear();
+        _allUnreadCount = 0;
+      });
+      _updateBadge(0);
+    }
+
+    // Refresh feeds to pick up any new articles published since last fetch.
+    if (mounted) setState(() => _refreshing = true);
+    try {
+      final refreshSvc = RefreshService(_settingsRepo);
+      if (_selectedTabIndex == 0) {
+        await refreshSvc.refreshAll();
+      } else {
+        final folder = _folders[_selectedTabIndex - 1];
+        final feeds = await _feedRepo.getByFolder(folder.id!);
+        for (final feed in feeds) {
+          await refreshSvc.refreshFeed(feed);
+        }
+      }
+    } finally {
+      // Reload unread-only so only freshly fetched articles appear.
+      if (mounted) {
+        final (articles, folderCounts, allCount) = await (
+          _articlesForTab(_selectedTabIndex, _folders, unreadOnly: true),
+          _articleRepo.getAllFolderUnreadCounts(),
+          _articleRepo.getUnreadCount(),
+        ).wait;
+        if (mounted) {
+          setState(() {
+            _articles = articles;
+            _cardKeys
+              ..clear()
+              ..addAll(List.generate(articles.length, (_) => GlobalKey()));
+            _folderUnreadCounts = folderCounts;
+            _allUnreadCount = allCount;
+            _refreshing = false;
+          });
+          _updateBadge(allCount);
+          _savedScrollOffset = 0.0;
+        }
+      }
+    }
+
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.allMarkedRead)),
