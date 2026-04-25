@@ -1,16 +1,16 @@
 # Product Requirements Document
-## [APP_NAME] — Android RSS Reader
+## Flash — Android RSS Reader
 
-**Version:** 1.0  
-**Status:** Draft  
+**Version:** 1.1  
+**Status:** Active  
 **Author:** David  
-**Last Updated:** March 2026
+**Last Updated:** April 2026
 
 ---
 
 ## 1. Product Overview
 
-[APP_NAME] is a locally-hosted, account-free Android RSS/Atom feed reader with a native Material You interface. It aggregates news from user-defined feeds, organizes them into folders, and intelligently filters out noise — through keyword blocking and AI-assisted opinion detection — so the user reads only the content they care about.
+Flash is a locally-hosted, account-free Android RSS/Atom feed reader with a native Material You interface. It aggregates news from user-defined feeds, organizes them into folders, and intelligently filters out noise — through keyword blocking and AI-assisted opinion detection — so the user reads only the content they care about.
 
 All data lives on-device. Google Drive backup is optional and non-destructive. No account is required to use core functionality.
 
@@ -69,7 +69,7 @@ Specific mandates:
 
 ### 3.8 Google Drive Backup (Optional Feature)
 - `google_sign_in` + Drive REST API v3
-- Saves a single JSON file to `/[APP_NAME]/backup.json` in user's Drive
+- Saves a single JSON file to `/Flash/backup.json` in user's Drive
 
 ---
 
@@ -121,6 +121,12 @@ Specific mandates:
 - Articles sorted newest to oldest, always — no user-configurable sort order
 - Unread articles have full visual weight; read articles are visually de-emphasized (reduced opacity, lighter text weight)
 
+**Article List Persistence — Hardcoded Behaviour**
+- Articles **stay in the list permanently** once loaded, even after being marked as read — they never disappear mid-session
+- Read articles are visually de-emphasised (reduced opacity, lighter weight) but remain in place
+- The **scroll position is always restored** exactly when the user returns to the feed — whether from the in-app reader, the system browser, or any other screen. The list never jumps or resets.
+- These two behaviours are non-negotiable UX requirements, not settings. There is no user toggle for them.
+
 **Mark as Read — On Scroll**
 - As articles scroll past the midpoint of the screen, they are automatically marked as read
 - This matches the behavior of Palabre and Reeder
@@ -129,6 +135,14 @@ Specific mandates:
 **Mark as Read — Other Methods**
 - Swipe left: mark as read
 - Swipe right: mark as unread
+**Mark All as Read — Hardcoded Behaviour**
+This action has a precise three-step sequence that must not be changed:
+1. **Immediately clears the list** — the article list empties the moment the button is tapped, giving instant visual feedback
+2. **Refreshes all feeds** in the current tab/folder to fetch any new articles published since the last refresh
+3. **Reloads unread-only** — only articles that arrived during the refresh step are shown; nothing previously read reappears
+
+A one-time confirmation dialog is shown on the first use only (suppressed on all subsequent taps).
+
 **Long-press Quick Actions (Radial Menu)**
 - Long-press on any card opens a circular radial context menu centred on the card -- identical in interaction pattern to Palabre's original radial menu
 - The radial has exactly 2 action buttons arranged around a central X dismiss button:
@@ -256,7 +270,7 @@ Stage 2 — Claude Haiku AI (optional, requires API key):
 **Behavior**
 - Optional — user must opt in from Settings > Backup
 - Requires Google sign-in (OAuth 2.0 via `google_sign_in`)
-- Saves to `/[APP_NAME]/backup.json` in the user's Google Drive root
+- Saves to `/Flash/backup.json` in the user's Google Drive root
 - Manual backup: "Backup now" button in Settings
 - Manual restore: "Restore from Drive" button in Settings
 - On restore: user is shown a diff (X feeds, Y folders, Z keywords) before confirming
@@ -307,7 +321,7 @@ Long-press card → bottom sheet → "Summarise with AI"
 
 --- — Thumb Zone Design
 
-This is a core UX principle for [APP_NAME], not an afterthought. The app is designed to be operated entirely with one hand, with a thumb of any reach. This directly influences layout, component placement, and interaction patterns throughout the app.
+This is a core UX principle for Flash, not an afterthought. The app is designed to be operated entirely with one hand, with a thumb of any reach. This directly influences layout, component placement, and interaction patterns throughout the app.
 
 ### 5.1 Thumb Zone Rules
 
@@ -324,7 +338,7 @@ The screen is divided into three zones based on one-handed thumb reach on a stan
 - Folder/category tabs — placed at the BOTTOM of the feed view, not the top, using a `BottomAppBar` or custom bottom tab row. This is a deliberate departure from the typical top-tab pattern and is a hard requirement.
 - Floating action button for Add Feed (bottom right)
 - Swipe gesture targets (full-width cards, swipeable anywhere)
-- "Mark all as read" — triggered via long-press on the bottom tab, not a top menu item
+- "Mark all as read" — triggered via long-press on the bottom tab, not a top menu item (also available as a mini FAB on the feed screen)
 - Pull-to-refresh remains a downward swipe (natural thumb gesture)
 
 **Middle of screen:**
@@ -404,18 +418,20 @@ Content area (scrollable, between top bar and folder tabs):
 ## 7. Out of Scope for v1.0
 
 - iOS support
-- Starred / saved articles
-- OPML import / export
 - Push notifications
 - Home screen widget
-- In-app article reader (webview)
-- Article search
 - Per-feed custom refresh intervals
-- Text size / font controls
 - Tablet-optimized layout
-- Article sharing to social media (only native share sheet)
 - Multi-account Google Drive
 - Sync across devices (Drive backup is one-way restore, not live sync)
+
+**Previously listed as out of scope but now implemented:**
+- Starred / saved articles (Bookmarks screen — shipped)
+- OPML import / export (shipped)
+- In-app article reader (Reader screen with article extraction — shipped)
+- Article search (Search screen — shipped)
+- Text size / font controls (reader font size setting — shipped)
+- Localisation / i18n (EN, DE, ES, FR, IT — shipped)
 
 ---
 
@@ -462,7 +478,7 @@ Animations, edge-to-edge refinement, predictive back, performance optimization, 
 
 ## 11. Open Questions
 
-- **App name:** TBD — replace all instances of `[APP_NAME]` once decided
+- **App name:** TBD — replace all instances of `Flash` once decided
 - **Launcher icon:** TBD
 - **Opinion filter confidence threshold:** Should borderline articles stay in main feed or go to Opinions? Propose: fail open (stay in main feed if uncertain)
 - **Restore behavior:** Should restoring from Drive merge with existing feeds or replace them? Propose: merge, with duplicate detection by URL
