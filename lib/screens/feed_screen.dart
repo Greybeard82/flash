@@ -271,34 +271,18 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     await _articleRepo.markManyRead(ids.toList());
     if (!mounted) return;
 
-    // Measure the total height of articles being removed so we can compensate
-    // the scroll offset — these articles were above the viewport so their
-    // removal would otherwise cause a jump.
-    double removedHeight = 0;
-    for (final article in _articles) {
-      if (!ids.contains(article.id)) continue;
-      final key = article.id != null ? _cardKeys[article.id!] : null;
-      double h = 120.0;
-      if (key?.currentContext != null) {
-        final box = key!.currentContext!.findRenderObject() as RenderBox?;
-        if (box != null && box.hasSize) h = box.size.height;
-      }
-      removedHeight += h + 1; // +1 for the separator
-    }
-
+    // Dim articles in-place rather than removing them. Removing items above
+    // the viewport requires scroll compensation that is never pixel-perfect,
+    // causing a visible list jump. The articles will be gone on the next
+    // _loadArticles call (refresh, tab switch, or app resume).
     setState(() {
-      _articles = _articles.where((a) => !ids.contains(a.id)).toList();
-      _syncCardKeys(_articles);
+      _articles = [
+        for (final a in _articles)
+          ids.contains(a.id) ? a.copyWith(isRead: true) : a,
+      ];
       _allUnreadCount = (_allUnreadCount - ids.length).clamp(0, _allUnreadCount);
     });
     AppBadgePlus.updateBadge(_allUnreadCount);
-
-    // Shift the scroll offset up by the height of removed items so the
-    // visible content doesn't appear to jump.
-    if (removedHeight > 0 && _scrollController.hasClients) {
-      final adjusted = (_scrollController.offset - removedHeight).clamp(0.0, double.infinity);
-      _scrollController.jumpTo(adjusted);
-    }
   }
 
   // ── Article actions ────────────────────────────────────────────────────────
