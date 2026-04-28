@@ -727,22 +727,18 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                           .withValues(alpha: 0.6),
                     )),
             const SizedBox(height: 6),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: widget.folders.map((f) {
-                  final selected = _selectedFolder?.id == f.id;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(f.name),
-                      selected: selected,
-                      onSelected: (_) =>
-                          setState(() => _selectedFolder = selected ? null : f),
-                    ),
-                  );
-                }).toList(),
-              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: widget.folders.map((f) {
+                final selected = _selectedFolder?.id == f.id;
+                return ChoiceChip(
+                  label: Text(f.name),
+                  selected: selected,
+                  onSelected: (_) =>
+                      setState(() => _selectedFolder = selected ? null : f),
+                );
+              }).toList(),
             ),
             const SizedBox(height: 12),
           ],
