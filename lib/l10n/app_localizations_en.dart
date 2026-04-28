@@ -21,6 +21,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noArticlesYet => 'No articles yet.\nPull down to refresh.';
 
   @override
+  String get noNewArticles => 'No new articles.\nYou\'re all caught up.';
+
+  @override
   String get feeds => 'Feeds';
 
   @override

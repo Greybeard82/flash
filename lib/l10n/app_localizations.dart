@@ -128,6 +128,12 @@ abstract class AppLocalizations {
   /// **'No articles yet.\nPull down to refresh.'**
   String get noArticlesYet;
 
+  /// No description provided for @noNewArticles.
+  ///
+  /// In en, this message translates to:
+  /// **'No new articles.\nYou\'re all caught up.'**
+  String get noNewArticles;
+
   /// No description provided for @feeds.
   ///
   /// In en, this message translates to:

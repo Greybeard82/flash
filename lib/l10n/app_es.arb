@@ -5,6 +5,7 @@
   "markAllRead": "Marcar todo como leído",
   "refresh": "Actualizar",
   "noArticlesYet": "Sin artículos aún.\nDesliza hacia abajo para actualizar.",
+  "noNewArticles": "Sin artículos nuevos.\nEstás al día.",
   "feeds": "Fuentes",
   "categories": "Categorías",
   "newCategory": "Nueva categoría",

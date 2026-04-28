@@ -22,6 +22,9 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucun article pour l\'instant.\nTirez vers le bas pour actualiser.';
 
   @override
+  String get noNewArticles => 'Aucun nouvel article.\nVous êtes à jour.';
+
+  @override
   String get feeds => 'Flux';
 
   @override

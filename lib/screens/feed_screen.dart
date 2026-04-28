@@ -22,8 +22,9 @@ import 'search_screen.dart';
 
 class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
+  final int refreshTrigger;
 
-  const FeedScreen({super.key, required this.onNavigateToFeeds});
+  const FeedScreen({super.key, required this.onNavigateToFeeds, this.refreshTrigger = 0});
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -50,6 +51,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _refreshing = false;
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
+  // True after a manual refresh that returned no new unread articles.
+  bool _noNewArticles = false;
 
   // Race guard: only the latest tab-switch result is applied.
   int _tabGeneration = 0;
@@ -66,6 +69,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _boot();
+  }
+
+  @override
+  void didUpdateWidget(FeedScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _fetchAndReload();
+    }
   }
 
   @override
@@ -173,7 +184,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   // ── Network refresh ────────────────────────────────────────────────────────
 
   /// Fetches all feeds from the network then reloads the local DB into state.
-  /// Saves and restores the scroll position so the list doesn't jump.
+  /// Called on boot (auto-refresh) — shows all articles including read.
   Future<void> _fetchAndReload() async {
     if (!mounted || _refreshing) return;
     final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
@@ -188,10 +199,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   }
 
   /// Manual refresh — fetches only the current tab's feeds.
+  /// After fetching, shows only unread articles and flags if none arrived.
   Future<void> _refreshCurrentTab() async {
     if (_refreshing) return;
     HapticFeedback.lightImpact();
-    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
     setState(() => _refreshing = true);
     try {
       final svc = RefreshService(_settingsRepo);
@@ -202,9 +213,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         for (final f in feeds) { await svc.refreshFeed(f); }
       }
     } finally {
-      await _loadArticles();
-      if (mounted) setState(() => _refreshing = false);
-      _restoreScrollOffset(offset);
+      await _loadArticles(unreadOnly: true);
+      if (mounted) {
+        setState(() {
+          _refreshing = false;
+          _noNewArticles = _articles.isEmpty;
+        });
+      }
     }
   }
 
@@ -216,6 +231,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     setState(() {
       _selectedTabIndex = index;
       _loading = true;
+      _noNewArticles = false;
     });
     final articles = await _articlesForTab(index, _folders);
     if (!mounted || gen != _tabGeneration) return;
@@ -555,7 +571,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.35),
             Text(
-              l10n.noArticlesYet,
+              _noNewArticles ? l10n.noNewArticles : l10n.noArticlesYet,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context)

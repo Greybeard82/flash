@@ -93,9 +93,9 @@ class _AppShellState extends State<_AppShell> {
   int _currentIndex = 0;
   bool _onboardingComplete = true; // assume complete until checked
 
-  // Incremented each time the Feed tab is tapped — forces FeedScreen to remount
-  // (and reload its articles) without keeping stale state across navigations.
-  int _feedKey = 0;
+  // Incremented each time the Feed tab is tapped while already on Feed —
+  // triggers a reload via didUpdateWidget without remounting FeedScreen.
+  int _feedRefreshTrigger = 0;
 
   @override
   void initState() {
@@ -117,23 +117,32 @@ class _AppShellState extends State<_AppShell> {
   }
 
   void _navigateTo(int index) {
-    if (index == 0) _feedKey++;
-    setState(() => _currentIndex = index);
+    if (index == 0 && _currentIndex == 0) {
+      // Already on Feed tab — trigger reload without remounting
+      setState(() => _feedRefreshTrigger++);
+    } else {
+      setState(() => _currentIndex = index);
+    }
   }
 
-  Widget get _activeScreen {
+  // All screens are kept alive in the IndexedStack so state (scroll position,
+  // loaded articles) survives tab switches and theme changes.
+  Widget _buildScreenStack() {
     if (!_onboardingComplete) {
       return OnboardingScreen(onDone: _finishOnboarding);
     }
-    return switch (_currentIndex) {
-      0 => FeedScreen(
-          key: ValueKey(_feedKey),
+    return IndexedStack(
+      index: _currentIndex,
+      children: [
+        FeedScreen(
           onNavigateToFeeds: () => _navigateTo(1),
+          refreshTrigger: _feedRefreshTrigger,
         ),
-      1 => const FeedsScreen(),
-      2 => const BookmarksScreen(),
-      _ => SettingsScreen(themeModeNotifier: widget.themeModeNotifier),
-    };
+        const FeedsScreen(),
+        const BookmarksScreen(),
+        SettingsScreen(themeModeNotifier: widget.themeModeNotifier),
+      ],
+    );
   }
 
   @override
@@ -142,7 +151,6 @@ class _AppShellState extends State<_AppShell> {
     final isTV = FormFactor.isTV;
     final width = MediaQuery.of(context).size.width;
     final useRail = isTV || width >= 600;
-
 
     final railDestinations = [
       NavigationRailDestination(
@@ -183,7 +191,7 @@ class _AppShellState extends State<_AppShell> {
               ),
               const VerticalDivider(thickness: 1, width: 1),
             ],
-            Expanded(child: _activeScreen),
+            Expanded(child: _buildScreenStack()),
           ],
         ),
       );
@@ -214,7 +222,7 @@ class _AppShellState extends State<_AppShell> {
         if (!didPop) setState(() => _currentIndex = 0);
       },
       child: Scaffold(
-        body: _activeScreen,
+        body: _buildScreenStack(),
         bottomNavigationBar: _onboardingComplete ? BottomNavigationBar(
           currentIndex: _currentIndex,
           onTap: _navigateTo,

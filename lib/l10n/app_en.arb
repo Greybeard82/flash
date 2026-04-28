@@ -5,6 +5,7 @@
   "markAllRead": "Mark all as read",
   "refresh": "Refresh",
   "noArticlesYet": "No articles yet.\nPull down to refresh.",
+  "noNewArticles": "No new articles.\nYou're all caught up.",
   "feeds": "Feeds",
   "categories": "Categories",
   "newCategory": "New category",

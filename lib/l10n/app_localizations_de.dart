@@ -22,6 +22,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Noch keine Artikel.\nZum Aktualisieren nach unten ziehen.';
 
   @override
+  String get noNewArticles =>
+      'Keine neuen Artikel.\nAlles auf dem neuesten Stand.';
+
+  @override
   String get feeds => 'Feeds';
 
   @override
