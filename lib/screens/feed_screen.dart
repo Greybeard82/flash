@@ -24,7 +24,11 @@ class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
   final int refreshTrigger;
 
-  const FeedScreen({super.key, required this.onNavigateToFeeds, this.refreshTrigger = 0});
+  const FeedScreen({
+    super.key,
+    required this.onNavigateToFeeds,
+    this.refreshTrigger = 0,
+  });
 
   @override
   State<FeedScreen> createState() => _FeedScreenState();
@@ -51,8 +55,9 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   bool _refreshing = false;
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
-  // True after a manual refresh that returned no new unread articles.
-  bool _noNewArticles = false;
+
+  // Keyed by article ID — avoids parallel-list sync bugs when articles are removed.
+  final Map<int, GlobalKey> _cardKeys = {};
 
   // Race guard: only the latest tab-switch result is applied.
   int _tabGeneration = 0;
@@ -60,7 +65,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   // Mark-as-read-on-scroll debounce
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkRead = {};
-  final List<GlobalKey?> _cardKeys = [];
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -87,10 +91,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // On every resume (returning from browser, reader, or background), reload
-  // articles from the local DB to pick up any changes made by background
-  // refresh — without triggering a full network fetch and without touching
-  // the scroll position.
+  // On resume from background, reload from DB to pick up background-refresh
+  // results — no network call, no scroll jump.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && !_loading) {
@@ -100,31 +102,29 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
+  // Cold open: show shimmer, fetch network, then display only unread articles.
   Future<void> _boot() async {
     final settings = await _settingsRepo.getAll();
     _markReadOnScroll = settings.markReadOnScroll;
 
-    // Show cached articles immediately.
-    await _loadArticles(showLoading: true);
-    _scrollController.addListener(_onScroll);
+    if (mounted) setState(() => _loading = true);
 
-    // Then fetch fresh articles from the network in the background.
-    // The refresh spinner in the FAB provides visual feedback.
-    _fetchAndReload();
+    // Fetch fresh articles before showing anything.
+    try {
+      await RefreshService(_settingsRepo).refreshAll();
+    } catch (_) {
+      // Network failure is non-fatal — we'll show whatever is cached.
+    }
+
+    await _loadArticles();
+    _scrollController.addListener(_onScroll);
   }
 
   // ── Core data operations ───────────────────────────────────────────────────
 
-  /// Reads articles for the current tab from the local DB and updates state.
-  /// Always loads with includeRead: true so articles never disappear mid-session
-  /// when marked as read. Pass [unreadOnly: true] only for the post-mark-all-read
-  /// reload, where the intention is to show only freshly arrived articles.
-  Future<void> _loadArticles({
-    bool showLoading = false,
-    bool unreadOnly = false,
-  }) async {
+  // Always loads unread-only — read articles are never shown in the feed.
+  Future<void> _loadArticles() async {
     if (!mounted) return;
-    if (showLoading) setState(() => _loading = true);
 
     final (folders, feeds) = await (
       _folderRepo.getAll(),
@@ -134,7 +134,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final safeTab = _selectedTabIndex.clamp(0, folders.length);
 
     final (articles, folderCounts, allCount) = await (
-      _articlesForTab(safeTab, folders, unreadOnly: unreadOnly),
+      _articlesForTab(safeTab, folders),
       _articleRepo.getAllFolderUnreadCounts(),
       _articleRepo.getUnreadCount(),
     ).wait;
@@ -145,9 +145,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       _hasFeeds = feeds.isNotEmpty;
       _selectedTabIndex = safeTab;
       _articles = articles;
-      _cardKeys
-        ..clear()
-        ..addAll(List.generate(articles.length, (_) => GlobalKey()));
+      _syncCardKeys(articles);
       _folderUnreadCounts = folderCounts;
       _allUnreadCount = allCount;
       _loading = false;
@@ -155,21 +153,25 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     AppBadgePlus.updateBadge(allCount);
   }
 
-  /// Reloads articles from DB while preserving the current scroll position.
-  /// Used on app resume — picks up background-refresh results without jumping.
+  // Reloads from DB while preserving scroll position (used on app resume).
   Future<void> _reloadArticles() async {
     final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
     await _loadArticles();
     _restoreScrollOffset(offset);
   }
 
-  Future<List<Article>> _articlesForTab(
-    int tab,
-    List<Folder> folders, {
-    bool unreadOnly = false,
-  }) {
-    if (tab == 0) return _articleRepo.getAll(includeRead: !unreadOnly);
-    return _articleRepo.getForFolder(folders[tab - 1].id!, includeRead: !unreadOnly);
+  // Always unread-only.
+  Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
+    if (tab == 0) return _articleRepo.getAll(includeRead: false);
+    return _articleRepo.getForFolder(folders[tab - 1].id!, includeRead: false);
+  }
+
+  void _syncCardKeys(List<Article> articles) {
+    final activeIds = {for (final a in articles) if (a.id != null) a.id!};
+    _cardKeys.removeWhere((id, _) => !activeIds.contains(id));
+    for (final a in articles) {
+      if (a.id != null) _cardKeys.putIfAbsent(a.id!, GlobalKey.new);
+    }
   }
 
   void _restoreScrollOffset(double offset) {
@@ -183,23 +185,19 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
   // ── Network refresh ────────────────────────────────────────────────────────
 
-  /// Fetches all feeds from the network then reloads the local DB into state.
-  /// Called on boot (auto-refresh) — shows all articles including read.
+  // Called when the Flash tab is re-tapped (refreshTrigger increment).
   Future<void> _fetchAndReload() async {
     if (!mounted || _refreshing) return;
-    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
     setState(() => _refreshing = true);
     try {
       await RefreshService(_settingsRepo).refreshAll();
     } finally {
       await _loadArticles();
       if (mounted) setState(() => _refreshing = false);
-      _restoreScrollOffset(offset);
     }
   }
 
-  /// Manual refresh — fetches only the current tab's feeds.
-  /// After fetching, shows only unread articles and flags if none arrived.
+  // Pull-to-refresh or FAB refresh — fetches only the current tab's feeds.
   Future<void> _refreshCurrentTab() async {
     if (_refreshing) return;
     HapticFeedback.lightImpact();
@@ -210,16 +208,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         await svc.refreshAll();
       } else {
         final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
-        for (final f in feeds) { await svc.refreshFeed(f); }
+        for (final f in feeds) {
+          await svc.refreshFeed(f);
+        }
       }
     } finally {
-      await _loadArticles(unreadOnly: true);
-      if (mounted) {
-        setState(() {
-          _refreshing = false;
-          _noNewArticles = _articles.isEmpty;
-        });
-      }
+      await _loadArticles();
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
@@ -231,18 +226,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     setState(() {
       _selectedTabIndex = index;
       _loading = true;
-      _noNewArticles = false;
     });
     final articles = await _articlesForTab(index, _folders);
     if (!mounted || gen != _tabGeneration) return;
     setState(() {
       _articles = articles;
-      _cardKeys
-        ..clear()
-        ..addAll(List.generate(articles.length, (_) => GlobalKey()));
+      _syncCardKeys(articles);
       _loading = false;
     });
-    // New tab always starts at the top.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) _scrollController.jumpTo(0);
     });
@@ -255,15 +246,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final offset = _scrollController.offset;
     double cumulative = 0.0;
     for (int i = 0; i < _articles.length; i++) {
-      final key = i < _cardKeys.length ? _cardKeys[i] : null;
+      final article = _articles[i];
+      final key = article.id != null ? _cardKeys[article.id!] : null;
       double h = 120.0;
       if (key?.currentContext != null) {
         final box = key!.currentContext!.findRenderObject() as RenderBox?;
         if (box != null && box.hasSize) h = box.size.height;
       }
       if (cumulative + h / 2 < offset) {
-        final a = _articles[i];
-        if (!a.isRead && a.id != null) _pendingMarkRead.add(a.id!);
+        if (!article.isRead && article.id != null) _pendingMarkRead.add(article.id!);
       } else {
         break;
       }
@@ -279,15 +270,35 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     _pendingMarkRead.clear();
     await _articleRepo.markManyRead(ids.toList());
     if (!mounted) return;
-    setState(() {
-      for (int i = 0; i < _articles.length; i++) {
-        if (ids.contains(_articles[i].id)) {
-          _articles[i] = _articles[i].copyWith(isRead: true);
-        }
+
+    // Measure the total height of articles being removed so we can compensate
+    // the scroll offset — these articles were above the viewport so their
+    // removal would otherwise cause a jump.
+    double removedHeight = 0;
+    for (final article in _articles) {
+      if (!ids.contains(article.id)) continue;
+      final key = article.id != null ? _cardKeys[article.id!] : null;
+      double h = 120.0;
+      if (key?.currentContext != null) {
+        final box = key!.currentContext!.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize) h = box.size.height;
       }
+      removedHeight += h + 1; // +1 for the separator
+    }
+
+    setState(() {
+      _articles = _articles.where((a) => !ids.contains(a.id)).toList();
+      _syncCardKeys(_articles);
       _allUnreadCount = (_allUnreadCount - ids.length).clamp(0, _allUnreadCount);
     });
     AppBadgePlus.updateBadge(_allUnreadCount);
+
+    // Shift the scroll offset up by the height of removed items so the
+    // visible content doesn't appear to jump.
+    if (removedHeight > 0 && _scrollController.hasClients) {
+      final adjusted = (_scrollController.offset - removedHeight).clamp(0.0, double.infinity);
+      _scrollController.jumpTo(adjusted);
+    }
   }
 
   // ── Article actions ────────────────────────────────────────────────────────
@@ -297,9 +308,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     final wasUnread = article.id != null && !article.isRead;
     if (wasUnread) await _articleRepo.markRead(article.id!);
     if (!mounted) return;
-
-    // Save scroll position now, before any navigation or lifecycle events fire.
-    final scrollOffset = _scrollController.hasClients ? _scrollController.offset : 0.0;
 
     final uri = Uri.tryParse(article.url);
     if (uri == null) return;
@@ -337,22 +345,16 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
 
-    // Update the article's read state in-place — no DB reload, no list rebuild.
-    // This keeps the list stable and the scroll position intact.
+    // Remove the now-read article from the list. Items above the removed
+    // article are unaffected; Flutter preserves their scroll position.
     if (wasUnread && mounted) {
       setState(() {
-        _articles = [
-          for (final a in _articles)
-            a.id == article.id ? a.copyWith(isRead: true) : a,
-        ];
+        _articles = _articles.where((a) => a.id != article.id).toList();
+        _cardKeys.remove(article.id);
         _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
       });
       AppBadgePlus.updateBadge(_allUnreadCount);
     }
-
-    // Restore the exact scroll position the user was at before opening the article.
-    // This runs after the state update above so the list has the right height.
-    _restoreScrollOffset(scrollOffset);
   }
 
   Future<bool> _preflightIsHtml(Uri uri) async {
@@ -364,21 +366,21 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Swipe right-to-left: mark read and remove from list.
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
     await _articleRepo.markRead(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
-      _articles = [
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isRead: true) : a,
-      ];
+      _articles = _articles.where((a) => a.id != article.id).toList();
+      _cardKeys.remove(article.id);
       _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
     });
     AppBadgePlus.updateBadge(_allUnreadCount);
   }
 
+  // Swipe left-to-right: mark unread — article stays (it's now unread).
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markUnread(article.id!);
@@ -438,14 +440,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
 
     HapticFeedback.mediumImpact();
 
-    // Step 1 — Mark all as read in the DB.
+    // Step 1 — Mark all as read in DB.
     if (_selectedTabIndex == 0) {
       await _articleRepo.markAllRead();
     } else {
       await _articleRepo.markAllReadForFolder(_folders[_selectedTabIndex - 1].id!);
     }
 
-    // Step 2 — Clear the list immediately for instant feedback.
+    // Step 2 — Clear list immediately for instant feedback.
     if (!mounted) return;
     setState(() {
       _articles = [];
@@ -454,7 +456,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     });
     AppBadgePlus.updateBadge(0);
 
-    // Step 3 — Fetch fresh articles from the network.
+    // Step 3 — Fetch fresh articles from network.
     setState(() => _refreshing = true);
     try {
       final svc = RefreshService(_settingsRepo);
@@ -462,11 +464,13 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         await svc.refreshAll();
       } else {
         final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
-        for (final f in feeds) { await svc.refreshFeed(f); }
+        for (final f in feeds) {
+          await svc.refreshFeed(f);
+        }
       }
     } finally {
-      // Step 4 — Reload unread-only: nothing previously read reappears.
-      await _loadArticles(unreadOnly: true);
+      // Step 4 — Show only newly arrived unread articles.
+      await _loadArticles();
       if (mounted) setState(() => _refreshing = false);
     }
 
@@ -571,7 +575,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.35),
             Text(
-              _noNewArticles ? l10n.noNewArticles : l10n.noArticlesYet,
+              l10n.noNewArticles,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context)
@@ -588,26 +592,30 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     return RefreshIndicator(
       onRefresh: _refreshCurrentTab,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      child: ListView.separated(
+      child: Scrollbar(
         controller: _scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        cacheExtent: 500,
-        itemCount: _articles.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, indent: 16, endIndent: 16),
-        itemBuilder: (context, i) {
-          final article = _articles[i];
-          final cardKey = i < _cardKeys.length ? _cardKeys[i] : null;
-          return ArticleCard(
-            key: cardKey,
-            article: article,
-            onTap: () => _openArticle(article),
-            onMarkRead: () => _markRead(article),
-            onMarkUnread: () => _markUnread(article),
-            onShare: () => _shareService.shareArticle(article),
-            onBookmark: () => _toggleSaved(article),
-          );
-        },
+        thumbVisibility: true,
+        child: ListView.separated(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          cacheExtent: 500,
+          itemCount: _articles.length,
+          separatorBuilder: (_, __) =>
+              const Divider(height: 1, indent: 16, endIndent: 16),
+          itemBuilder: (context, i) {
+            final article = _articles[i];
+            final cardKey = article.id != null ? _cardKeys[article.id!] : null;
+            return ArticleCard(
+              key: cardKey,
+              article: article,
+              onTap: () => _openArticle(article),
+              onMarkRead: () => _markRead(article),
+              onMarkUnread: () => _markUnread(article),
+              onShare: () => _shareService.shareArticle(article),
+              onBookmark: () => _toggleSaved(article),
+            );
+          },
+        ),
       ),
     );
   }
