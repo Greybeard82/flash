@@ -156,6 +156,21 @@ class ArticleRepository {
     );
   }
 
+  Future<void> deleteAll() async {
+    final db = await _db;
+    await db.delete(TableNames.articles);
+  }
+
+  Future<void> deleteForFolder(int folderId) async {
+    final db = await _db;
+    await db.rawDelete('''
+      DELETE FROM ${TableNames.articles}
+      WHERE feed_id IN (
+        SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
+      )
+    ''', [folderId]);
+  }
+
   Future<void> runAutoCleanup(int feedId, int effectiveLimit) async {
     final db = await _db;
     await db.rawDelete(
