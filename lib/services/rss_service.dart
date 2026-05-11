@@ -8,6 +8,7 @@ import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../utils/constants.dart';
 import '../utils/html_utils.dart';
 
 class RssService {
@@ -31,7 +32,7 @@ class RssService {
       }
 
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-      var articles = _parse(body, feed);
+      var articles = _applyFetchThresholds(_parse(body, feed));
 
       if (keywords.isNotEmpty) {
         articles = articles.map((a) {
@@ -233,6 +234,25 @@ class RssService {
     final second = timeParts.length > 2 ? int.tryParse(timeParts[2]) ?? 0 : 0;
 
     return DateTime.utc(year, month, day, hour, minute, second);
+  }
+
+  List<Article> _applyFetchThresholds(List<Article> articles) {
+    final cutoffMs = DateTime.now()
+        .subtract(Duration(days: kFetchDayLimit))
+        .millisecondsSinceEpoch;
+
+    // Sort newest-first so the age check can short-circuit.
+    articles.sort((a, b) =>
+        (b.publishedAt ?? 0).compareTo(a.publishedAt ?? 0));
+
+    final accepted = <Article>[];
+    for (final article in articles) {
+      if (article.publishedAt == null) continue;
+      if (article.publishedAt! < cutoffMs) break;
+      if (accepted.length >= kFetchArticleLimit) break;
+      accepted.add(article);
+    }
+    return accepted;
   }
 
   /// Validate a URL is a parseable feed
