@@ -148,7 +148,7 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'anthropic_api_key_set', 'value': 'false'},
   {'key': 'google_account_email', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
-  {'key': 'schema_version', 'value': '1'},
+  {'key': 'schema_version', 'value': '3'},
   {'key': 'article_font_size', 'value': 'medium'},
   {'key': 'reader_mode', 'value': 'false'},
 ];

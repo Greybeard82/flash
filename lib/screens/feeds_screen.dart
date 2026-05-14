@@ -617,7 +617,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       }
 
       final rssService =
-          RssService(widget.articleRepo, widget.feedRepo, widget.settingsRepo);
+          RssService(widget.articleRepo, widget.feedRepo);
       final info = await rssService.validateFeedUrl(url);
       if (info == null) {
         setState(() {

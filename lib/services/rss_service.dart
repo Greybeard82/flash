@@ -7,18 +7,46 @@ import '../models/keyword_block.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/keyword_repository.dart';
-import '../repositories/settings_repository.dart';
 import '../utils/constants.dart';
 import '../utils/html_utils.dart';
 
 class RssService {
   final ArticleRepository _articleRepo;
   final FeedRepository _feedRepo;
-  final SettingsRepository _settingsRepo;
 
-  RssService(this._articleRepo, this._feedRepo, this._settingsRepo);
+  RssService(this._articleRepo, this._feedRepo);
 
-  Future<({Feed feed, int newCount, List<({String title, String? description})> unblocked})> fetchAndStore(
+  // ── GUID resolution ────────────────────────────────────────────────────────
+
+  static String resolveGuid(String? feedGuid, String? articleUrl) {
+    if (feedGuid != null && feedGuid.trim().isNotEmpty) return feedGuid.trim();
+    if (articleUrl != null && articleUrl.trim().isNotEmpty) return articleUrl.trim();
+    throw Exception('Article has no guid or url — discard');
+  }
+
+  // ── Fetch threshold filter ─────────────────────────────────────────────────
+
+  List<Article> applyFetchThresholds(List<Article> articles) {
+    final cutoffMs = DateTime.now()
+        .subtract(const Duration(days: kFetchDayLimit))
+        .millisecondsSinceEpoch;
+
+    articles.sort((a, b) => (b.publishedAt ?? 0).compareTo(a.publishedAt ?? 0));
+
+    final accepted = <Article>[];
+    for (final article in articles) {
+      if (article.publishedAt == null) continue;
+      if (article.publishedAt! < cutoffMs) break;
+      if (accepted.length >= kFetchArticleLimit) break;
+      accepted.add(article);
+    }
+    return accepted;
+  }
+
+  // ── Fetch and store ────────────────────────────────────────────────────────
+
+  Future<({Feed feed, int newCount, List<({String title, String? description})> unblocked})>
+      fetchAndStore(
     Feed feed, {
     List<KeywordBlock> keywords = const [],
   }) async {
@@ -32,7 +60,7 @@ class RssService {
       }
 
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-      var articles = _applyFetchThresholds(_parse(body, feed));
+      var articles = applyFetchThresholds(_parse(body, feed));
 
       if (keywords.isNotEmpty) {
         articles = articles.map((a) {
@@ -42,21 +70,8 @@ class RssService {
         }).toList();
       }
 
-      final actualNewCount = await _articleRepo.insertMany(articles);
+      await _articleRepo.insertArticles(feed.id!, articles);
 
-      // Auto-cleanup
-      final globalLimit = int.tryParse(
-              await _settingsRepo.get('article_limit') ?? '100') ??
-          100;
-      final effectiveLimit = feed.articleLimit ?? globalLimit;
-      await _articleRepo.runAutoCleanup(feed.id!, effectiveLimit);
-
-      final updatedFeed = feed.copyWith(
-        lastFetchedAt: now,
-        lastFetchError: null,
-        consecutiveFailures: 0,
-        isDead: false,
-      );
       await _feedRepo.updateFetchResult(
         feedId: feed.id!,
         lastFetchedAt: now,
@@ -64,11 +79,22 @@ class RssService {
         consecutiveFailures: 0,
         isDead: false,
       );
+
       final unblocked = articles
           .where((a) => !a.isBlocked)
           .map((a) => (title: a.title, description: a.description))
           .toList();
-      return (feed: updatedFeed, newCount: actualNewCount, unblocked: unblocked);
+
+      return (
+        feed: feed.copyWith(
+          lastFetchedAt: now,
+          lastFetchError: null,
+          consecutiveFailures: 0,
+          isDead: false,
+        ),
+        newCount: articles.length,
+        unblocked: unblocked,
+      );
     } catch (e) {
       final failures = feed.consecutiveFailures + 1;
       final isDead = failures >= 7;
@@ -91,23 +117,17 @@ class RssService {
     }
   }
 
+  // ── Parsing ────────────────────────────────────────────────────────────────
+
   List<Article> _parse(String body, Feed feed) {
-    // Try RSS 2.0 first
     try {
       final channel = RssFeed.parse(body);
-      if (channel.items.isNotEmpty) {
-        return _fromRssItems(channel.items, feed);
-      }
+      if (channel.items.isNotEmpty) return _fromRssItems(channel.items, feed);
     } catch (_) {}
-
-    // Fallback to Atom
     try {
       final atom = AtomFeed.parse(body);
-      if (atom.items.isNotEmpty) {
-        return _fromAtomItems(atom.items, feed);
-      }
+      if (atom.items.isNotEmpty) return _fromAtomItems(atom.items, feed);
     } catch (_) {}
-
     return [];
   }
 
@@ -115,23 +135,22 @@ class RssService {
     final now = DateTime.now().millisecondsSinceEpoch;
     final articles = <Article>[];
     for (final item in items) {
-      final guid = item.guid ?? item.link ?? '';
-      if (guid.isEmpty) continue;
-
-      final thumbnailUrl = _extractRssThumbnail(item);
+      final String guid;
+      try {
+        guid = resolveGuid(item.guid, item.link);
+      } catch (_) {
+        continue;
+      }
       final publishedAt = item.pubDate != null
           ? _parseDate(item.pubDate!)?.millisecondsSinceEpoch
           : null;
-
-      final title = stripHtml(item.title);
-      final description = stripHtml(item.description);
       articles.add(Article(
         feedId: feed.id!,
         guid: guid,
-        title: title,
+        title: stripHtml(item.title),
         url: item.link ?? '',
-        description: description,
-        thumbnailUrl: thumbnailUrl,
+        description: stripHtml(item.description),
+        thumbnailUrl: _extractRssThumbnail(item),
         publishedAt: publishedAt,
         fetchedAt: now,
       ));
@@ -143,16 +162,18 @@ class RssService {
     final now = DateTime.now().millisecondsSinceEpoch;
     final articles = <Article>[];
     for (final item in items) {
-      final guid = item.id ?? '';
-      if (guid.isEmpty) continue;
-
       final url = item.links.isNotEmpty ? item.links.first.href ?? '' : '';
+      final String guid;
+      try {
+        guid = resolveGuid(item.id, url.isNotEmpty ? url : null);
+      } catch (_) {
+        continue;
+      }
       final publishedAt = item.published != null
           ? _parseDate(item.published!)?.millisecondsSinceEpoch
           : item.updated != null
               ? _parseDate(item.updated!)?.millisecondsSinceEpoch
               : null;
-
       String? thumbnailUrl;
       if (item.media != null) {
         thumbnailUrl = item.media!.contents.isNotEmpty
@@ -161,15 +182,12 @@ class RssService {
                 ? item.media!.thumbnails.first.url
                 : null;
       }
-
-      final title = stripHtml(item.title);
-      final description = stripHtml(item.summary ?? item.content);
       articles.add(Article(
         feedId: feed.id!,
         guid: guid,
-        title: title,
+        title: stripHtml(item.title),
         url: url,
-        description: description,
+        description: stripHtml(item.summary ?? item.content),
         thumbnailUrl: thumbnailUrl,
         publishedAt: publishedAt,
         fetchedAt: now,
@@ -179,28 +197,19 @@ class RssService {
   }
 
   String? _extractRssThumbnail(RssItem item) {
-    // media:content or media:thumbnail
     if (item.media != null) {
-      if (item.media!.contents.isNotEmpty) {
-        return item.media!.contents.first.url;
-      }
-      if (item.media!.thumbnails.isNotEmpty) {
-        return item.media!.thumbnails.first.url;
-      }
+      if (item.media!.contents.isNotEmpty) return item.media!.contents.first.url;
+      if (item.media!.thumbnails.isNotEmpty) return item.media!.thumbnails.first.url;
     }
-    // enclosure
     if (item.enclosure?.url != null) {
       final mime = item.enclosure!.type ?? '';
-      if (mime.startsWith('image/')) {
-        return item.enclosure!.url;
-      }
+      if (mime.startsWith('image/')) return item.enclosure!.url;
     }
     return null;
   }
 
   DateTime? _parseDate(String dateStr) {
     try {
-      // Try RFC 822 / RFC 2822 (RSS pub dates)
       return _parseRfc822(dateStr);
     } catch (_) {}
     try {
@@ -211,20 +220,14 @@ class RssService {
   }
 
   DateTime? _parseRfc822(String s) {
-    // Example: "Mon, 02 Jan 2006 15:04:05 -0700"
-    // or "Mon, 02 Jan 2006 15:04:05 GMT"
     final months = {
       'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
       'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
     };
     final parts = s.trim().split(RegExp(r'[\s,]+'));
     if (parts.length < 6) return DateTime.tryParse(s);
-
-    // [DayName,] DD Mon YYYY HH:MM:SS TZ
     int idx = 0;
-    if (int.tryParse(parts[0]) == null) {
-      idx = 1;
-    }
+    if (int.tryParse(parts[0]) == null) idx = 1;
     final day = int.tryParse(parts[idx]) ?? 1;
     final month = months[parts[idx + 1]] ?? 1;
     final year = int.tryParse(parts[idx + 2]) ?? 2000;
@@ -232,39 +235,19 @@ class RssService {
     final hour = int.tryParse(timeParts[0]) ?? 0;
     final minute = timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
     final second = timeParts.length > 2 ? int.tryParse(timeParts[2]) ?? 0 : 0;
-
     return DateTime.utc(year, month, day, hour, minute, second);
   }
 
-  List<Article> _applyFetchThresholds(List<Article> articles) {
-    final cutoffMs = DateTime.now()
-        .subtract(Duration(days: kFetchDayLimit))
-        .millisecondsSinceEpoch;
+  // ── Feed validation ────────────────────────────────────────────────────────
 
-    // Sort newest-first so the age check can short-circuit.
-    articles.sort((a, b) =>
-        (b.publishedAt ?? 0).compareTo(a.publishedAt ?? 0));
-
-    final accepted = <Article>[];
-    for (final article in articles) {
-      if (article.publishedAt == null) continue;
-      if (article.publishedAt! < cutoffMs) break;
-      if (accepted.length >= kFetchArticleLimit) break;
-      accepted.add(article);
-    }
-    return accepted;
-  }
-
-  /// Validate a URL is a parseable feed
   Future<({String title, String? siteUrl, String? description})?> validateFeedUrl(
-      String url) async {
+    String url,
+  ) async {
     try {
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: 15),
-      );
+      final response =
+          await http.get(Uri.parse(url)).timeout(const Duration(seconds: 15));
       if (response.statusCode != 200) return null;
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-
       try {
         final channel = RssFeed.parse(body);
         if (channel.title != null) {
@@ -275,19 +258,16 @@ class RssService {
           );
         }
       } catch (_) {}
-
       try {
         final atom = AtomFeed.parse(body);
         if (atom.title != null) {
-          final siteUrl = atom.links.isNotEmpty ? atom.links.first.href : null;
           return (
             title: atom.title!,
-            siteUrl: siteUrl,
+            siteUrl: atom.links.isNotEmpty ? atom.links.first.href : null,
             description: atom.subtitle,
           );
         }
       } catch (_) {}
-
       return null;
     } catch (_) {
       return null;

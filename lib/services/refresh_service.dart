@@ -19,11 +19,9 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     if (task == kRefreshTaskName) {
       try {
-        await _doRefreshAll();
-      } catch (_) {
-        // Background refresh errors are intentionally silent — the app
-        // will pick up new articles on the next successful run.
-      }
+        // Background job: run cleanup first, then fetch.
+        await _doRefresh(runCleanup: true);
+      } catch (_) {}
     }
     return true;
   });
@@ -57,31 +55,38 @@ Future<void> _showKeywordNotification(List<String> keywords) async {
   );
 }
 
-/// Shared refresh logic used by both the background WorkManager task
-/// and foreground manual refresh.
-/// Returns the total number of new articles fetched.
-Future<int> _doRefreshAll({List<Feed>? feeds}) async {
-  final feedRepo = FeedRepository();
+/// Core refresh logic shared across cold start, background, and pull-to-refresh.
+///
+/// [runCleanup] — true for cold start and background; false for pull-to-refresh.
+/// [feeds] — if provided, only these feeds are fetched; otherwise all feeds.
+Future<int> _doRefresh({bool runCleanup = false, List<Feed>? feeds}) async {
   final articleRepo = ArticleRepository();
-  final settingsRepo = SettingsRepository();
+  final feedRepo = FeedRepository();
   final keywordRepo = KeywordRepository();
   final alertRepo = KeywordAlertRepository();
+
+  // Cleanup must complete before any inserts (cold start and background only).
+  if (runCleanup) {
+    await articleRepo.runCleanup();
+  }
+
   final keywords = await keywordRepo.getAll();
   final alerts = await alertRepo.getAll();
-  final rssService = RssService(articleRepo, feedRepo, settingsRepo);
+  final rssService = RssService(articleRepo, feedRepo);
   final feedList = feeds ?? await feedRepo.getAll();
+
   int totalNew = 0;
   final allUnblocked = <({String title, String? description})>[];
-  for (final feed in feedList) {
+
+  await Future.wait(feedList.map((feed) async {
     final result = await rssService.fetchAndStore(feed, keywords: keywords);
     totalNew += result.newCount;
     allUnblocked.addAll(result.unblocked);
-  }
+  }));
+
   if (alerts.isNotEmpty && allUnblocked.isNotEmpty) {
     final hits = KeywordAlertRepository.findHits(allUnblocked, alerts);
-    if (hits.isNotEmpty) {
-      await _showKeywordNotification(hits);
-    }
+    if (hits.isNotEmpty) await _showKeywordNotification(hits);
   }
 
   return totalNew;
@@ -97,13 +102,6 @@ class RefreshService {
     await schedulePeriodicRefresh();
   }
 
-  /// Schedules (or updates) the periodic background refresh.
-  ///
-  /// [forceReschedule] should be `true` only when the user explicitly changes
-  /// the interval in Settings — it cancels any existing task and registers a
-  /// fresh one so the new interval takes effect immediately.
-  /// On normal app startup pass `false` (default) so an already-running
-  /// schedule is not reset.
   Future<void> schedulePeriodicRefresh({bool forceReschedule = false}) async {
     final intervalStr =
         await _settingsRepo.get('refresh_interval_minutes') ?? '30';
@@ -128,7 +126,12 @@ class RefreshService {
     );
   }
 
-  Future<int> refreshAll() => _doRefreshAll();
+  /// Fetch all feeds.
+  /// [coldStart] — true on app cold open; runs cleanup before fetching.
+  Future<int> refreshAll({bool coldStart = false}) =>
+      _doRefresh(runCleanup: coldStart);
 
-  Future<int> refreshFeed(Feed feed) => _doRefreshAll(feeds: [feed]);
+  /// Refresh a single feed without running cleanup.
+  Future<int> refreshFeed(Feed feed) =>
+      _doRefresh(runCleanup: false, feeds: [feed]);
 }

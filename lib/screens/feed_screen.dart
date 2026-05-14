@@ -61,19 +61,15 @@ class _FeedScreenState extends State<FeedScreen>
   Map<int, int> _folderUnreadCounts = {};
   int _allUnreadCount = 0;
   int _selectedTabIndex = 0;
-  bool _booting = true;   // cold start: show lightning animation
-  bool _loading = false;  // tab switch: show shimmer
+  bool _booting = true;
+  bool _loading = false;
   bool _refreshing = false;
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
 
-  // Keyed by article ID — avoids parallel-list sync bugs when articles are removed.
   final Map<int, GlobalKey> _cardKeys = {};
-
-  // Race guard: only the latest tab-switch result is applied.
   int _tabGeneration = 0;
 
-  // Mark-as-read-on-scroll: DB writes are immediate, UI update is debounced.
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkReadUI = {};
 
@@ -96,9 +92,7 @@ class _FeedScreenState extends State<FeedScreen>
   @override
   void didUpdateWidget(FeedScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
-      _fetchAndReload();
-    }
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) _fetchAndReload();
   }
 
   @override
@@ -125,8 +119,9 @@ class _FeedScreenState extends State<FeedScreen>
 
     if (mounted) setState(() => _booting = true);
 
+    // Cold start: cleanup first, then fetch.
     try {
-      await RefreshService(_settingsRepo).refreshAll();
+      await RefreshService(_settingsRepo).refreshAll(coldStart: true);
     } catch (_) {}
 
     await _loadArticles();
@@ -149,7 +144,7 @@ class _FeedScreenState extends State<FeedScreen>
     final (articles, folderCounts, allCount) = await (
       _articlesForTab(safeTab, folders),
       _articleRepo.getAllFolderUnreadCounts(),
-      _articleRepo.getUnreadCount(),
+      _articleRepo.getTotalUnreadCount(),
     ).wait;
 
     if (!mounted) return;
@@ -173,8 +168,8 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
-    if (tab == 0) return _articleRepo.getAll(includeRead: false);
-    return _articleRepo.getForFolder(folders[tab - 1].id!, includeRead: false);
+    if (tab == 0) return _articleRepo.getAllArticles();
+    return _articleRepo.getArticlesByFolder(folders[tab - 1].id!);
   }
 
   void _syncCardKeys(List<Article> articles) {
@@ -196,22 +191,19 @@ class _FeedScreenState extends State<FeedScreen>
 
   // ── Network refresh ────────────────────────────────────────────────────────
 
+  // Re-tap of Flash tab: fetch without cleanup.
   Future<void> _fetchAndReload() async {
     if (!mounted || _refreshing) return;
     setState(() => _refreshing = true);
-    _bannerKey.currentState?.show(
-      AppLocalizations.of(context)!.refresh,
-      persistent: true,
-    );
     try {
       await RefreshService(_settingsRepo).refreshAll();
     } finally {
       await _loadArticles();
       if (mounted) setState(() => _refreshing = false);
-      _bannerKey.currentState?.dismiss();
     }
   }
 
+  // Pull-to-refresh: fetch without cleanup.
   Future<void> _refreshCurrentTab() async {
     if (_refreshing) return;
     HapticFeedback.lightImpact();
@@ -237,7 +229,6 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _onTabSelected(int index) async {
     if (index == _selectedTabIndex) return;
 
-    // Save current scroll position before switching.
     if (_scrollController.hasClients) {
       _tabScrollPositions[_selectedTabIndex] = _scrollController.offset;
     }
@@ -255,7 +246,6 @@ class _FeedScreenState extends State<FeedScreen>
       _loading = false;
     });
 
-    // Restore saved scroll position for the new tab, or go to top.
     final savedOffset = _tabScrollPositions[index] ?? 0.0;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -275,8 +265,7 @@ class _FeedScreenState extends State<FeedScreen>
     final offset = _scrollController.offset;
     double cumulative = 0.0;
     final toWrite = <int>[];
-    for (int i = 0; i < _articles.length; i++) {
-      final article = _articles[i];
+    for (final article in _articles) {
       final key = article.id != null ? _cardKeys[article.id!] : null;
       double h = 120.0;
       if (key?.currentContext != null) {
@@ -321,7 +310,6 @@ class _FeedScreenState extends State<FeedScreen>
   // ── Article actions ────────────────────────────────────────────────────────
 
   Future<void> _openArticle(Article article) async {
-    // Save scroll position before leaving.
     final scrollOffset =
         _scrollController.hasClients ? _scrollController.offset : 0.0;
 
@@ -330,7 +318,7 @@ class _FeedScreenState extends State<FeedScreen>
 
     // Mark read immediately and dim in-place.
     if (wasUnread) {
-      await _articleRepo.markRead(article.id!);
+      await _articleRepo.markAsRead(article.id!);
       if (mounted) {
         setState(() {
           _articles = [
@@ -395,10 +383,8 @@ class _FeedScreenState extends State<FeedScreen>
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
 
-    // Restore scroll exactly — list is unchanged except the tapped card is grey.
-    if (mounted) {
-      _restoreScrollOffset(scrollOffset);
-    }
+    // Restore scroll — list is unchanged except the tapped card is grey.
+    if (mounted) _restoreScrollOffset(scrollOffset);
   }
 
   Future<bool> _preflightIsHtml(Uri uri) async {
@@ -410,10 +396,9 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
-  // Swipe right-to-left: mark read and remove from list.
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
-    await _articleRepo.markRead(article.id!);
+    await _articleRepo.markAsRead(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -424,10 +409,9 @@ class _FeedScreenState extends State<FeedScreen>
     AppBadgePlus.updateBadge(_allUnreadCount);
   }
 
-  // Swipe left-to-right: mark unread — article stays (it's now unread).
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
-    await _articleRepo.markUnread(article.id!);
+    await _articleRepo.markAsUnread(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -460,33 +444,31 @@ class _FeedScreenState extends State<FeedScreen>
     HapticFeedback.mediumImpact();
 
     if (_selectedTabIndex == 0) {
-      // All tab: delete every article, then cold-start-style fetch.
-      await _articleRepo.deleteAll();
+      // All tab: mark all read, run cleanup, then cold-start fetch with animation.
+      await _articleRepo.markAllAsRead();
+      await _articleRepo.runCleanup();
+
+      // Show cold-start animation and trigger full fetch.
       if (!mounted) return;
       setState(() {
-        _articles = [];
-        _cardKeys.clear();
-        _allUnreadCount = 0;
         _booting = true;
+        _allUnreadCount = 0;
       });
       AppBadgePlus.updateBadge(0);
-
       try {
-        await RefreshService(_settingsRepo).refreshAll();
+        await RefreshService(_settingsRepo).refreshAll(coldStart: false);
       } catch (_) {}
-
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
     } else {
-      // Category tab: delete only this folder's articles — no fetch.
+      // Category tab: mark read + cleanup for this folder only — no fetch.
       final folderId = _folders[_selectedTabIndex - 1].id!;
-      await _articleRepo.deleteForFolder(folderId);
-      if (!mounted) return;
+      await _articleRepo.markAllAsReadByFolder(folderId);
+      await _articleRepo.runCleanup(folderId: folderId);
 
-      // Recalculate counts and reload.
       final (folderCounts, allCount) = await (
         _articleRepo.getAllFolderUnreadCounts(),
-        _articleRepo.getUnreadCount(),
+        _articleRepo.getTotalUnreadCount(),
       ).wait;
 
       if (!mounted) return;
@@ -497,9 +479,7 @@ class _FeedScreenState extends State<FeedScreen>
         _allUnreadCount = allCount;
       });
       AppBadgePlus.updateBadge(allCount);
-
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.allMarkedRead);
+      _bannerKey.currentState?.show(AppLocalizations.of(context)!.allMarkedRead);
     }
   }
 
@@ -582,9 +562,7 @@ class _FeedScreenState extends State<FeedScreen>
       return EmptyState(onAddFeed: widget.onNavigateToFeeds);
     }
 
-    if (_booting) {
-      return _BootingAnimation(animation: _pulseAnim);
-    }
+    if (_booting) return _BootingAnimation(animation: _pulseAnim);
 
     if (_loading) {
       return ListView.builder(
@@ -652,10 +630,8 @@ class _FeedScreenState extends State<FeedScreen>
   }
 }
 
-/// Lightning logo with pulse animation shown during cold-start fetch.
 class _BootingAnimation extends StatelessWidget {
   final Animation<double> animation;
-
   const _BootingAnimation({required this.animation});
 
   @override
@@ -667,11 +643,7 @@ class _BootingAnimation extends StatelessWidget {
         children: [
           ScaleTransition(
             scale: animation,
-            child: Icon(
-              Icons.bolt_rounded,
-              size: 72,
-              color: theme.colorScheme.primary,
-            ),
+            child: Icon(Icons.bolt_rounded, size: 72, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 16),
           Text(

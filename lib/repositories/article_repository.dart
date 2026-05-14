@@ -3,46 +3,78 @@ import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/article.dart';
 import '../utils/keyword_matcher.dart';
+import '../utils/constants.dart';
 
 class ArticleRepository {
   Future<Database> get _db async => AppDatabase.instance.database;
 
-  Future<List<Article>> getForFeed(int feedId, {bool includeRead = true}) async {
+  // ── Insert ─────────────────────────────────────────────────────────────────
+
+  /// Insert articles for a feed using INSERT OR IGNORE to deduplicate.
+  /// An existing row (same feed_id + guid) is silently skipped — never reset to unread.
+  Future<void> insertArticles(int feedId, List<Article> articles) async {
+    if (articles.isEmpty) return;
     final db = await _db;
-    final where = includeRead
-        ? 'a.feed_id = ? AND a.is_blocked = 0'
-        : 'a.feed_id = ? AND a.is_read = 0 AND a.is_blocked = 0';
+    final batch = db.batch();
+    final fetchedAt = DateTime.now().millisecondsSinceEpoch;
+    for (final a in articles) {
+      batch.rawInsert('''
+        INSERT OR IGNORE INTO ${TableNames.articles}
+        (feed_id, guid, title, url, description, thumbnail_url, thumbnail_path,
+         published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)
+      ''', [
+        feedId,
+        a.guid,
+        a.title,
+        a.url,
+        a.description,
+        a.thumbnailUrl,
+        a.thumbnailPath,
+        a.publishedAt,
+        fetchedAt,
+        a.isBlocked ? 1 : 0,
+        a.blockedKeyword,
+      ]);
+    }
+    await batch.commit(noResult: true);
+  }
+
+  // ── Read queries ───────────────────────────────────────────────────────────
+
+  /// All unread, unblocked articles across all folders, newest first.
+  Future<List<Article>> getAllArticles() async {
+    final db = await _db;
     final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE $where
+      WHERE a.is_read = 0 AND a.is_blocked = 0
       ORDER BY a.published_at DESC
-    ''', [feedId]);
+    ''');
     return rows.map(Article.fromMap).toList();
   }
 
-  Future<List<Article>> getForFolder(int folderId, {bool includeRead = true}) async {
+  /// Unread, unblocked articles for a specific folder, newest first.
+  Future<List<Article>> getArticlesByFolder(int folderId) async {
     final db = await _db;
-    final whereExtra = includeRead ? '' : 'AND a.is_read = 0';
     final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE f.folder_id = ? AND a.is_blocked = 0 $whereExtra
+      WHERE f.folder_id = ? AND a.is_read = 0 AND a.is_blocked = 0
       ORDER BY a.published_at DESC
     ''', [folderId]);
     return rows.map(Article.fromMap).toList();
   }
 
-  Future<List<Article>> getAll({bool includeRead = true}) async {
+  Future<List<Article>> getSaved() async {
     final db = await _db;
-    final whereExtra = includeRead ? '' : 'AND a.is_read = 0';
     final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.is_blocked = 0 $whereExtra
+      WHERE a.is_saved = 1
       ORDER BY a.published_at DESC
     ''');
     return rows.map(Article.fromMap).toList();
@@ -51,7 +83,7 @@ class ArticleRepository {
   Future<List<Article>> getBlocked() async {
     final db = await _db;
     final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_blocked = 1
@@ -65,7 +97,7 @@ class ArticleRepository {
     final db = await _db;
     final pattern = '%${query.trim()}%';
     final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_blocked = 0
@@ -76,22 +108,49 @@ class ArticleRepository {
     return rows.map(Article.fromMap).toList();
   }
 
-  Future<int> insertMany(List<Article> articles) async {
-    if (articles.isEmpty) return 0;
+  // ── Counts ─────────────────────────────────────────────────────────────────
+
+  /// Total unread count across all folders.
+  Future<int> getTotalUnreadCount() async {
     final db = await _db;
-    int newCount = 0;
-    for (final article in articles) {
-      final id = await db.insert(
-        TableNames.articles,
-        article.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-      if (id != 0) newCount++;
-    }
-    return newCount;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM ${TableNames.articles} a
+      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
+      WHERE a.is_read = 0 AND a.is_blocked = 0
+    ''');
+    return result.first['cnt'] as int;
   }
 
-  Future<void> markRead(int articleId) async {
+  /// Unread count for a single folder.
+  Future<int> getUnreadCount(int folderId) async {
+    final db = await _db;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) AS cnt
+      FROM ${TableNames.articles} a
+      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
+      WHERE f.folder_id = ? AND a.is_read = 0 AND a.is_blocked = 0
+    ''', [folderId]);
+    return result.first['cnt'] as int;
+  }
+
+  /// Unread counts for every folder in one query, keyed by folder_id.
+  Future<Map<int, int>> getAllFolderUnreadCounts() async {
+    final db = await _db;
+    final rows = await db.rawQuery('''
+      SELECT f.folder_id, COUNT(*) AS cnt
+      FROM ${TableNames.articles} a
+      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
+      WHERE a.is_read = 0 AND a.is_blocked = 0
+        AND f.folder_id IS NOT NULL
+      GROUP BY f.folder_id
+    ''');
+    return {for (final row in rows) row['folder_id'] as int: row['cnt'] as int};
+  }
+
+  // ── Mark read / unread ─────────────────────────────────────────────────────
+
+  Future<void> markAsRead(int articleId) async {
     final db = await _db;
     await db.update(
       TableNames.articles,
@@ -101,7 +160,7 @@ class ArticleRepository {
     );
   }
 
-  Future<void> markUnread(int articleId) async {
+  Future<void> markAsUnread(int articleId) async {
     final db = await _db;
     await db.update(
       TableNames.articles,
@@ -126,17 +185,16 @@ class ArticleRepository {
     await batch.commit(noResult: true);
   }
 
-  Future<void> markAllReadForFeed(int feedId) async {
+  Future<void> markAllAsRead() async {
     final db = await _db;
     await db.update(
       TableNames.articles,
       {'is_read': 1},
-      where: 'feed_id = ? AND is_blocked = 0',
-      whereArgs: [feedId],
+      where: 'is_blocked = 0',
     );
   }
 
-  Future<void> markAllReadForFolder(int folderId) async {
+  Future<void> markAllAsReadByFolder(int folderId) async {
     final db = await _db;
     await db.rawUpdate('''
       UPDATE ${TableNames.articles}
@@ -147,37 +205,49 @@ class ArticleRepository {
     ''', [folderId]);
   }
 
-  Future<void> markAllRead() async {
+  // ── Cleanup ────────────────────────────────────────────────────────────────
+
+  /// Delete read (and not saved) articles older than [kFetchDayLimit] days.
+  /// Scoped to [folderId] if provided; otherwise applies to all feeds.
+  /// Returns the number of rows deleted.
+  Future<int> runCleanup({int? folderId}) async {
+    final db = await _db;
+    final cutoffMs = DateTime.now()
+        .subtract(Duration(days: kFetchDayLimit))
+        .millisecondsSinceEpoch;
+    if (folderId == null) {
+      return db.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE is_read = 1
+          AND is_saved = 0
+          AND published_at < ?
+      ''', [cutoffMs]);
+    } else {
+      return db.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE is_read = 1
+          AND is_saved = 0
+          AND published_at < ?
+          AND feed_id IN (
+            SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
+          )
+      ''', [cutoffMs, folderId]);
+    }
+  }
+
+  // ── Saved / bookmarks ──────────────────────────────────────────────────────
+
+  Future<void> setSaved(int articleId, {required bool saved}) async {
     final db = await _db;
     await db.update(
       TableNames.articles,
-      {'is_read': 1},
-      where: 'is_blocked = 0',
+      {'is_saved': saved ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [articleId],
     );
   }
 
-  Future<void> deleteAll() async {
-    final db = await _db;
-    await db.delete(TableNames.articles);
-  }
-
-  Future<void> deleteForFolder(int folderId) async {
-    final db = await _db;
-    await db.rawDelete('''
-      DELETE FROM ${TableNames.articles}
-      WHERE feed_id IN (
-        SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
-      )
-    ''', [folderId]);
-  }
-
-  Future<void> runAutoCleanup(int feedId, int effectiveLimit) async {
-    final db = await _db;
-    await db.rawDelete(
-      SchemaStatements.autoCleanup,
-      [feedId, feedId, effectiveLimit],
-    );
-  }
+  // ── Thumbnails ─────────────────────────────────────────────────────────────
 
   Future<void> updateThumbnailPath(int articleId, String path) async {
     final db = await _db;
@@ -189,7 +259,8 @@ class ArticleRepository {
     );
   }
 
-  /// When a keyword is newly added, scan all unblocked articles and block matches.
+  // ── Keyword blocking ───────────────────────────────────────────────────────
+
   Future<void> retroactivelyBlock(String keyword, bool wholeWord) async {
     final db = await _db;
     final rows = await db.query(
@@ -215,7 +286,6 @@ class ArticleRepository {
     await batch.commit(noResult: true);
   }
 
-  /// When a keyword is deleted, unblock all articles it had blocked.
   Future<void> unblockByKeyword(String keyword) async {
     final db = await _db;
     await db.update(
@@ -226,60 +296,8 @@ class ArticleRepository {
     );
   }
 
-  Future<List<Article>> getSaved() async {
-    final db = await _db;
-    final rows = await db.rawQuery('''
-      SELECT a.*, f.title as feed_title, f.favicon_path as feed_favicon_path
-      FROM ${TableNames.articles} a
-      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.is_saved = 1
-      ORDER BY a.published_at DESC
-    ''');
-    return rows.map(Article.fromMap).toList();
-  }
+  // ── Backward-compatible aliases ────────────────────────────────────────────
 
-  Future<void> setSaved(int articleId, {required bool saved}) async {
-    final db = await _db;
-    await db.update(
-      TableNames.articles,
-      {'is_saved': saved ? 1 : 0},
-      where: 'id = ?',
-      whereArgs: [articleId],
-    );
-  }
-
-  Future<int> getUnreadCount() async {
-    final db = await _db;
-    final result = await db.rawQuery('''
-      SELECT COUNT(*) as count
-      FROM ${TableNames.articles} a
-      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.is_read = 0 AND a.is_blocked = 0
-    ''');
-    return result.first['count'] as int;
-  }
-
-  Future<int> getUnreadCountForFolder(int folderId) async {
-    final db = await _db;
-    final result = await db.rawQuery('''
-      SELECT COUNT(*) as count
-      FROM ${TableNames.articles} a
-      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE f.folder_id = ? AND a.is_read = 0 AND a.is_blocked = 0    ''', [folderId]);
-    return result.first['count'] as int;
-  }
-
-  /// Returns unread counts for every folder in a single query, keyed by folder_id.
-  /// Use this instead of calling [getUnreadCountForFolder] in a loop.
-  Future<Map<int, int>> getAllFolderUnreadCounts() async {
-    final db = await _db;
-    final rows = await db.rawQuery('''
-      SELECT f.folder_id, COUNT(*) AS cnt
-      FROM ${TableNames.articles} a
-      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.is_read = 0 AND a.is_blocked = 0        AND f.folder_id IS NOT NULL
-      GROUP BY f.folder_id
-    ''');
-    return {for (final row in rows) row['folder_id'] as int: row['cnt'] as int};
-  }
+  Future<void> markRead(int id) => markAsRead(id);
+  Future<void> markUnread(int id) => markAsUnread(id);
 }

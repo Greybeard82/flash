@@ -105,7 +105,7 @@ class OpmlService {
     final entries = _parseOpml(content);
     if (entries.isEmpty) return 0;
 
-    final rssService = RssService(articleRepo, feedRepo, settingsRepo);
+    final rssService = RssService(articleRepo, feedRepo);
     int added = 0;
 
     for (final entry in entries) {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'schema.dart';
@@ -5,6 +6,7 @@ import 'schema.dart';
 class AppDatabase {
   static AppDatabase? _instance;
   static Database? _db;
+  static String? _testPath;
 
   AppDatabase._();
 
@@ -13,20 +15,35 @@ class AppDatabase {
     return _instance!;
   }
 
+  /// For unit tests only — opens a fresh in-memory DB for each test.
+  /// Call in setUp; call close() in tearDown to free the connection.
+  @visibleForTesting
+  static void useForTesting() {
+    _testPath = inMemoryDatabasePath; // ':memory:'
+    _instance = null;
+    _db = null;
+  }
+
   Future<Database> get database async {
     _db ??= await _initDatabase();
     return _db!;
   }
 
   Future<Database> _initDatabase() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'flash.db');
+    final String path;
+    if (_testPath != null) {
+      path = _testPath!;
+    } else {
+      final dbPath = await getDatabasesPath();
+      path = join(dbPath, 'flash.db');
+    }
 
     return openDatabase(
       path,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      singleInstance: _testPath == null, // fresh DB per test when testing
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -52,7 +69,6 @@ class AppDatabase {
     await db.execute(SchemaStatements.createArticleSummaries);
     await db.execute(SchemaStatements.createSettings);
 
-    // Seed default settings
     final batch = db.batch();
     for (final s in defaultSettings) {
       batch.insert(TableNames.settings, {
@@ -61,7 +77,6 @@ class AppDatabase {
         'updated_at': now,
       });
     }
-
     await batch.commit(noResult: true);
   }
 
@@ -81,6 +96,16 @@ class AppDatabase {
     if (oldVersion < 4) {
       await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
       await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
+    }
+    if (oldVersion < 5) {
+      // Ensure the (feed_id, guid) unique index exists — safe no-op if already present.
+      await db.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_guid_feed ON articles(feed_id, guid)',
+      );
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('schema_version', '3', $now)",
+      );
     }
   }
 
