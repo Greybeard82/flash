@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.0
+**Version:** 2.1
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** April 2026
+**Last Updated:** May 2026
 
 ---
 
@@ -130,7 +130,8 @@ Specific mandates:
 
 **Auto-Refresh on Open**
 - On every cold open, Flash silently fetches all feeds in the background immediately after loading the cached article list from the database
-- The refresh spinner appears in the FAB during this fetch; no full-screen loading state is shown
+- A full-screen lightning bolt (⚡) pulse animation replaces the content area during the cold-start fetch; the FABs are hidden until the fetch completes
+- Before fetching, stale articles (read, unsaved, older than 7 days) are purged from the database
 - This ensures the list is always up to date within seconds of opening the app
 
 **Article List Persistence — Hardcoded, Non-Negotiable**
@@ -142,19 +143,22 @@ Specific mandates:
 
 **Mark as Read — On Scroll**
 - Articles are automatically marked as read as they scroll past the midpoint of the viewport
+- DB write is immediate; the visual dim is debounced 150ms to avoid flicker during fast scrolling
 - Can be disabled in Settings
 
 **Mark as Read — Swipe**
-- Swipe right-to-left: mark as read
-- Swipe left-to-right: mark as unread
-- Swipe never removes the article from the list
+- Swipe in either direction (left or right): mark as read
+- Article dims in-place — it is never removed from the list
+- There is no swipe gesture for mark as unread
 
-**Mark All as Read — Hardcoded Three-Step Sequence**
-1. **List clears immediately** the moment the button is tapped
-2. **All feeds in the current tab are refreshed** to fetch any new articles
-3. **Only newly fetched unread articles are shown** — nothing previously read reappears
+**Mark All as Read — No Confirmation, Immediate Execution**
 
-First use shows a one-time confirmation dialog; all subsequent taps execute immediately.
+Behaviour differs by tab:
+
+- **All tab:** marks every article read → runs age-based cleanup (removes read+unsaved articles older than 7 days) → plays cold-start animation → refreshes all feeds → shows only newly fetched unread articles
+- **Category tab:** marks every article in that folder read → runs cleanup for that folder only → reloads counts → shows a `NotificationBanner` confirmation; no feed refresh
+
+No confirmation dialog is ever shown.
 
 **Long-Press Radial Menu**
 - Long-press any article card to open a radial context menu centred on the card
@@ -176,7 +180,7 @@ Three mini FABs, visible only when at least one feed exists:
 - **Mark all read** — executes the mark-all-read sequence above
 
 **Open Article**
-- Tap a card to open the article
+- Tap a card to open the article; the card dims in-place immediately (marks as read); exact scroll position is restored on return — no reload
 - If **Reader Mode** is on (Settings toggle): opens the in-app Reader screen with extracted article text
   - Pre-flight HTML check determines if the URL serves readable HTML
   - Per-domain compatibility is cached (`reader_compat_<domain>`) to avoid repeated checks
@@ -248,14 +252,27 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ### 4.9 Article Auto-Cleanup
 
-- Each feed stores a maximum number of articles locally (default: 100 per feed, configurable in Settings)
-- When the limit is exceeded, the oldest read articles are deleted
-- Unread and bookmarked articles are never auto-deleted
-- Blocked articles are cleaned up first
+- **Age-based:** read, unsaved articles whose `published_at` is older than 7 days are deleted automatically
+- Unread articles are never deleted, regardless of age
+- Bookmarked (saved) articles are never deleted, regardless of read state or age
+- Cleanup runs on every cold open and every background refresh, **before** new articles are fetched
+- Pull-to-refresh does **not** trigger cleanup — previously read articles remain visible for the session
+- Per-folder cleanup is also supported (used by "Mark all as read" on a category tab)
 
 ---
 
-### 4.10 Background Refresh
+### 4.10 Fetch Thresholds
+
+Applied to every feed fetch before articles are written to the database:
+
+- Articles are sorted newest-to-oldest by `published_at`
+- Articles with `published_at` older than 7 days are discarded — they would be cleaned up immediately anyway
+- Articles with no `published_at` are always discarded
+- At most 100 articles per feed per fetch are accepted (the 100 newest within the 7-day window)
+- GUID resolution: feed-level guid is preferred; if absent, the article URL is used as the GUID; if neither exists, the article is skipped (no random or timestamp-based GUIDs)
+- Duplicate (feed\_id + guid) articles are silently ignored on insert — re-fetching never resets the read state of existing articles
+
+### 4.11 Background Refresh
 
 - Configurable interval: 15 min, 30 min, 1h, 3h, 6h, Manual only
 - Default: 30 minutes
@@ -265,7 +282,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.11 AI Article Summary
+### 4.12 AI Article Summary
 
 **Trigger:** Long-press card → radial menu → ✦ Summary
 
@@ -291,7 +308,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.12 Backup & Restore
+### 4.13 Backup & Restore
 
 **Backup format:** Single JSON file (`flash_backup.json`) containing folders, feeds, and keyword blocklist. Version-tagged for forward compatibility.
 
@@ -320,7 +337,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.13 OPML Import / Export
+### 4.14 OPML Import / Export
 
 - Import: reads an OPML file and adds all feeds, preserving folder structure where possible
 - Export: generates a standard OPML file shared via the system share sheet
@@ -328,7 +345,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.14 Onboarding
+### 4.15 Onboarding
 
 - Shown on first launch only
 - Walks the user through adding their first feed and creating a folder
@@ -390,7 +407,6 @@ Content area:
 | Mark as read on scroll | On | On, Off |
 | Reader mode | Off | On, Off |
 | Article font size | Medium | Small, Medium, Large |
-| Max articles per feed | 100 | 50, 100, 200, 500, Unlimited |
 | Anthropic API key | — | Text input (masked) |
 | Google Drive backup | — | Sign in / Sign out, Backup now, Restore |
 | Local backup | — | Export, Import |
@@ -436,7 +452,12 @@ Content area:
 - Card list UI with shimmer loading state
 - Mark as read on scroll, swipe gestures (read/unread)
 - Pull-to-refresh, manual refresh FAB
-- Auto-refresh on cold open
+- Auto-refresh on cold open with lightning bolt animation
+- Age-based article cleanup (7-day threshold, runs on cold start + background refresh)
+- Fetch thresholds: 7-day age filter + 100-article cap per feed; deterministic GUID resolution
+- INSERT OR IGNORE deduplication — re-fetch never resets read state
+- Per-tab scroll position preservation
+- `NotificationBanner` slide-in widget (replaces snackbar for confirmations)
 - In-app Reader with article extraction, per-domain compatibility caching
 - Article search (full-text, debounced, race-safe)
 - Bookmarks screen

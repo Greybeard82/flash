@@ -1,18 +1,17 @@
 // Feed behavior unit tests.
 //
-// These tests cover the pure-logic transformations that the feed screen applies
+// These tests cover the pure-logic list mutations that the feed screen applies
 // to its article list. They do NOT require a real SQLite database or Flutter
 // widget pump — they test Dart functions directly.
 //
-// Covered behaviors:
-//  1. Only unread articles are ever shown (includeRead: false path)
-//  2. After opening an article, it is removed from the list
-//  3. After scroll-to-read, the articles are removed and scroll compensated
-//  4. Manual refresh with no new articles leaves an empty list
-//  5. Swipe mark-as-read removes the article from the list
-//  6. Swipe mark-as-unread keeps the article in the list
-//  7. Tab switch resets to the top and loads the new tab's unread articles
-//  8. Read state is global: marking read in "All" removes from category list
+// Covered behaviors (current, post-rewrite):
+//  1. getAllArticles returns only unread+unblocked articles from the DB
+//  2. Opening an article dims it in-place (isRead = true), scroll restored
+//  3. Scroll-to-read: DB write immediate, UI dims in-place after debounce
+//  4. Swipe (either direction) marks article as read and dims in-place
+//  5. Articles with isRead=true are rendered at reduced opacity but stay in list
+//  6. Tab switch restores that tab's saved scroll offset (or top if none)
+//  7. Read state is global: marking read in "All" removes it from category DB query
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/models/article.dart';
@@ -37,32 +36,30 @@ Article _article({
       isSaved: false,
     );
 
-// Simulates the list mutation that _openArticle performs after returning.
-List<Article> _removeArticle(List<Article> list, int articleId) =>
-    list.where((a) => a.id != articleId).toList();
-
-// Simulates _flushMarkRead: removes all articles whose IDs are in [ids].
-List<Article> _removeIds(List<Article> list, Set<int> ids) =>
-    list.where((a) => !ids.contains(a.id)).toList();
-
-// Simulates _markRead (swipe): removes the article.
-List<Article> _markReadSwipe(List<Article> list, int articleId) =>
-    list.where((a) => a.id != articleId).toList();
-
-// Simulates _markUnread (swipe): updates isRead to false in-place.
-List<Article> _markUnreadSwipe(List<Article> list, int articleId) => [
+// Simulates _openArticle: dims the tapped article in-place, rest unchanged.
+List<Article> _dimArticle(List<Article> list, int articleId) => [
       for (final a in list)
-        a.id == articleId ? a.copyWith(isRead: false) : a,
+        a.id == articleId ? a.copyWith(isRead: true) : a,
     ];
 
-// Simulates the unread filter applied by _articlesForTab.
+// Simulates _flushMarkReadUI: dims all articles whose IDs are in [ids].
+List<Article> _dimIds(List<Article> list, Set<int> ids) => [
+      for (final a in list)
+        ids.contains(a.id) ? a.copyWith(isRead: true) : a,
+    ];
+
+// Simulates _markRead (swipe either direction): dims in-place.
+List<Article> _markReadSwipe(List<Article> list, int articleId) =>
+    _dimArticle(list, articleId);
+
+// Simulates the unread-only filter used by getAllArticles / getArticlesByFolder.
 List<Article> _unreadOnly(List<Article> list) =>
     list.where((a) => !a.isRead).toList();
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('Feed only shows unread articles', () {
+  group('DB query returns only unread articles', () {
     test('_articlesForTab returns only unread articles', () {
       final all = [
         _article(id: 1, isRead: false),
@@ -84,101 +81,125 @@ void main() {
     });
   });
 
-  group('Opening an article removes it from the list', () {
-    test('opened article is removed', () {
+  group('Opening an article dims it in-place', () {
+    test('opened article is marked read but stays in list', () {
       final articles = [
         _article(id: 1),
         _article(id: 2),
         _article(id: 3),
       ];
-      final result = _removeArticle(articles, 2);
-      expect(result.length, 2);
-      expect(result.any((a) => a.id == 2), isFalse);
+      final result = _dimArticle(articles, 2);
+      expect(result.length, 3);
+      expect(result.any((a) => a.id == 2), isTrue);
+      expect(result.firstWhere((a) => a.id == 2).isRead, isTrue);
     });
 
-    test('articles above and below opened article remain', () {
+    test('articles above and below dimmed article are unchanged', () {
       final articles = [
         _article(id: 10),
         _article(id: 20),
         _article(id: 30),
       ];
-      final result = _removeArticle(articles, 20);
-      expect(result.map((a) => a.id).toList(), [10, 30]);
+      final result = _dimArticle(articles, 20);
+      expect(result.map((a) => a.id).toList(), [10, 20, 30]);
+      expect(result.firstWhere((a) => a.id == 10).isRead, isFalse);
+      expect(result.firstWhere((a) => a.id == 30).isRead, isFalse);
     });
 
-    test('opening last article leaves empty list', () {
+    test('opening last article dims it but list has one element', () {
       final articles = [_article(id: 1)];
-      final result = _removeArticle(articles, 1);
-      expect(result, isEmpty);
+      final result = _dimArticle(articles, 1);
+      expect(result.length, 1);
+      expect(result.first.isRead, isTrue);
     });
   });
 
-  group('Scroll-to-read removes articles from list', () {
-    test('scrolled-past articles are removed', () {
+  group('Scroll-to-read dims articles in-place', () {
+    test('scrolled-past articles are dimmed, not removed', () {
       final articles = [
         _article(id: 1),
         _article(id: 2),
         _article(id: 3),
         _article(id: 4),
       ];
-      // Articles 1 and 2 scrolled past the viewport.
-      final result = _removeIds(articles, {1, 2});
-      expect(result.length, 2);
-      expect(result.map((a) => a.id).toList(), [3, 4]);
+      final result = _dimIds(articles, {1, 2});
+      expect(result.length, 4);
+      expect(result.firstWhere((a) => a.id == 1).isRead, isTrue);
+      expect(result.firstWhere((a) => a.id == 2).isRead, isTrue);
+      expect(result.firstWhere((a) => a.id == 3).isRead, isFalse);
+      expect(result.firstWhere((a) => a.id == 4).isRead, isFalse);
     });
 
-    test('unread count decreases by number of removed articles', () {
+    test('unread count decreases by number of dimmed articles', () {
       int unreadCount = 4;
-      final removed = {1, 2};
-      unreadCount = (unreadCount - removed.length).clamp(0, unreadCount);
+      final dimmed = {1, 2};
+      unreadCount = (unreadCount - dimmed.length).clamp(0, unreadCount);
       expect(unreadCount, 2);
     });
 
-    test('removing all articles results in empty list', () {
+    test('dimming all articles leaves them in list but all read', () {
       final articles = [_article(id: 1), _article(id: 2)];
-      final result = _removeIds(articles, {1, 2});
-      expect(result, isEmpty);
+      final result = _dimIds(articles, {1, 2});
+      expect(result.length, 2);
+      expect(result.every((a) => a.isRead), isTrue);
     });
   });
 
-  group('Swipe mark-as-read removes article', () {
-    test('swiped article is removed from list', () {
+  group('Swipe mark-as-read dims article in-place', () {
+    test('swiped article is dimmed, not removed', () {
       final articles = [
         _article(id: 1),
         _article(id: 2),
         _article(id: 3),
       ];
       final result = _markReadSwipe(articles, 2);
+      expect(result.length, 3);
+      expect(result.any((a) => a.id == 2), isTrue);
+      expect(result.firstWhere((a) => a.id == 2).isRead, isTrue);
+    });
+
+    test('swipe on already-read article is a no-op', () {
+      final articles = [
+        _article(id: 1, isRead: true),
+        _article(id: 2),
+      ];
+      final result = _markReadSwipe(articles, 1);
       expect(result.length, 2);
-      expect(result.any((a) => a.id == 2), isFalse);
+      expect(result.firstWhere((a) => a.id == 1).isRead, isTrue);
+    });
+
+    test('both swipe directions produce same in-place dim result', () {
+      final articles = [_article(id: 5), _article(id: 6)];
+      final leftSwipe = _markReadSwipe(articles, 5);
+      final rightSwipe = _markReadSwipe(articles, 5);
+      // Both directions call the same _markRead logic.
+      expect(leftSwipe.firstWhere((a) => a.id == 5).isRead, isTrue);
+      expect(rightSwipe.firstWhere((a) => a.id == 5).isRead, isTrue);
+      expect(leftSwipe.length, rightSwipe.length);
     });
   });
 
-  group('Swipe mark-as-unread keeps article in list', () {
-    test('article stays in list after mark-unread', () {
-      // In unread-only mode, an article shown must already be unread,
-      // so this swipe is a no-op visually. Confirm the list is unchanged.
+  group('Read articles stay in list with reduced opacity signal', () {
+    test('isRead=true acts as the opacity signal (no removal from list)', () {
       final articles = [
         _article(id: 1, isRead: false),
-        _article(id: 2, isRead: false),
+        _article(id: 2, isRead: true),
       ];
-      final result = _markUnreadSwipe(articles, 1);
-      expect(result.length, 2);
-      expect(result.any((a) => a.id == 1), isTrue);
-      expect(result.firstWhere((a) => a.id == 1).isRead, isFalse);
+      // The list contains both; caller uses isRead to pick opacity.
+      expect(articles.length, 2);
+      expect(articles.firstWhere((a) => a.id == 1).isRead, isFalse);
+      expect(articles.firstWhere((a) => a.id == 2).isRead, isTrue);
     });
   });
 
   group('Refresh behavior', () {
     test('refresh with new articles populates list', () {
-      // Simulates network returning 3 new unread articles.
       final fetched = [_article(id: 10), _article(id: 11), _article(id: 12)];
       final displayed = _unreadOnly(fetched);
       expect(displayed.length, 3);
     });
 
     test('refresh with no new articles returns empty list', () {
-      // All fetched articles are already read.
       final fetched = [
         _article(id: 1, isRead: true),
         _article(id: 2, isRead: true),
@@ -189,28 +210,27 @@ void main() {
   });
 
   group('Read state is global across tabs', () {
-    test('article marked read in All is absent from category list', () {
-      // Both lists start with article 5.
+    test('article marked read in All is absent from category DB query', () {
+      // Both lists start with article 5 as unread.
       final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
       final techTabArticles = [_article(id: 5, feedId: 2), _article(id: 7, feedId: 2)];
 
-      // User marks article 5 as read in All tab.
-      final updatedAll = _removeArticle(allTabArticles, 5);
+      // User opens article 5 in All tab → dimmed in-place in All.
+      final updatedAll = _dimArticle(allTabArticles, 5);
 
-      // Tech tab reloads from DB (unread-only) — article 5 is now read in DB,
-      // so it doesn't appear.
+      // Tech tab reloads from DB (unread-only) — article 5 is now read in DB.
       final updatedTech = _unreadOnly(
         techTabArticles.map((a) => a.id == 5 ? a.copyWith(isRead: true) : a).toList(),
       );
 
-      expect(updatedAll.any((a) => a.id == 5), isFalse);
+      expect(updatedAll.any((a) => a.id == 5), isTrue);
+      expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
       expect(updatedTech.any((a) => a.id == 5), isFalse);
     });
   });
 
   group('Tab switch', () {
     test('switching tabs loads only that tab\'s unread articles', () {
-      // Tech tab has articles from feedId 2 only; article 3 is already read.
       final techArticles = [
         _article(id: 3, feedId: 2, isRead: true),
         _article(id: 4, feedId: 2, isRead: false),

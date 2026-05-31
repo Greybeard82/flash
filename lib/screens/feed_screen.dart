@@ -402,8 +402,10 @@ class _FeedScreenState extends State<FeedScreen>
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
-      _articles = _articles.where((a) => a.id != article.id).toList();
-      _cardKeys.remove(article.id);
+      _articles = [
+        for (final a in _articles)
+          a.id == article.id ? a.copyWith(isRead: true) : a,
+      ];
       _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
     });
     AppBadgePlus.updateBadge(_allUnreadCount);

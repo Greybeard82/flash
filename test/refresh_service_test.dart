@@ -14,7 +14,7 @@ import 'package:flash/utils/constants.dart';
 
 late ArticleRepository _repo;
 
-final _now = DateTime(2026, 5, 14, 12, 0, 0);
+final _now = DateTime.now();
 final _recent = _now.subtract(const Duration(days: 1));
 final _old = _now.subtract(const Duration(days: kFetchDayLimit + 1));
 

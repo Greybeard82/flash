@@ -8,10 +8,9 @@ import 'package:flash/utils/constants.dart';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-
 late ArticleRepository _repo;
 
-final _now = DateTime(2026, 5, 14, 12, 0, 0);
+final _now = DateTime.now();
 final _recent = _now.subtract(const Duration(days: 1));
 final _old = _now.subtract(const Duration(days: 8));
 
@@ -33,8 +32,8 @@ Future<void> _setUp({bool twoFolders = false}) async {
   final db = await AppDatabase.instance.database;
   final ts = DateTime.now().millisecondsSinceEpoch;
 
-  final f1 = await db.insert(TableNames.folders,
-      {'name': 'Cat1', 'position': 0, 'created_at': ts});
+  final f1 = await db.insert(
+      TableNames.folders, {'name': 'Cat1', 'position': 0, 'created_at': ts});
   await db.insert(TableNames.feeds, {
     'folder_id': f1,
     'title': 'Feed1',
@@ -46,8 +45,8 @@ Future<void> _setUp({bool twoFolders = false}) async {
   });
 
   if (twoFolders) {
-    final f2 = await db.insert(TableNames.folders,
-        {'name': 'Cat2', 'position': 1, 'created_at': ts});
+    final f2 = await db.insert(
+        TableNames.folders, {'name': 'Cat2', 'position': 1, 'created_at': ts});
     await db.insert(TableNames.feeds, {
       'folder_id': f2,
       'title': 'Feed2',
@@ -64,7 +63,8 @@ Future<void> _tearDown() async => AppDatabase.instance.close();
 
 Future<int> _count() async {
   final db = await AppDatabase.instance.database;
-  final r = await db.rawQuery('SELECT COUNT(*) AS c FROM ${TableNames.articles}');
+  final r =
+      await db.rawQuery('SELECT COUNT(*) AS c FROM ${TableNames.articles}');
   return r.first['c'] as int;
 }
 
@@ -100,7 +100,8 @@ void main() {
     tearDown(_tearDown);
 
     test('markAsRead sets is_read=1 for the correct article only', () async {
-      await _repo.insertArticles(1, [_art(1, published: _recent), _art(2, published: _recent)]);
+      await _repo.insertArticles(
+          1, [_art(1, published: _recent), _art(2, published: _recent)]);
       final db = await AppDatabase.instance.database;
       final id1 = (await db.query(TableNames.articles,
               where: 'guid = ?', whereArgs: ['guid-1'], limit: 1))
@@ -111,7 +112,8 @@ void main() {
     });
 
     test('markAsUnread sets is_read=0 for the correct article only', () async {
-      await _repo.insertArticles(1, [_art(1, published: _recent), _art(2, published: _recent)]);
+      await _repo.insertArticles(
+          1, [_art(1, published: _recent), _art(2, published: _recent)]);
       final db = await AppDatabase.instance.database;
       final rows = await db.query(TableNames.articles);
       final id1 = rows.first['id'] as int;
@@ -179,14 +181,16 @@ void main() {
     setUp(_setUp);
     tearDown(_tearDown);
 
-    test('deletes read articles where published_at is older than 7 days', () async {
+    test('deletes read articles where published_at is older than 7 days',
+        () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       await _repo.markAllAsRead();
       await _repo.runCleanup();
       expect(await _count(), 0);
     });
 
-    test('does not delete read articles where published_at is within 7 days', () async {
+    test('does not delete read articles where published_at is within 7 days',
+        () async {
       await _repo.insertArticles(1, [_art(1, published: _recent)]);
       await _repo.markAllAsRead();
       await _repo.runCleanup();
@@ -215,7 +219,8 @@ void main() {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       // Mark saved via the dedicated method (insertArticles always sets is_saved=0).
       final db = await AppDatabase.instance.database;
-      final id = (await db.query(TableNames.articles, limit: 1)).first['id'] as int;
+      final id =
+          (await db.query(TableNames.articles, limit: 1)).first['id'] as int;
       await _repo.setSaved(id, saved: true);
       await _repo.markAllAsRead();
       await _repo.runCleanup();
@@ -276,7 +281,8 @@ void main() {
         _art(2, published: _recent),
       ]);
       final db = await AppDatabase.instance.database;
-      final f1 = (await db.query(TableNames.folders, limit: 1)).first['id'] as int;
+      final f1 =
+          (await db.query(TableNames.folders, limit: 1)).first['id'] as int;
       expect(await _repo.getUnreadCount(f1), 2);
     });
   });
@@ -285,7 +291,8 @@ void main() {
     setUp(_setUp);
     tearDown(_tearDown);
 
-    test('articles within 7 days remain in DB as read after combined operation', () async {
+    test('articles within 7 days remain in DB as read after combined operation',
+        () async {
       await _repo.insertArticles(1, [_art(1, published: _recent)]);
       await _repo.markAllAsRead();
       await _repo.runCleanup();
@@ -294,7 +301,8 @@ void main() {
       expect(row!['is_read'], 1);
     });
 
-    test('articles older than 7 days are gone from DB after combined operation', () async {
+    test('articles older than 7 days are gone from DB after combined operation',
+        () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       await _repo.markAllAsRead();
       await _repo.runCleanup();
@@ -307,13 +315,16 @@ void main() {
     tearDown(_tearDown);
 
     test('cleanup cutoff is based on kFetchDayLimit days ago', () async {
-      // Article exactly at the boundary (7 days ago) should NOT be deleted.
-      final boundary = _now.subtract(Duration(days: kFetchDayLimit));
-      await _repo.insertArticles(
-          1, [_art(1, published: boundary)]);
+      // Article 5 seconds inside the safe zone (just under kFetchDayLimit days
+      // old) must NOT be deleted. Using a buffer avoids a sub-millisecond race
+      // between the test's DateTime.now() and runCleanup()'s DateTime.now().
+      final justWithin = DateTime.now()
+          .subtract(const Duration(days: kFetchDayLimit))
+          .add(const Duration(seconds: 5));
+      await _repo.insertArticles(1, [_art(1, published: justWithin)]);
       await _repo.markAllAsRead();
       // runCleanup deletes where published_at < cutoff (strictly less than).
-      // Boundary == cutoff, so it is NOT deleted.
+      // justWithin is >= cutoff, so it is NOT deleted.
       final deleted = await _repo.runCleanup();
       expect(deleted, 0);
     });

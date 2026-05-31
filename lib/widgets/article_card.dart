@@ -117,28 +117,19 @@ class ArticleCard extends StatelessWidget {
       return InkWell(onTap: onTap, child: content);
     }
 
+    final swipeBg = _swipeBackground(
+      context,
+      alignment: Alignment.centerLeft,
+      color: theme.colorScheme.primary.withValues(alpha: 0.15),
+      icon: Icons.mark_email_read_rounded,
+      iconColor: theme.colorScheme.primary,
+    );
     return Dismissible(
       key: ValueKey('article_${article.id}'),
-      background: _swipeBackground(
-        context,
-        alignment: Alignment.centerLeft,
-        color: theme.colorScheme.primary.withValues(alpha: 0.15),
-        icon: Icons.mark_email_read_rounded,
-        iconColor: theme.colorScheme.primary,
-      ),
-      secondaryBackground: _swipeBackground(
-        context,
-        alignment: Alignment.centerRight,
-        color: theme.colorScheme.onSurface.withValues(alpha: 0.08),
-        icon: Icons.mark_email_unread_rounded,
-        iconColor: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-      ),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.startToEnd) {
-          onMarkRead();
-        } else {
-          onMarkUnread?.call();
-        }
+      background: swipeBg,
+      secondaryBackground: swipeBg,
+      confirmDismiss: (_) async {
+        onMarkRead();
         return false;
       },
       child: GestureDetector(

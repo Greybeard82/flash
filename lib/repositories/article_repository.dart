@@ -213,7 +213,7 @@ class ArticleRepository {
   Future<int> runCleanup({int? folderId}) async {
     final db = await _db;
     final cutoffMs = DateTime.now()
-        .subtract(Duration(days: kFetchDayLimit))
+        .subtract(const Duration(days: kFetchDayLimit))
         .millisecondsSinceEpoch;
     if (folderId == null) {
       return db.rawDelete('''

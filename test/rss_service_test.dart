@@ -18,7 +18,7 @@ Article _art(int i, {DateTime? published, String? guid, String? url}) => Article
       fetchedAt: 0,
     );
 
-final _now = DateTime(2026, 5, 14, 12, 0, 0);
+final _now = DateTime.now();
 final _recent = _now.subtract(const Duration(days: 1));
 
 // Thin wrapper that exposes applyFetchThresholds with an injectable clock.

@@ -2,17 +2,17 @@
 class KeywordMatcher {
   /// Returns true if [keyword] is found in [haystack].
   ///
-  /// When [wholeWord] is true, matches only on word boundaries (e.g. "crypto"
-  /// will not match "cryptocurrency"). Matching is always case-sensitive.
+  /// Matching is always case-insensitive. When [wholeWord] is true, matches
+  /// only on word boundaries (e.g. "crypto" will not match "cryptocurrency").
   static bool matches(String keyword, String haystack, {bool wholeWord = false}) {
     if (wholeWord) {
       final pattern = RegExp(
         r'\b' + RegExp.escape(keyword) + r'\b',
-        caseSensitive: true,
+        caseSensitive: false,
       );
       return pattern.hasMatch(haystack);
     }
-    return haystack.contains(keyword);
+    return haystack.toLowerCase().contains(keyword.toLowerCase());
   }
 
   /// Builds the haystack string from an article's title and optional description.
