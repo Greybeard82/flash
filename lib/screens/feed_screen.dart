@@ -12,6 +12,7 @@ import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/refresh_service.dart';
+import '../services/session_read_tracker.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 import '../widgets/empty_state.dart';
@@ -168,8 +169,12 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
-    if (tab == 0) return _articleRepo.getAllArticles();
-    return _articleRepo.getArticlesByFolder(folders[tab - 1].id!);
+    final sessionIds = SessionReadTracker.instance.ids;
+    if (tab == 0) return _articleRepo.getAllArticles(sessionReadIds: sessionIds);
+    return _articleRepo.getArticlesByFolder(
+      folders[tab - 1].id!,
+      sessionReadIds: sessionIds,
+    );
   }
 
   void _syncCardKeys(List<Article> articles) {
@@ -286,6 +291,7 @@ class _FeedScreenState extends State<FeedScreen>
     // DB write is immediate.
     if (toWrite.isNotEmpty) {
       _articleRepo.markManyRead(toWrite);
+      SessionReadTracker.instance.addAll(toWrite);
       _allUnreadCount = (_allUnreadCount - toWrite.length).clamp(0, _allUnreadCount);
       AppBadgePlus.updateBadge(_allUnreadCount);
     }
@@ -319,6 +325,7 @@ class _FeedScreenState extends State<FeedScreen>
     // Mark read immediately and dim in-place.
     if (wasUnread) {
       await _articleRepo.markAsRead(article.id!);
+      SessionReadTracker.instance.add(article.id!);
       if (mounted) {
         setState(() {
           _articles = [
@@ -399,6 +406,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
     await _articleRepo.markAsRead(article.id!);
+    SessionReadTracker.instance.add(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -414,6 +422,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markAsUnread(article.id!);
+    SessionReadTracker.instance.remove(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -449,11 +458,11 @@ class _FeedScreenState extends State<FeedScreen>
     final cleanupDays = settings.cleanupAgeDays;
 
     if (_selectedTabIndex == 0) {
-      // All tab: mark all read, run cleanup, then cold-start fetch with animation.
+      // All tab: mark all read, clear tracker, run cleanup, cold-start fetch.
       await _articleRepo.markAllAsRead();
+      SessionReadTracker.instance.clear();
       await _articleRepo.runCleanup(days: cleanupDays);
 
-      // Show cold-start animation and trigger full fetch.
       if (!mounted) return;
       setState(() {
         _booting = true;
@@ -466,10 +475,27 @@ class _FeedScreenState extends State<FeedScreen>
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
     } else {
-      // Category tab: mark read + cleanup for this folder only — no fetch.
+      // Category tab: mark read, remove folder's IDs from tracker, cleanup, refresh folder.
       final folderId = _folders[_selectedTabIndex - 1].id!;
+
+      // Capture IDs currently shown for this folder before clearing them.
+      final folderIds = _articles
+          .where((a) => a.id != null)
+          .map((a) => a.id!)
+          .toSet();
+
       await _articleRepo.markAllAsReadByFolder(folderId);
+      SessionReadTracker.instance.removeWhere(folderIds.contains);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
+
+      // Refresh feeds in this folder.
+      try {
+        final svc = RefreshService(_settingsRepo);
+        final feeds = await _feedRepo.getByFolder(folderId);
+        for (final f in feeds) {
+          await svc.refreshFeed(f);
+        }
+      } catch (_) {}
 
       final (folderCounts, allCount) = await (
         _articleRepo.getAllFolderUnreadCounts(),
@@ -477,9 +503,11 @@ class _FeedScreenState extends State<FeedScreen>
       ).wait;
 
       if (!mounted) return;
+      final freshArticles = await _articlesForTab(_selectedTabIndex, _folders);
+      if (!mounted) return;
       setState(() {
-        _articles = [];
-        _cardKeys.clear();
+        _articles = freshArticles;
+        _syncCardKeys(freshArticles);
         _folderUnreadCounts = folderCounts;
         _allUnreadCount = allCount;
       });

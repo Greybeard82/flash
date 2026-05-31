@@ -1,17 +1,18 @@
 // Feed behavior unit tests.
 //
 // These tests cover the pure-logic list mutations that the feed screen applies
-// to its article list. They do NOT require a real SQLite database or Flutter
-// widget pump — they test Dart functions directly.
+// to its in-memory article list, plus the union-query model that drives what
+// the screen shows.
 //
-// Covered behaviors (current, post-rewrite):
-//  1. getAllArticles returns only unread+unblocked articles from the DB
+// Covered behaviors:
+//  1. Union query: unread OR session-read IDs — not unread-only
 //  2. Opening an article dims it in-place (isRead = true), scroll restored
 //  3. Scroll-to-read: DB write immediate, UI dims in-place after debounce
 //  4. Swipe (either direction) marks article as read and dims in-place
 //  5. Articles with isRead=true are rendered at reduced opacity but stay in list
 //  6. Tab switch restores that tab's saved scroll offset (or top if none)
-//  7. Read state is global: marking read in "All" removes it from category DB query
+//  7. Read state is global: reading in one scope dims it in any other scope
+//  8. Mark-unread removes from session tracker and restores full weight
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/models/article.dart';
@@ -36,7 +37,11 @@ Article _article({
       isSaved: false,
     );
 
-// Simulates _openArticle: dims the tapped article in-place, rest unchanged.
+// Simulates the union query: unread OR id ∈ sessionReadIds.
+List<Article> _unionQuery(List<Article> list, Set<int> sessionReadIds) =>
+    list.where((a) => !a.isRead || sessionReadIds.contains(a.id)).toList();
+
+// Simulates _openArticle / _markRead: dims the tapped article in-place.
 List<Article> _dimArticle(List<Article> list, int articleId) => [
       for (final a in list)
         a.id == articleId ? a.copyWith(isRead: true) : a,
@@ -52,42 +57,57 @@ List<Article> _dimIds(List<Article> list, Set<int> ids) => [
 List<Article> _markReadSwipe(List<Article> list, int articleId) =>
     _dimArticle(list, articleId);
 
-// Simulates the unread-only filter used by getAllArticles / getArticlesByFolder.
-List<Article> _unreadOnly(List<Article> list) =>
-    list.where((a) => !a.isRead).toList();
+// Simulates _markUnread: un-dims the article.
+List<Article> _dimUnread(List<Article> list, int articleId) => [
+      for (final a in list)
+        a.id == articleId ? a.copyWith(isRead: false) : a,
+    ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('DB query returns only unread articles', () {
-    test('_articlesForTab returns only unread articles', () {
+  group('Union query (unread OR session-read)', () {
+    test('empty tracker returns only unread articles', () {
       final all = [
         _article(id: 1, isRead: false),
         _article(id: 2, isRead: true),
         _article(id: 3, isRead: false),
         _article(id: 4, isRead: true),
       ];
-      final result = _unreadOnly(all);
+      final result = _unionQuery(all, {});
       expect(result.length, 2);
       expect(result.every((a) => !a.isRead), isTrue);
     });
 
-    test('empty list when all articles are read', () {
+    test('tracker adds read articles back into view', () {
+      final all = [
+        _article(id: 1, isRead: false),
+        _article(id: 2, isRead: true),
+        _article(id: 3, isRead: false),
+      ];
+      final result = _unionQuery(all, {2});
+      expect(result.length, 3);
+      expect(result.any((a) => a.id == 2 && a.isRead), isTrue);
+    });
+
+    test('cold open: empty tracker, all read in DB → empty list', () {
       final all = [
         _article(id: 1, isRead: true),
         _article(id: 2, isRead: true),
       ];
-      expect(_unreadOnly(all), isEmpty);
+      expect(_unionQuery(all, {}), isEmpty);
+    });
+
+    test('tracker with IDs not in the list is safe (no crash, no phantom rows)', () {
+      final all = [_article(id: 1), _article(id: 2)];
+      final result = _unionQuery(all, {99, 100});
+      expect(result.length, 2);
     });
   });
 
   group('Opening an article dims it in-place', () {
     test('opened article is marked read but stays in list', () {
-      final articles = [
-        _article(id: 1),
-        _article(id: 2),
-        _article(id: 3),
-      ];
+      final articles = [_article(id: 1), _article(id: 2), _article(id: 3)];
       final result = _dimArticle(articles, 2);
       expect(result.length, 3);
       expect(result.any((a) => a.id == 2), isTrue);
@@ -95,11 +115,7 @@ void main() {
     });
 
     test('articles above and below dimmed article are unchanged', () {
-      final articles = [
-        _article(id: 10),
-        _article(id: 20),
-        _article(id: 30),
-      ];
+      final articles = [_article(id: 10), _article(id: 20), _article(id: 30)];
       final result = _dimArticle(articles, 20);
       expect(result.map((a) => a.id).toList(), [10, 20, 30]);
       expect(result.firstWhere((a) => a.id == 10).isRead, isFalse);
@@ -117,10 +133,7 @@ void main() {
   group('Scroll-to-read dims articles in-place', () {
     test('scrolled-past articles are dimmed, not removed', () {
       final articles = [
-        _article(id: 1),
-        _article(id: 2),
-        _article(id: 3),
-        _article(id: 4),
+        _article(id: 1), _article(id: 2), _article(id: 3), _article(id: 4),
       ];
       final result = _dimIds(articles, {1, 2});
       expect(result.length, 4);
@@ -147,22 +160,15 @@ void main() {
 
   group('Swipe mark-as-read dims article in-place', () {
     test('swiped article is dimmed, not removed', () {
-      final articles = [
-        _article(id: 1),
-        _article(id: 2),
-        _article(id: 3),
-      ];
+      final articles = [_article(id: 1), _article(id: 2), _article(id: 3)];
       final result = _markReadSwipe(articles, 2);
       expect(result.length, 3);
       expect(result.any((a) => a.id == 2), isTrue);
       expect(result.firstWhere((a) => a.id == 2).isRead, isTrue);
     });
 
-    test('swipe on already-read article is a no-op', () {
-      final articles = [
-        _article(id: 1, isRead: true),
-        _article(id: 2),
-      ];
+    test('swipe on already-read article leaves it read', () {
+      final articles = [_article(id: 1, isRead: true), _article(id: 2)];
       final result = _markReadSwipe(articles, 1);
       expect(result.length, 2);
       expect(result.firstWhere((a) => a.id == 1).isRead, isTrue);
@@ -172,10 +178,103 @@ void main() {
       final articles = [_article(id: 5), _article(id: 6)];
       final leftSwipe = _markReadSwipe(articles, 5);
       final rightSwipe = _markReadSwipe(articles, 5);
-      // Both directions call the same _markRead logic.
       expect(leftSwipe.firstWhere((a) => a.id == 5).isRead, isTrue);
       expect(rightSwipe.firstWhere((a) => a.id == 5).isRead, isTrue);
       expect(leftSwipe.length, rightSwipe.length);
+    });
+  });
+
+  group('Mark-unread removes from tracker and restores full weight', () {
+    test('un-dimming restores isRead=false', () {
+      final articles = [_article(id: 1, isRead: true), _article(id: 2)];
+      final result = _dimUnread(articles, 1);
+      expect(result.firstWhere((a) => a.id == 1).isRead, isFalse);
+      expect(result.length, 2);
+    });
+
+    test('tracker removal: ID no longer in session set', () {
+      final tracker = <int>{1, 2, 3};
+      tracker.remove(2);
+      expect(tracker, containsAll([1, 3]));
+      expect(tracker, isNot(contains(2)));
+    });
+
+    test('after mark-unread, union query re-hides the article on next tab load', () {
+      final articles = [_article(id: 1, isRead: true), _article(id: 2)];
+      // Tracker no longer contains id 1 (was removed by _markUnread).
+      final result = _unionQuery(articles, {});
+      // Article 1 is read but not in tracker → excluded.
+      expect(result.any((a) => a.id == 1), isFalse);
+      expect(result.any((a) => a.id == 2), isTrue);
+    });
+  });
+
+  group('Read state is global across tabs (session tracker)', () {
+    test('article read in All tab stays visible (dimmed) in folder tab', () {
+      // Simulate: All tab loaded, user reads article 5.
+      final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
+      final tracker = <int>{};
+
+      final updatedAll = _dimArticle(allTabArticles, 5);
+      tracker.add(5);
+
+      // Folder tab re-runs union query with the global tracker.
+      final folderTabArticles = [
+        _article(id: 5, feedId: 2, isRead: true),
+        _article(id: 7, feedId: 2),
+      ];
+      final folderResult = _unionQuery(folderTabArticles, tracker);
+
+      // Article 5 is in tracker → still visible, dimmed.
+      expect(folderResult.any((a) => a.id == 5 && a.isRead), isTrue);
+      expect(folderResult.length, 2);
+
+      // All tab still shows it dimmed too.
+      expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
+    });
+
+    test('mark-all-read (All) + clear tracker → reload shows unread-only', () {
+      final beforeClear = [
+        _article(id: 1, isRead: true),
+        _article(id: 2, isRead: false),
+      ];
+      final tracker = <int>{1};
+
+      // Before clear: article 1 still visible via tracker.
+      expect(_unionQuery(beforeClear, tracker).length, 2);
+
+      // After markAllAsRead + clear tracker: unread-only.
+      tracker.clear();
+      final reloaded = [
+        _article(id: 1, isRead: true),
+        _article(id: 2, isRead: true), // now also marked read
+      ];
+      expect(_unionQuery(reloaded, tracker), isEmpty);
+    });
+
+    test('mark-all-read (Category) removes folder IDs, other tab IDs remain', () {
+      final tracker = <int>{10, 20}; // 10 = folder1, 20 = folder2
+      final folder1Ids = {10};
+
+      tracker.removeWhere(folder1Ids.contains);
+
+      expect(tracker, isNot(contains(10)));
+      expect(tracker, contains(20));
+    });
+  });
+
+  group('Tab switch', () {
+    test('tab with saved scroll offset restores position', () {
+      final positions = <int, double>{0: 320.0, 1: 0.0};
+      // Switching from tab 0 to tab 1: save tab 0, restore tab 1.
+      expect(positions[0], 320.0);
+      expect(positions[1] ?? 0.0, 0.0);
+    });
+
+    test('switching to a new tab (no saved offset) starts at top', () {
+      final positions = <int, double>{};
+      final offset = positions[2] ?? 0.0;
+      expect(offset, 0.0);
     });
   });
 
@@ -185,60 +284,9 @@ void main() {
         _article(id: 1, isRead: false),
         _article(id: 2, isRead: true),
       ];
-      // The list contains both; caller uses isRead to pick opacity.
       expect(articles.length, 2);
       expect(articles.firstWhere((a) => a.id == 1).isRead, isFalse);
       expect(articles.firstWhere((a) => a.id == 2).isRead, isTrue);
-    });
-  });
-
-  group('Refresh behavior', () {
-    test('refresh with new articles populates list', () {
-      final fetched = [_article(id: 10), _article(id: 11), _article(id: 12)];
-      final displayed = _unreadOnly(fetched);
-      expect(displayed.length, 3);
-    });
-
-    test('refresh with no new articles returns empty list', () {
-      final fetched = [
-        _article(id: 1, isRead: true),
-        _article(id: 2, isRead: true),
-      ];
-      final displayed = _unreadOnly(fetched);
-      expect(displayed, isEmpty);
-    });
-  });
-
-  group('Read state is global across tabs', () {
-    test('article marked read in All is absent from category DB query', () {
-      // Both lists start with article 5 as unread.
-      final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
-      final techTabArticles = [_article(id: 5, feedId: 2), _article(id: 7, feedId: 2)];
-
-      // User opens article 5 in All tab → dimmed in-place in All.
-      final updatedAll = _dimArticle(allTabArticles, 5);
-
-      // Tech tab reloads from DB (unread-only) — article 5 is now read in DB.
-      final updatedTech = _unreadOnly(
-        techTabArticles.map((a) => a.id == 5 ? a.copyWith(isRead: true) : a).toList(),
-      );
-
-      expect(updatedAll.any((a) => a.id == 5), isTrue);
-      expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
-      expect(updatedTech.any((a) => a.id == 5), isFalse);
-    });
-  });
-
-  group('Tab switch', () {
-    test('switching tabs loads only that tab\'s unread articles', () {
-      final techArticles = [
-        _article(id: 3, feedId: 2, isRead: true),
-        _article(id: 4, feedId: 2, isRead: false),
-        _article(id: 5, feedId: 2, isRead: false),
-      ];
-      final result = _unreadOnly(techArticles);
-      expect(result.length, 2);
-      expect(result.every((a) => a.feedId == 2), isTrue);
     });
   });
 }

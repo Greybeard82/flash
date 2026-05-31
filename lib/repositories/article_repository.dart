@@ -42,30 +42,57 @@ class ArticleRepository {
 
   // ── Read queries ───────────────────────────────────────────────────────────
 
-  /// All unread, unblocked articles across all folders, newest first.
-  Future<List<Article>> getAllArticles() async {
+  /// Unblocked articles across all folders that are either unread OR in
+  /// [sessionReadIds] (read this session). Newest first.
+  Future<List<Article>> getAllArticles({Set<int> sessionReadIds = const {}}) async {
     final db = await _db;
+    final (where, args) = _unionClause(null, sessionReadIds);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.is_read = 0 AND a.is_blocked = 0
+      WHERE $where
       ORDER BY a.published_at DESC
-    ''');
+    ''', args);
     return rows.map(Article.fromMap).toList();
   }
 
-  /// Unread, unblocked articles for a specific folder, newest first.
-  Future<List<Article>> getArticlesByFolder(int folderId) async {
+  /// Unblocked articles for a specific folder that are either unread OR in
+  /// [sessionReadIds] (read this session). Newest first.
+  Future<List<Article>> getArticlesByFolder(
+    int folderId, {
+    Set<int> sessionReadIds = const {},
+  }) async {
     final db = await _db;
+    final (where, args) = _unionClause(folderId, sessionReadIds);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE f.folder_id = ? AND a.is_read = 0 AND a.is_blocked = 0
+      WHERE $where
       ORDER BY a.published_at DESC
-    ''', [folderId]);
+    ''', args);
     return rows.map(Article.fromMap).toList();
+  }
+
+  /// Builds the WHERE clause and args for the union query.
+  /// Scope: all folders when [folderId] is null; a specific folder otherwise.
+  (String, List<Object?>) _unionClause(int? folderId, Set<int> sessionReadIds) {
+    final buf = StringBuffer();
+    final args = <Object?>[];
+    if (folderId != null) {
+      buf.write('f.folder_id = ? AND ');
+      args.add(folderId);
+    }
+    buf.write('a.is_blocked = 0 AND (a.is_read = 0');
+    if (sessionReadIds.isNotEmpty) {
+      buf.write(
+        ' OR a.id IN (${List.filled(sessionReadIds.length, '?').join(',')})',
+      );
+      args.addAll(sessionReadIds);
+    }
+    buf.write(')');
+    return (buf.toString(), args);
   }
 
   Future<List<Article>> getSaved() async {

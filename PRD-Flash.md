@@ -114,7 +114,7 @@ Specific mandates:
 - Tab order is user-reorderable
 - Each folder tab shows an unread count badge
 - A special **"All"** tab aggregates articles across all folders
-- All category tabs behave identically to "All" — same persistence, scroll, and mark-all-read rules apply
+- All category tabs behave identically to "All" — same session-read model, scroll, and mark-all-read rules apply (category mark-all-read also refreshes that folder's feeds)
 
 ---
 
@@ -131,16 +131,18 @@ Specific mandates:
 **Auto-Refresh on Open**
 - On every cold open, Flash silently fetches all feeds in the background immediately after loading the cached article list from the database
 - A full-screen lightning bolt (⚡) pulse animation replaces the content area during the cold-start fetch; the FABs are hidden until the fetch completes
-- Before fetching, stale articles (read, unsaved, older than 7 days) are purged from the database
+- Before fetching, stale articles (read, unsaved, older than the configured cleanup window) are purged from the database
 - This ensures the list is always up to date within seconds of opening the app
 
-**Article List Persistence — Hardcoded, Non-Negotiable**
-- Articles **stay in the list permanently** once loaded, even after being marked as read — they never disappear mid-session
-- Read articles are visually de-emphasised (dimmed) but remain in place at their original position
-- On next cold open or after "Mark all as read", the list reloads from the database — only unread articles appear; previously-read articles are absent (they remain in the DB unless older than the cleanup window)
-- The **scroll position is always restored exactly** when the user returns to the feed — whether from the in-app reader, the system browser, or switching tabs
-- Switching to a different category tab resets that tab's scroll to the top (correct behaviour); the previous tab's position is not carried over
-- These behaviours have no user toggle — they are hardcoded
+**What the feed shows — the session-read model**
+
+The feed displays: **all non-blocked articles in scope that are either unread, or were read during the current app session** (the "session read set"). This single rule governs every tab and every action:
+
+- **Session read set:** an in-memory set of article IDs read since the app launched. It is empty on every cold open and is never persisted to disk.
+- **Cold open:** session set is empty → only unread articles appear. Previously-read articles remain in the DB (for deduplication) but do not show.
+- **During a session:** any article marked as read (scroll, swipe, tap) is added to the session set. It stays in the list, dimmed in place, for the rest of the session.
+- **Tab switching:** the query re-runs for the new tab's scope, passing the same global session set. An article read in one tab is visible (dimmed) in any other tab it belongs to.
+- **App restart / cold open:** session set is cleared → fresh unread-only view.
 
 **Mark as Read — On Scroll**
 - Articles are automatically marked as read as they scroll past the midpoint of the viewport
@@ -148,18 +150,26 @@ Specific mandates:
 - Can be disabled in Settings
 
 **Mark as Read — Swipe**
-- Swipe in either direction (left or right): mark as read
-- Article dims in-place — it is never removed from the list
-- There is no swipe gesture for mark as unread
+- Swipe in either direction (left or right): mark as read, add to session set
+- Article dims in-place — it is never removed from the list mid-session
+
+**Mark as Unread — Swipe**
+- Long-press → radial menu (see below), or dedicated swipe gesture: mark as unread, remove from session set
+- Article restores full visual weight and is hidden on the next tab reload
 
 **Mark All as Read — No Confirmation, Immediate Execution**
 
 Behaviour differs by tab:
 
-- **All tab:** marks every article read → runs age-based cleanup (removes read+unsaved articles older than the configured cleanup window) → plays cold-start animation → refreshes all feeds → shows only newly fetched unread articles
-- **Category tab:** marks every article in that folder read → runs cleanup for that folder only → reloads counts → shows a `NotificationBanner` confirmation; no feed refresh
+- **All tab:** marks every article read in DB → **clears the entire session set** → runs age-based cleanup → plays cold-start (⚡) animation → refreshes all feeds → reloads. Result: only newly fetched unread articles are shown.
+- **Category tab:** marks every article in that folder read in DB → **removes that folder's article IDs from the session set** → runs cleanup for that folder only → **refreshes that folder's feeds** → reloads → shows a `NotificationBanner` confirmation. Result: only newly fetched unread articles for that folder are shown.
 
-No confirmation dialog is ever shown.
+No confirmation dialog is ever shown. Scroll position for the affected tab resets to top after reload.
+
+**Scroll position**
+- The **scroll position is always restored exactly** when the user returns to the feed — whether from the in-app reader, the system browser, or switching tabs
+- Switching to a different category tab resets that tab's scroll to the top (correct behaviour); the previous tab's position is saved and restored when switching back
+- These behaviours have no user toggle — they are hardcoded
 
 **Long-Press Radial Menu**
 - Long-press any article card to open a radial context menu centred on the card
@@ -181,7 +191,7 @@ Three mini FABs, visible only when at least one feed exists:
 - **Mark all read** — executes the mark-all-read sequence above
 
 **Open Article**
-- Tap a card to open the article; the card dims in-place immediately (marks as read); exact scroll position is restored on return — no reload
+- Tap a card to open the article; the card dims in-place immediately (marks as read, added to session set); exact scroll position is restored on return — no reload
 - If **Reader Mode** is on (Settings toggle): opens the in-app Reader screen with extracted article text
   - Pre-flight HTML check determines if the URL serves readable HTML
   - Per-domain compatibility is cached (`reader_compat_<domain>`) to avoid repeated checks
