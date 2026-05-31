@@ -136,7 +136,8 @@ Specific mandates:
 
 **Article List Persistence — Hardcoded, Non-Negotiable**
 - Articles **stay in the list permanently** once loaded, even after being marked as read — they never disappear mid-session
-- Read articles are visually de-emphasised but remain in place at their original position
+- Read articles are visually de-emphasised (dimmed) but remain in place at their original position
+- On next cold open or after "Mark all as read", the list reloads from the database — only unread articles appear; previously-read articles are absent (they remain in the DB unless older than the cleanup window)
 - The **scroll position is always restored exactly** when the user returns to the feed — whether from the in-app reader, the system browser, or switching tabs
 - Switching to a different category tab resets that tab's scroll to the top (correct behaviour); the previous tab's position is not carried over
 - These behaviours have no user toggle — they are hardcoded
@@ -155,7 +156,7 @@ Specific mandates:
 
 Behaviour differs by tab:
 
-- **All tab:** marks every article read → runs age-based cleanup (removes read+unsaved articles older than 7 days) → plays cold-start animation → refreshes all feeds → shows only newly fetched unread articles
+- **All tab:** marks every article read → runs age-based cleanup (removes read+unsaved articles older than the configured cleanup window) → plays cold-start animation → refreshes all feeds → shows only newly fetched unread articles
 - **Category tab:** marks every article in that folder read → runs cleanup for that folder only → reloads counts → shows a `NotificationBanner` confirmation; no feed refresh
 
 No confirmation dialog is ever shown.
@@ -252,7 +253,8 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ### 4.9 Article Auto-Cleanup
 
-- **Age-based:** read, unsaved articles whose `published_at` is older than 7 days are deleted automatically
+- **Age-based:** read, unsaved articles whose `published_at` is older than the configured cleanup window are deleted automatically
+- The cleanup window defaults to **7 days** and is user-configurable from **5 to 20 days** (Settings → Article cleanup window)
 - Unread articles are never deleted, regardless of age
 - Bookmarked (saved) articles are never deleted, regardless of read state or age
 - Cleanup runs on every cold open and every background refresh, **before** new articles are fetched
@@ -413,6 +415,7 @@ Content area:
 | OPML | — | Import, Export |
 | Keyword blocklist | — | Manage list |
 | Keyword alerts | — | Manage list |
+| Article cleanup window | 7 days | 5–20 days (stepper) |
 | Language | System | EN, DE, ES, FR, IT |
 
 ---
@@ -453,7 +456,7 @@ Content area:
 - Mark as read on scroll, swipe gestures (read/unread)
 - Pull-to-refresh, manual refresh FAB
 - Auto-refresh on cold open with lightning bolt animation
-- Age-based article cleanup (7-day threshold, runs on cold start + background refresh)
+- Age-based article cleanup (configurable 5–20 day window, default 7 days, runs on cold start + background refresh)
 - Fetch thresholds: 7-day age filter + 100-article cap per feed; deterministic GUID resolution
 - INSERT OR IGNORE deduplication — re-fetch never resets read state
 - Per-tab scroll position preservation
