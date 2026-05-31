@@ -533,4 +533,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String timeYearsAgo(int n) {
     return 'hace ${n}a';
   }
+
+  @override
+  String get newspaperMode => 'Modo periódico';
+
+  @override
+  String get newspaperModeSubtitle => 'Lee tu feed como un periódico impreso';
+
+  @override
+  String get newspaperModeOverridesTheme =>
+      'La apariencia está definida por el modo periódico';
 }

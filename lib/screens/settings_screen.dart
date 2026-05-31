@@ -16,8 +16,13 @@ import 'keyword_blocklist_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final ValueNotifier<String> themeModeNotifier;
+  final ValueNotifier<bool> newspaperModeNotifier;
 
-  const SettingsScreen({super.key, required this.themeModeNotifier});
+  const SettingsScreen({
+    super.key,
+    required this.themeModeNotifier,
+    required this.newspaperModeNotifier,
+  });
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -285,6 +290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Reading ──
           _sectionHeader(l10n.reading),
           _themeSelector(s, l10n),
+          _newspaperToggle(s, l10n),
           _toggle(
             title: l10n.markReadOnScroll,
             subtitle: l10n.markReadOnScrollSubtitle,
@@ -594,12 +600,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _themeSelector(AppSettings s, AppLocalizations l10n) {
+    final disabled = s.newspaperMode;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(l10n.theme, style: Theme.of(context).textTheme.bodyLarge),
+          Text(
+            l10n.theme,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: disabled
+                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
+                  : null,
+            ),
+          ),
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
@@ -611,7 +625,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ButtonSegment(value: 'dark',   label: SizedBox(width: 72, child: Text(l10n.themeDark,   textAlign: TextAlign.center))),
               ],
               selected: {s.theme},
-              onSelectionChanged: (sel) {
+              onSelectionChanged: disabled ? null : (sel) {
                 _save('theme', sel.first);
                 widget.themeModeNotifier.value = sel.first;
               },
@@ -620,8 +634,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          if (disabled) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.newspaperModeOverridesTheme,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _newspaperToggle(AppSettings s, AppLocalizations l10n) {
+    return SwitchListTile(
+      title: Text(l10n.newspaperMode),
+      subtitle: Text(l10n.newspaperModeSubtitle),
+      value: s.newspaperMode,
+      onChanged: (v) {
+        _save('newspaper_mode', v.toString());
+        widget.newspaperModeNotifier.value = v;
+      },
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 

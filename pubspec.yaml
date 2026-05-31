@@ -74,3 +74,19 @@ flutter:
   assets:
     - assets/images/
     - assets/icons/
+    - assets/fonts/
+
+  fonts:
+    - family: PT Serif
+      fonts:
+        - asset: assets/fonts/PTSerif-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/PTSerif-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/PTSerif-Italic.ttf
+          weight: 400
+          style: italic
+    - family: Playfair Display
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-VF.ttf
+          weight: 700

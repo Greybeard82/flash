@@ -170,5 +170,8 @@
   "timeMonthsAgo": "il y a {n}mois",
   "@timeMonthsAgo": { "placeholders": { "n": { "type": "int" } } },
   "timeYearsAgo": "il y a {n}an",
-  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } }
+  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
+  "newspaperMode": "Mode journal",
+  "newspaperModeSubtitle": "Lisez votre fil comme un journal imprimé",
+  "newspaperModeOverridesTheme": "L'apparence est définie par le mode journal"
 }

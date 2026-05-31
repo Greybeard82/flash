@@ -11,6 +11,7 @@ class AppSettings {
   final String articleFontSize; // 'small' | 'medium' | 'large'
   final bool readerMode;
   final int cleanupAgeDays; // [5, 20]
+  final bool newspaperMode;
 
   const AppSettings({
     this.theme = 'system',
@@ -25,6 +26,7 @@ class AppSettings {
     this.articleFontSize = 'medium',
     this.readerMode = false,
     this.cleanupAgeDays = 7,
+    this.newspaperMode = false,
   });
 
   factory AppSettings.fromMap(Map<String, String> map) {
@@ -43,6 +45,7 @@ class AppSettings {
       articleFontSize: map['article_font_size'] ?? 'medium',
       readerMode: (map['reader_mode'] ?? 'false') == 'true',
       cleanupAgeDays: (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(5, 20),
+      newspaperMode: (map['newspaper_mode'] ?? 'false') == 'true',
     );
   }
 
@@ -59,6 +62,7 @@ class AppSettings {
     String? articleFontSize,
     bool? readerMode,
     int? cleanupAgeDays,
+    bool? newspaperMode,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -73,6 +77,7 @@ class AppSettings {
       articleFontSize: articleFontSize ?? this.articleFontSize,
       readerMode: readerMode ?? this.readerMode,
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
+      newspaperMode: newspaperMode ?? this.newspaperMode,
     );
   }
 }

@@ -67,6 +67,7 @@ class _FeedScreenState extends State<FeedScreen>
   bool _refreshing = false;
   bool _hasFeeds = false;
   bool _markReadOnScroll = true;
+  bool _newspaperMode = false;
 
   final Map<int, GlobalKey> _cardKeys = {};
   int _tabGeneration = 0;
@@ -117,6 +118,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _boot() async {
     final settings = await _settingsRepo.getAll();
     _markReadOnScroll = settings.markReadOnScroll;
+    if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
 
     if (mounted) setState(() => _booting = true);
 
@@ -164,6 +166,9 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _reloadArticles() async {
     final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    // Refresh newspaper mode in case it was toggled in Settings.
+    final settings = await _settingsRepo.getAll();
+    if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
     await _loadArticles();
     _restoreScrollOffset(offset);
   }
@@ -523,7 +528,7 @@ class _FeedScreenState extends State<FeedScreen>
     final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.appTitle),
+        title: _newspaperMode ? _NewspaperMasthead() : Text(l10n.appTitle),
         centerTitle: false,
         actions: const [],
       ),
@@ -655,6 +660,44 @@ class _FeedScreenState extends State<FeedScreen>
           },
         ),
       ),
+    );
+  }
+}
+
+class _NewspaperMasthead extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final ink = theme.colorScheme.onSurface;
+    final today = DateTime.now();
+    final dateline =
+        'INTERNATIONAL EDITION · ${today.day.toString().padLeft(2, '0')}.'
+        '${today.month.toString().padLeft(2, '0')}.${today.year}';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Flash',
+          style: TextStyle(
+            fontFamily: 'Playfair Display',
+            fontWeight: FontWeight.w700,
+            fontSize: 26,
+            color: ink,
+            height: 1.1,
+          ),
+        ),
+        Divider(height: 3, thickness: 1, color: ink.withValues(alpha: 0.4)),
+        Text(
+          dateline,
+          style: TextStyle(
+            fontFamily: 'PT Serif',
+            fontSize: 9,
+            letterSpacing: 0.8,
+            color: ink.withValues(alpha: 0.55),
+          ),
+        ),
+      ],
     );
   }
 }

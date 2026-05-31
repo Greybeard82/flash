@@ -533,4 +533,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String timeYearsAgo(int n) {
     return 'il y a ${n}an';
   }
+
+  @override
+  String get newspaperMode => 'Mode journal';
+
+  @override
+  String get newspaperModeSubtitle =>
+      'Lisez votre fil comme un journal imprimé';
+
+  @override
+  String get newspaperModeOverridesTheme =>
+      'L\'apparence est définie par le mode journal';
 }

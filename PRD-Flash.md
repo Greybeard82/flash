@@ -48,6 +48,8 @@ Specific mandates:
 - Typography: Roboto / system default — no custom fonts
 - All dialogs, bottom sheets, and snackbars are standard Material 3 components
 
+**Exception — Newspaper mode (opt-in):** When the user enables Newspaper mode in Settings, the app deliberately departs from the above. It switches to a printed-newspaper aesthetic: newsprint paper background, serif type (PT Serif body, Playfair Display headlines), and a red spot-colour accent. Both fonts are bundled as OFL-licensed TTF assets — no runtime font fetching. This mode overrides the System/Light/Dark theme choice. It is OFF by default and has no effect on the native-feel rules above when disabled.
+
 ### 3.4 Local Storage
 - **SQLite via `sqflite`** — feeds, articles, read state, folders, blocklist, settings, keyword alerts
 - Schema versioned with migration support
@@ -426,6 +428,7 @@ Content area:
 | Keyword blocklist | — | Manage list |
 | Keyword alerts | — | Manage list |
 | Article cleanup window | 7 days | 5–20 days (stepper) |
+| Newspaper mode | Off | On/Off |
 | Language | System | EN, DE, ES, FR, IT |
 
 ---

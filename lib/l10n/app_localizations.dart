@@ -1045,6 +1045,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{n}y ago'**
   String timeYearsAgo(int n);
+
+  /// No description provided for @newspaperMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Newspaper mode'**
+  String get newspaperMode;
+
+  /// No description provided for @newspaperModeSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Read your feed as a printed paper'**
+  String get newspaperModeSubtitle;
+
+  /// No description provided for @newspaperModeOverridesTheme.
+  ///
+  /// In en, this message translates to:
+  /// **'Appearance is set by Newspaper mode'**
+  String get newspaperModeOverridesTheme;
 }
 
 class _AppLocalizationsDelegate

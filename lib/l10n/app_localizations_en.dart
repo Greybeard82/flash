@@ -530,4 +530,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String timeYearsAgo(int n) {
     return '${n}y ago';
   }
+
+  @override
+  String get newspaperMode => 'Newspaper mode';
+
+  @override
+  String get newspaperModeSubtitle => 'Read your feed as a printed paper';
+
+  @override
+  String get newspaperModeOverridesTheme =>
+      'Appearance is set by Newspaper mode';
 }

@@ -170,5 +170,8 @@
   "timeMonthsAgo": "{n}mesi fa",
   "@timeMonthsAgo": { "placeholders": { "n": { "type": "int" } } },
   "timeYearsAgo": "{n}anni fa",
-  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } }
+  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
+  "newspaperMode": "Modalità giornale",
+  "newspaperModeSubtitle": "Leggi il feed come un giornale stampato",
+  "newspaperModeOverridesTheme": "L'aspetto è impostato dalla modalità giornale"
 }

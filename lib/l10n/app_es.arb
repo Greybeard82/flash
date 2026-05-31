@@ -170,5 +170,8 @@
   "timeMonthsAgo": "hace {n}mes",
   "@timeMonthsAgo": { "placeholders": { "n": { "type": "int" } } },
   "timeYearsAgo": "hace {n}a",
-  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } }
+  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
+  "newspaperMode": "Modo periódico",
+  "newspaperModeSubtitle": "Lee tu feed como un periódico impreso",
+  "newspaperModeOverridesTheme": "La apariencia está definida por el modo periódico"
 }

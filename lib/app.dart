@@ -20,30 +20,40 @@ class FlashApp extends StatefulWidget {
 class _FlashAppState extends State<FlashApp> {
   final _settingsRepo = SettingsRepository();
   ThemeMode _themeMode = ThemeMode.system;
+  bool _newspaper = false;
 
-  // Notifier passed down to SettingsScreen so it can trigger a theme rebuild
+  // Notifiers passed down so SettingsScreen can trigger instant rebuilds.
   final themeModeNotifier = ValueNotifier<String>('system');
+  final newspaperModeNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
+    _loadSettings();
     themeModeNotifier.addListener(_onThemeChanged);
+    newspaperModeNotifier.addListener(_onNewspaperChanged);
   }
 
   @override
   void dispose() {
     themeModeNotifier.removeListener(_onThemeChanged);
     themeModeNotifier.dispose();
+    newspaperModeNotifier.removeListener(_onNewspaperChanged);
+    newspaperModeNotifier.dispose();
     super.dispose();
   }
 
-  Future<void> _loadTheme() async {
-    final value = await _settingsRepo.get('theme') ?? 'system';
-    _applyTheme(value);
+  Future<void> _loadSettings() async {
+    final theme = await _settingsRepo.get('theme') ?? 'system';
+    final newspaper = (await _settingsRepo.get('newspaper_mode')) == 'true';
+    _applyTheme(theme);
+    if (mounted) setState(() => _newspaper = newspaper);
   }
 
   void _onThemeChanged() => _applyTheme(themeModeNotifier.value);
+  void _onNewspaperChanged() {
+    if (mounted) setState(() => _newspaper = newspaperModeNotifier.value);
+  }
 
   void _applyTheme(String value) {
     final mode = value == 'light'
@@ -56,12 +66,17 @@ class _FlashAppState extends State<FlashApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Newspaper mode always renders as paper (light), ignoring the theme choice.
+    final theme      = _newspaper ? flashNewspaperTheme() : flashLightTheme();
+    final darkTheme  = _newspaper ? flashNewspaperTheme() : flashDarkTheme();
+    final themeMode  = _newspaper ? ThemeMode.light : _themeMode;
+
     return MaterialApp(
       title: 'Flash',
       debugShowCheckedModeBanner: false,
-      theme: flashLightTheme(),
-      darkTheme: flashDarkTheme(),
-      themeMode: _themeMode,
+      theme: theme,
+      darkTheme: darkTheme,
+      themeMode: themeMode,
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,
@@ -75,15 +90,22 @@ class _FlashAppState extends State<FlashApp> {
         Locale('de'),
         Locale('it'),
       ],
-      home: _AppShell(themeModeNotifier: themeModeNotifier),
+      home: _AppShell(
+        themeModeNotifier: themeModeNotifier,
+        newspaperModeNotifier: newspaperModeNotifier,
+      ),
     );
   }
 }
 
 class _AppShell extends StatefulWidget {
   final ValueNotifier<String> themeModeNotifier;
+  final ValueNotifier<bool> newspaperModeNotifier;
 
-  const _AppShell({required this.themeModeNotifier});
+  const _AppShell({
+    required this.themeModeNotifier,
+    required this.newspaperModeNotifier,
+  });
 
   @override
   State<_AppShell> createState() => _AppShellState();
@@ -140,7 +162,10 @@ class _AppShellState extends State<_AppShell> {
         ),
         const FeedsScreen(),
         const BookmarksScreen(),
-        SettingsScreen(themeModeNotifier: widget.themeModeNotifier),
+        SettingsScreen(
+          themeModeNotifier: widget.themeModeNotifier,
+          newspaperModeNotifier: widget.newspaperModeNotifier,
+        ),
       ],
     );
   }

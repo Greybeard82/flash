@@ -94,6 +94,121 @@ ThemeData flashLightTheme() {
   );
 }
 
+// ── Newspaper palette ──────────────────────────────────────────────────────
+const Color _npPaper    = Color(0xFFF2F1EE); // newsprint background
+const Color _npInk      = Color(0xFF1D1D1B); // ink text
+const Color _npRed      = Color(0xFFA0231A); // spot-colour accent
+const Color _npSurface2 = Color(0xFFE7E7E3); // nav / secondary surface
+const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
+
+ThemeData flashNewspaperTheme() {
+  const base = ColorScheme.light(
+    primary: _npRed,
+    onPrimary: Colors.white,
+    primaryContainer: Color(0xFFFADDD9),
+    onPrimaryContainer: Color(0xFF410E09),
+    secondary: _npRed,
+    onSecondary: Colors.white,
+    surface: _npPaper,
+    onSurface: _npInk,
+    surfaceContainerHighest: _npSurface2,
+    outline: _npHairline,
+    error: Color(0xFFBA1A1A),
+    onError: Colors.white,
+  );
+
+  // PT Serif for body/label/title; Playfair Display for display/headline.
+  const ptSerif = 'PT Serif';
+  const playfair = 'Playfair Display';
+
+  final baseText = const TextTheme().copyWith(
+    displayLarge:   const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    displayMedium:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    displaySmall:   const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    headlineLarge:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    headlineMedium: const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    headlineSmall:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+    titleLarge:   const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
+    titleMedium:  const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
+    titleSmall:   const TextStyle(fontFamily: ptSerif),
+    bodyLarge:    const TextStyle(fontFamily: ptSerif),
+    bodyMedium:   const TextStyle(fontFamily: ptSerif),
+    bodySmall:    const TextStyle(fontFamily: ptSerif),
+    labelLarge:   const TextStyle(fontFamily: ptSerif),
+    labelMedium:  const TextStyle(fontFamily: ptSerif),
+    labelSmall:   const TextStyle(fontFamily: ptSerif),
+  ).apply(
+    bodyColor: _npInk,
+    displayColor: _npInk,
+  );
+
+  return ThemeData(
+    useMaterial3: true,
+    colorScheme: base,
+    scaffoldBackgroundColor: _npPaper,
+    textTheme: baseText,
+    appBarTheme: AppBarTheme(
+      backgroundColor: _npPaper,
+      foregroundColor: _npInk,
+      elevation: 0,
+      scrolledUnderElevation: 1,
+      surfaceTintColor: _npRed,
+      titleTextStyle: baseText.titleLarge?.copyWith(color: _npInk),
+    ),
+    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      backgroundColor: _npSurface2,
+      selectedItemColor: _npRed,
+      unselectedItemColor: Color(0xFF888880),
+      type: BottomNavigationBarType.fixed,
+      elevation: 8,
+    ),
+    cardTheme: CardThemeData(
+      color: _npPaper,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(2),
+      ),
+    ),
+    dividerTheme: const DividerThemeData(
+      color: _npHairline,
+      thickness: 1,
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: _npRed,
+        foregroundColor: Colors.white,
+        minimumSize: const Size(88, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        textStyle: const TextStyle(fontFamily: ptSerif),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) return _npRed;
+        return null;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return _npRed.withValues(alpha: 0.4);
+        }
+        return null;
+      }),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: _npInk,
+      contentTextStyle: const TextStyle(
+        color: _npPaper,
+        fontFamily: ptSerif,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: _npRed,
+    ),
+  );
+}
+
 ThemeData flashDarkTheme() {
   const base = ColorScheme.dark(
     primary: darkAccent,

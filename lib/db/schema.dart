@@ -138,5 +138,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'cleanup_age_days', 'value': '7'},
   {'key': 'article_font_size', 'value': 'medium'},
   {'key': 'reader_mode', 'value': 'false'},
+  {'key': 'newspaper_mode', 'value': 'false'},
 ];
 

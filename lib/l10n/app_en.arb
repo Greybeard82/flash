@@ -211,5 +211,8 @@
   "timeMonthsAgo": "{n}mo ago",
   "@timeMonthsAgo": { "placeholders": { "n": { "type": "int" } } },
   "timeYearsAgo": "{n}y ago",
-  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } }
+  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
+  "newspaperMode": "Newspaper mode",
+  "newspaperModeSubtitle": "Read your feed as a printed paper",
+  "newspaperModeOverridesTheme": "Appearance is set by Newspaper mode"
 }

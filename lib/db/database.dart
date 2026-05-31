@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -110,6 +110,12 @@ class AppDatabase {
       final now = DateTime.now().millisecondsSinceEpoch;
       await db.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('cleanup_age_days', '7', $now)",
+      );
+    }
+    if (oldVersion < 7) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('newspaper_mode', 'false', $now)",
       );
     }
   }

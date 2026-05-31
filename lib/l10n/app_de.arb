@@ -170,5 +170,8 @@
   "timeMonthsAgo": "vor {n}Mo",
   "@timeMonthsAgo": { "placeholders": { "n": { "type": "int" } } },
   "timeYearsAgo": "vor {n}J",
-  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } }
+  "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
+  "newspaperMode": "Zeitungsmodus",
+  "newspaperModeSubtitle": "Feed als gedruckte Zeitung lesen",
+  "newspaperModeOverridesTheme": "Erscheinungsbild wird vom Zeitungsmodus bestimmt"
 }
