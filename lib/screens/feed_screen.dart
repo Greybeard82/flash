@@ -445,10 +445,13 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markAllRead() async {
     HapticFeedback.mediumImpact();
 
+    final settings = await _settingsRepo.getAll();
+    final cleanupDays = settings.cleanupAgeDays;
+
     if (_selectedTabIndex == 0) {
       // All tab: mark all read, run cleanup, then cold-start fetch with animation.
       await _articleRepo.markAllAsRead();
-      await _articleRepo.runCleanup();
+      await _articleRepo.runCleanup(days: cleanupDays);
 
       // Show cold-start animation and trigger full fetch.
       if (!mounted) return;
@@ -466,7 +469,7 @@ class _FeedScreenState extends State<FeedScreen>
       // Category tab: mark read + cleanup for this folder only — no fetch.
       final folderId = _folders[_selectedTabIndex - 1].id!;
       await _articleRepo.markAllAsReadByFolder(folderId);
-      await _articleRepo.runCleanup(folderId: folderId);
+      await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       final (folderCounts, allCount) = await (
         _articleRepo.getAllFolderUnreadCounts(),
@@ -612,18 +615,14 @@ class _FeedScreenState extends State<FeedScreen>
           itemBuilder: (context, i) {
             final article = _articles[i];
             final cardKey = article.id != null ? _cardKeys[article.id!] : null;
-            return AnimatedOpacity(
-              duration: const Duration(milliseconds: 150),
-              opacity: article.isRead ? 0.45 : 1.0,
-              child: ArticleCard(
-                key: cardKey,
-                article: article,
-                onTap: () => _openArticle(article),
-                onMarkRead: () => _markRead(article),
-                onMarkUnread: () => _markUnread(article),
-                onShare: () => _shareService.shareArticle(article),
-                onBookmark: () => _toggleSaved(article),
-              ),
+            return ArticleCard(
+              key: cardKey,
+              article: article,
+              onTap: () => _openArticle(article),
+              onMarkRead: () => _markRead(article),
+              onMarkUnread: () => _markUnread(article),
+              onShare: () => _shareService.shareArticle(article),
+              onBookmark: () => _toggleSaved(article),
             );
           },
         ),

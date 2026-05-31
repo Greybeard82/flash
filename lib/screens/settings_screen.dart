@@ -322,6 +322,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── Storage ──
           _sectionHeader(l10n.storage),
+          _cleanupAgeControl(s),
           _dropdown<int>(
             title: l10n.maxArticlesPerFeed,
             value: s.articleLimit,
@@ -709,6 +710,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
         entry('iPad / wider screen layout'),
         const SizedBox(height: 8),
       ],
+    );
+  }
+
+  Widget _cleanupAgeControl(AppSettings s) {
+    final days = s.cleanupAgeDays;
+    return ListTile(
+      title: const Text('Article cleanup window'),
+      subtitle: const Text('Read articles older than this are removed'),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.remove_rounded),
+            onPressed: days <= 5
+                ? null
+                : () => _save('cleanup_age_days', (days - 1).toString()),
+          ),
+          SizedBox(
+            width: 52,
+            child: Text(
+              '$days days',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_rounded),
+            onPressed: days >= 20
+                ? null
+                : () => _save('cleanup_age_days', (days + 1).toString()),
+          ),
+        ],
+      ),
     );
   }
 

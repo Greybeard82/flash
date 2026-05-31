@@ -120,20 +120,6 @@ class SchemaStatements {
     )
   ''';
 
-  // Auto-cleanup query — run after every feed fetch
-  static const String autoCleanup = '''
-    DELETE FROM articles
-    WHERE feed_id = ?
-      AND is_read = 1
-      AND is_saved = 0
-      AND id NOT IN (
-        SELECT id FROM articles
-        WHERE feed_id = ?
-          AND is_read = 1
-        ORDER BY published_at DESC
-        LIMIT ?
-      )
-  ''';
 }
 
 // Default seeded settings
@@ -149,6 +135,7 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'google_account_email', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
   {'key': 'schema_version', 'value': '3'},
+  {'key': 'cleanup_age_days', 'value': '7'},
   {'key': 'article_font_size', 'value': 'medium'},
   {'key': 'reader_mode', 'value': 'false'},
 ];

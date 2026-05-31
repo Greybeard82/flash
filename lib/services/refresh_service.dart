@@ -64,10 +64,12 @@ Future<int> _doRefresh({bool runCleanup = false, List<Feed>? feeds}) async {
   final feedRepo = FeedRepository();
   final keywordRepo = KeywordRepository();
   final alertRepo = KeywordAlertRepository();
+  final settingsRepo = SettingsRepository();
 
   // Cleanup must complete before any inserts (cold start and background only).
   if (runCleanup) {
-    await articleRepo.runCleanup();
+    final settings = await settingsRepo.getAll();
+    await articleRepo.runCleanup(days: settings.cleanupAgeDays);
   }
 
   final keywords = await keywordRepo.getAll();

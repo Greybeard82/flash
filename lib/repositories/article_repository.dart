@@ -207,13 +207,15 @@ class ArticleRepository {
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
 
-  /// Delete read (and not saved) articles older than [kFetchDayLimit] days.
+  /// Delete read (and not saved) articles older than [days] days (default: [kFetchDayLimit]).
+  /// [days] is clamped to [5, 20].
   /// Scoped to [folderId] if provided; otherwise applies to all feeds.
   /// Returns the number of rows deleted.
-  Future<int> runCleanup({int? folderId}) async {
+  Future<int> runCleanup({int? folderId, int days = kFetchDayLimit}) async {
     final db = await _db;
+    final clampedDays = days.clamp(5, 20);
     final cutoffMs = DateTime.now()
-        .subtract(const Duration(days: kFetchDayLimit))
+        .subtract(Duration(days: clampedDays))
         .millisecondsSinceEpoch;
     if (folderId == null) {
       return db.rawDelete('''

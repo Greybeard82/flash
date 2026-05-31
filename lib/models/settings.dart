@@ -10,6 +10,7 @@ class AppSettings {
   final bool onboardingComplete;
   final String articleFontSize; // 'small' | 'medium' | 'large'
   final bool readerMode;
+  final int cleanupAgeDays; // [5, 20]
 
   const AppSettings({
     this.theme = 'system',
@@ -23,6 +24,7 @@ class AppSettings {
     this.onboardingComplete = false,
     this.articleFontSize = 'medium',
     this.readerMode = false,
+    this.cleanupAgeDays = 7,
   });
 
   factory AppSettings.fromMap(Map<String, String> map) {
@@ -40,6 +42,7 @@ class AppSettings {
       onboardingComplete: (map['onboarding_complete'] ?? 'false') == 'true',
       articleFontSize: map['article_font_size'] ?? 'medium',
       readerMode: (map['reader_mode'] ?? 'false') == 'true',
+      cleanupAgeDays: (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(5, 20),
     );
   }
 
@@ -55,6 +58,7 @@ class AppSettings {
     bool? onboardingComplete,
     String? articleFontSize,
     bool? readerMode,
+    int? cleanupAgeDays,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -68,6 +72,7 @@ class AppSettings {
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       articleFontSize: articleFontSize ?? this.articleFontSize,
       readerMode: readerMode ?? this.readerMode,
+      cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
     );
   }
 }

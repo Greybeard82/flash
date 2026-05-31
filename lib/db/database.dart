@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -98,13 +98,18 @@ class AppDatabase {
       await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
     }
     if (oldVersion < 5) {
-      // Ensure the (feed_id, guid) unique index exists — safe no-op if already present.
       await db.execute(
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_guid_feed ON articles(feed_id, guid)',
       );
       final now = DateTime.now().millisecondsSinceEpoch;
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('schema_version', '3', $now)",
+      );
+    }
+    if (oldVersion < 6) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('cleanup_age_days', '7', $now)",
       );
     }
   }
