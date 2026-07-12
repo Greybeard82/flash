@@ -84,14 +84,15 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final sheetHeight = MediaQuery.of(context).size.height -
+    final maxSheetHeight = MediaQuery.of(context).size.height -
         MediaQuery.of(context).padding.top;
 
-    return SizedBox(
-      height: sheetHeight,
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxSheetHeight),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Handle
@@ -132,8 +133,8 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             ),
             const SizedBox(height: 16),
 
-            // Scrollable content area (fills remaining space)
-            Expanded(
+            // Scrollable content area — sized to content, capped at screen height
+            Flexible(
               child: SingleChildScrollView(
                 child: !_streaming && _summary == null && !_done
                     ? _LoadingDots()
