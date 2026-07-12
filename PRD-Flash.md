@@ -507,7 +507,6 @@ Content area:
 
 ## 11. Open Questions
 
-- **Launcher icon:** Not yet finalised
 - **Opinion filter:** Planned but not yet implemented — the dedicated Opinions folder and Claude Haiku classification pipeline are not shipped
 - **Restore merge vs replace:** Current behaviour is replace (wipe then re-insert); merge with duplicate-URL detection is a future improvement
 - **Play Store:** No decision yet on public distribution
