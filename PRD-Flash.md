@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.1
+**Version:** 2.2
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** May 2026
+**Last Updated:** July 2026
 
 ---
 
@@ -301,16 +301,15 @@ Applied to every feed fetch before articles are written to the database:
 **Trigger:** Long-press card → radial menu → ✦ Summary
 
 **Flow:**
-1. Full article URL is fetched and readable body is extracted
-2. Title + first 2,000 characters sent to Claude Haiku:
-   > "Summarise this news article in 4 concise bullet points. Be factual and neutral. No preamble."
-3. Response shown in a bottom sheet; summary is cached per article URL
+1. On-device summary generated locally by Gemini Nano (AICore) — title + article description/body sent to the model
+2. Prompt requests ~122 words (up from the original 70), leads with a one-sentence focal point that states the single most important piece of information and cuts through clickbait/misleading titles, then presents the remaining detail as bullet points when the article covers several points of interest (plain paragraph otherwise)
+3. Response streams into the sheet as it generates
 
 **UI:**
-- Half-screen bottom sheet slides up immediately with a loading skeleton
-- On response: skeleton replaced with 4 bullet points
+- Full-screen bottom sheet (fills the available screen height below the status bar) slides up immediately with a loading indicator
+- On response: text streams in live, rendered with bullet formatting where the model returns list items
 - All text is selectable
-- Footer: "Powered by Claude" + "Open article" button
+- Footer: disclaimer + "Copy" button
 - Dismiss: tap outside or swipe down
 
 **Error States:**
@@ -492,6 +491,8 @@ Content area:
 - Unread badges on folder tabs and app icon
 - Empty state screens
 - Settings screen with all options
+- Session-read model: mark-all-read on a category tab now also refreshes that folder's feeds
+- Newspaper mode: opt-in serif theme (bundled PT Serif / Playfair Display OFL fonts), masthead nameplate on the feed screen, DB-persisted toggle in Settings
 
 ### Not Yet Built
 - iOS support

@@ -91,7 +91,12 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     "it" -> "Write the summary in Italian."
                     else -> "Write the summary in English."
                 }
-                val prompt = "Summarize the following article in approximately 70 words. $langInstruction\n\nTitle: $title\n\nContent: $trimmed\n\nSummary:"
+                val prompt = "Summarize the following article in approximately 122 words. $langInstruction " +
+                    "Start with a single sentence stating the focal point: the one piece of information that " +
+                    "matters most, cutting through any clickbait or misleading framing in the title. Then present " +
+                    "the rest of the summary as short bullet points (using \"- \") if the article covers several " +
+                    "distinct points of interest, or as a short paragraph if it covers only one. Keep it factual, " +
+                    "neutral, and easy to scan.\n\nTitle: $title\n\nContent: $trimmed\n\nSummary:"
                 withTimeout(45_000) {
                     getModel().generateContentStream(prompt).collect { response ->
                         val chunk = response.candidates.firstOrNull()?.text ?: ""

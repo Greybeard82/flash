@@ -84,7 +84,8 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final sheetHeight = MediaQuery.of(context).size.height * 0.72;
+    final sheetHeight = MediaQuery.of(context).size.height -
+        MediaQuery.of(context).padding.top;
 
     return SizedBox(
       height: sheetHeight,
@@ -248,10 +249,25 @@ class _SummaryText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8);
+    final lines = summary.split('\n');
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(summary, style: theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8)),
+        for (final line in lines)
+          Padding(
+            padding: EdgeInsets.only(bottom: line.trim().isEmpty ? 0 : 6),
+            child: line.trim().startsWith('- ')
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('•  ', style: bodyStyle),
+                      Expanded(child: Text(line.trim().substring(2), style: bodyStyle)),
+                    ],
+                  )
+                : Text(line, style: bodyStyle),
+          ),
         if (done) ...[
           const SizedBox(height: 16),
           Row(
