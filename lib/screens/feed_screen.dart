@@ -715,7 +715,7 @@ class _BootingAnimation extends StatelessWidget {
         children: [
           ScaleTransition(
             scale: animation,
-            child: Icon(Icons.bolt_rounded, size: 72, color: theme.colorScheme.primary),
+            child: Image.asset('assets/images/bolt_logo.png', width: 72, height: 72),
           ),
           const SizedBox(height: 16),
           Text(
