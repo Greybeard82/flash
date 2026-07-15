@@ -83,7 +83,9 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         result.success(null)
         scope.launch {
             try {
-                val trimmed = body.take(1200)
+                // 3000 chars (~750 tokens) gives the model enough of the article
+                // to extract buried facts, while staying well within Nano's window.
+                val trimmed = body.take(3000)
                 val langInstruction = when (locale) {
                     "es" -> "Write the summary in Spanish."
                     "fr" -> "Write the summary in French."
@@ -91,12 +93,18 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
                     "it" -> "Write the summary in Italian."
                     else -> "Write the summary in English."
                 }
-                val prompt = "Summarize the following article in approximately 122 words. $langInstruction " +
-                    "Start with a single sentence stating the focal point: the one piece of information that " +
-                    "matters most, cutting through any clickbait or misleading framing in the title. Then present " +
-                    "the rest of the summary as short bullet points (using \"- \") if the article covers several " +
-                    "distinct points of interest, or as a short paragraph if it covers only one. Keep it factual, " +
-                    "neutral, and easy to scan.\n\nTitle: $title\n\nContent: $trimmed\n\nSummary:"
+                val prompt =
+                    "You summarize news articles for a reader who wants only the substance. $langInstruction\n" +
+                    "Rules:\n" +
+                    "- Total length: strictly under 60 words. Never exceed this.\n" +
+                    "- Line 1: one sentence stating the single most important fact, finding, or decision in the " +
+                    "article. If the title teases, exaggerates, or withholds information (clickbait), this " +
+                    "sentence must state the actual answer or payoff directly.\n" +
+                    "- Then 2 to 3 bullet points, each starting with \"- \" and under 13 words, covering the " +
+                    "remaining substantive facts: numbers, names, dates, findings, decisions, consequences.\n" +
+                    "- Use only information present in the article. Do not add opinions or speculation.\n" +
+                    "- Do not restate the headline. No filler such as \"This article discusses\" or \"In summary\".\n\n" +
+                    "Title: $title\n\nContent: $trimmed\n\nSummary:"
                 withTimeout(45_000) {
                     getModel().generateContentStream(prompt).collect { response ->
                         val chunk = response.candidates.firstOrNull()?.text ?: ""

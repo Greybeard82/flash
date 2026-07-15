@@ -16,7 +16,7 @@ class ArticleSummarySheet extends StatefulWidget {
 
 class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
   String? _summary;
-  bool _streaming = false; // true while receiving chunks
+  String _pending = ''; // chunks buffered here silently; never rendered
   bool _done = false;
   String? _errorMessage;
   StreamSubscription<String>? _sub;
@@ -49,29 +49,39 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
 
     final locale = Platform.localeName.split('_').first;
     final content = widget.article.description ?? widget.article.title;
-    final stream = await nano.summarizeStream(widget.article.title, content, locale: locale);
+    final stream = await nano.summarizeStream(widget.article.title, content,
+        locale: locale);
 
     if (stream == null) {
       if (mounted) {
-        setState(() { _errorMessage = nano.unavailableReason; _done = true; });
+        setState(() {
+          _errorMessage = nano.unavailableReason;
+          _done = true;
+        });
       }
       return;
     }
 
-    if (mounted) setState(() => _streaming = true);
-
     _sub = stream.listen(
-      (text) {
-        if (mounted) setState(() => _summary = text);
-      },
+      // Buffer only. No setState per chunk, so partial text is never rendered.
+      (text) => _pending = text,
       onDone: () {
-        if (mounted) setState(() { _streaming = false; _done = true; });
+        if (mounted) {
+          setState(() {
+            final result = _pending.trim();
+            if (result.isEmpty) {
+              _errorMessage = 'Empty summary returned';
+            } else {
+              _summary = result;
+            }
+            _done = true;
+          });
+        }
       },
       onError: (e) {
         if (mounted) {
           setState(() {
             _errorMessage = e.toString();
-            _streaming = false;
             _done = true;
           });
         }
@@ -84,8 +94,8 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final maxSheetHeight = MediaQuery.of(context).size.height -
-        MediaQuery.of(context).padding.top;
+    final maxSheetHeight =
+        MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxSheetHeight),
@@ -98,7 +108,8 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             // Handle
             Center(
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(2),
@@ -110,14 +121,12 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             // Header
             Row(
               children: [
-                Icon(Icons.auto_awesome_rounded, size: 18, color: theme.colorScheme.primary),
+                Icon(Icons.auto_awesome_rounded,
+                    size: 18, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(l10n.aiSummary,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                if (_streaming) ...[
-                  const SizedBox(width: 8),
-                  _LoadingDots(),
-                ],
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
               ],
             ),
             const SizedBox(height: 4),
@@ -133,16 +142,22 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             ),
             const SizedBox(height: 16),
 
-            // Scrollable content area — sized to content, capped at screen height
+            // Content area: one page, never user-scrollable. Summary length is
+            // controlled by the generation prompt (native side); the
+            // NeverScrollableScrollPhysics is only a safety net so a rare
+            // over-long summary clips instead of throwing a layout overflow.
             Flexible(
               child: SingleChildScrollView(
-                child: !_streaming && _summary == null && !_done
-                    ? _LoadingDots()
+                physics: const NeverScrollableScrollPhysics(),
+                child: !_done
+                    ? _LoadingDots(key: const ValueKey('summaryLoading'))
                     : _errorMessage != null
-                        ? _UnavailableMessage(l10n: l10n, theme: theme, debugReason: _errorMessage)
-                        : _summary != null
-                            ? _SummaryText(summary: _summary!, theme: theme, l10n: l10n, done: _done)
-                            : const SizedBox.shrink(),
+                        ? _UnavailableMessage(
+                            key: const ValueKey('summaryUnavailable'),
+                            l10n: l10n, theme: theme, debugReason: _errorMessage)
+                        : _SummaryText(
+                            key: const ValueKey('summaryText'),
+                            summary: _summary!, theme: theme, l10n: l10n, done: _done),
               ),
             ),
           ],
@@ -153,17 +168,21 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
 }
 
 class _LoadingDots extends StatefulWidget {
+  const _LoadingDots({super.key});
+
   @override
   State<_LoadingDots> createState() => _LoadingDotsState();
 }
 
-class _LoadingDotsState extends State<_LoadingDots> with SingleTickerProviderStateMixin {
+class _LoadingDotsState extends State<_LoadingDots>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
       ..repeat();
   }
 
@@ -190,8 +209,10 @@ class _LoadingDotsState extends State<_LoadingDots> with SingleTickerProviderSta
               child: Opacity(
                 opacity: opacity,
                 child: Container(
-                  width: 7, height: 7,
-                  decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle),
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                      color: theme.colorScheme.primary, shape: BoxShape.circle),
                 ),
               ),
             );
@@ -207,7 +228,8 @@ class _UnavailableMessage extends StatelessWidget {
   final ThemeData theme;
   final String? debugReason;
 
-  const _UnavailableMessage({required this.l10n, required this.theme, this.debugReason});
+  const _UnavailableMessage(
+      {super.key, required this.l10n, required this.theme, this.debugReason});
 
   @override
   Widget build(BuildContext context) {
@@ -218,13 +240,15 @@ class _UnavailableMessage extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.info_outline_rounded, size: 18,
+              Icon(Icons.info_outline_rounded,
+                  size: 18,
                   color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(l10n.aiSummaryUnavailable,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.5))),
+                        color: theme.colorScheme.onSurface
+                            .withValues(alpha: 0.5))),
               ),
             ],
           ),
@@ -246,11 +270,17 @@ class _SummaryText extends StatelessWidget {
   final AppLocalizations l10n;
   final bool done;
 
-  const _SummaryText({required this.summary, required this.theme, required this.l10n, required this.done});
+  const _SummaryText(
+      {super.key,
+      required this.summary,
+      required this.theme,
+      required this.l10n,
+      required this.done});
 
   @override
   Widget build(BuildContext context) {
-    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8);
+    final bodyStyle =
+        theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8);
     final lines = summary.split('\n');
 
     return Column(
@@ -264,7 +294,9 @@ class _SummaryText extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('•  ', style: bodyStyle),
-                      Expanded(child: Text(line.trim().substring(2), style: bodyStyle)),
+                      Expanded(
+                          child:
+                              Text(line.trim().substring(2), style: bodyStyle)),
                     ],
                   )
                 : Text(line, style: bodyStyle),
@@ -276,7 +308,8 @@ class _SummaryText extends StatelessWidget {
               Expanded(
                 child: Text(l10n.aiSummaryDisclaimer,
                     style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: 0.35),
                         fontStyle: FontStyle.italic)),
               ),
               IconButton(

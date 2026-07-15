@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 /// Thin Flutter wrapper around the native Gemini Nano (Android AICore) bridge.
@@ -9,6 +10,13 @@ class GeminiNanoService {
 
   static GeminiNanoService? _instance;
   static GeminiNanoService get instance => _instance ??= GeminiNanoService._();
+
+  /// Test-only: clears the singleton (and its cached availability) so each
+  /// test starts from a clean state. No-op impact on production code paths.
+  @visibleForTesting
+  static void resetForTesting() {
+    _instance = null;
+  }
 
   GeminiNanoService._() {
     // Handle native→Flutter calls (streaming summary chunks)
