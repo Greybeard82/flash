@@ -211,3 +211,17 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 | Trigger a summary on an article that is a single-topic piece (no distinct sub-points) | Summary renders as flowing prose with no bullet points |
 | Trigger a summary on an article covering several distinct points | Summary renders as an opening sentence followed by short bullets |
 | Trigger a summary on an article whose extraction fails (e.g. a URL that 404s) | Summary still generates from the RSS description, with a small "Based on the article preview only." note under the disclaimer |
+
+---
+
+## 20. Session-Read Visibility Is Per-Tab
+
+| Step | Expected |
+|------|----------|
+| Find a Gaming folder with at least two unread articles (call them 5 and 6). Start on the All tab | All shows 5 and 6; Gaming shows 5 and 6 |
+| Scroll past article 5 in All (mark-read-on-scroll on) | All shows 5 dimmed and 6; Gaming (not yet visited) still logically shows only 6 |
+| Switch to Gaming | Article 5 is **absent** — not dimmed, not present. Only 6 shows |
+| Switch back to All | Article 5 is back, dimmed, at its original position; 6 unchanged |
+| Swipe article 5 unread while in All | Both All and Gaming now show 5 and 6, full weight (unread), in both tabs |
+| Mark all read in Gaming | The Gaming badge clears and its list empties down to newly-fetched unread. The All tab's visible list is unaffected — articles read only in All remain exactly as they were before the Gaming mark-all-read ran |
+| Force-close and relaunch the app | Every tab shows unread-only — no article appears dimmed anywhere until it's read again this session |

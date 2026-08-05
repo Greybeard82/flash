@@ -84,6 +84,9 @@ class _FeedScreenState extends State<FeedScreen>
 
   int? _folderOf(Article a) => _feedFolderId[a.feedId];
 
+  int _scopeForTab(int tab) =>
+      tab == 0 ? kAllScope : _folders[tab - 1].id!;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -231,7 +234,8 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
-    final sessionIds = SessionReadTracker.instance.ids;
+    final scope = tab == 0 ? kAllScope : folders[tab - 1].id!;
+    final sessionIds = SessionReadTracker.instance.idsForScope(scope);
     if (tab == 0) return _articleRepo.getAllArticles(sessionReadIds: sessionIds);
     return _articleRepo.getArticlesByFolder(
       folders[tab - 1].id!,
@@ -364,7 +368,8 @@ class _FeedScreenState extends State<FeedScreen>
     // DB write is immediate.
     if (toWrite.isNotEmpty) {
       _articleRepo.markManyRead(toWrite);
-      SessionReadTracker.instance.addAll(toWrite);
+      SessionReadTracker.instance
+          .addAll(toWrite, scope: _scopeForTab(_selectedTabIndex));
       _counts = _counts.applyManyRead(readFolderIds);
       AppBadgePlus.updateBadge(_counts.all);
     }
@@ -399,7 +404,8 @@ class _FeedScreenState extends State<FeedScreen>
     // Mark read immediately and dim in-place.
     if (wasUnread) {
       await _articleRepo.markAsRead(article.id!);
-      SessionReadTracker.instance.add(article.id!);
+      SessionReadTracker.instance
+          .add(article.id!, scope: _scopeForTab(_selectedTabIndex));
       if (mounted) {
         setState(() {
           _articles = [
@@ -482,7 +488,8 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
     await _articleRepo.markAsRead(article.id!);
-    SessionReadTracker.instance.add(article.id!);
+    SessionReadTracker.instance
+        .add(article.id!, scope: _scopeForTab(_selectedTabIndex));
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -498,7 +505,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markAsUnread(article.id!);
-    SessionReadTracker.instance.remove(article.id!);
+    SessionReadTracker.instance.removeEverywhere(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -558,16 +565,10 @@ class _FeedScreenState extends State<FeedScreen>
       // Category tab: mark read, remove folder's IDs from tracker, cleanup, refresh folder.
       final folderId = _folders[_selectedTabIndex - 1].id!;
 
-      // Capture IDs currently shown for this folder before clearing them.
-      final folderIds = _articles
-          .where((a) => a.id != null)
-          .map((a) => a.id!)
-          .toSet();
-
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
       await _articleRepo.markAllAsReadByFolder(folderId);
-      SessionReadTracker.instance.removeWhere(folderIds.contains);
+      SessionReadTracker.instance.clearScope(folderId);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       // Refresh feeds in this folder.

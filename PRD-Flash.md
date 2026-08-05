@@ -1,7 +1,7 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.3
+**Version:** 2.4
 **Status:** Active — reflecting shipped state
 **Author:** David
 **Last Updated:** August 2026
@@ -115,7 +115,8 @@ Specific mandates:
 - Folders appear as **scrollable tabs at the bottom** of the feed view (above the nav bar) — not at the top
 - Tab order is user-reorderable
 - Each folder tab shows an unread count badge
-- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause.
+- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause. Badge counts come from `is_read` in the DB and are scope-independent, so this was already correct before session-read scoping existed and is unaffected by it.
+- A read article, however, leaves every *other* tab's visible list immediately (session-read visibility is per-tab — see §4.3) even though its badge count updates everywhere at once — the count and the visibility are tracked independently.
 - A special **"All"** tab aggregates articles across all folders
 - All category tabs behave identically to "All" — same session-read model, scroll, and mark-all-read rules apply (category mark-all-read also refreshes that folder's feeds)
 
@@ -149,9 +150,11 @@ The feed displays: **all non-blocked articles in scope that are either unread, o
 
 - **Session read set:** an in-memory set of article IDs read since the app launched. It is empty on every cold open and is never persisted to disk.
 - **Cold open:** session set is empty → only unread articles appear. Previously-read articles remain in the DB (for deduplication) but do not show.
-- **During a session:** any article marked as read (scroll, swipe, tap) is added to the session set. It stays in the list, dimmed in place, for the rest of the session.
-- **Tab switching:** the query re-runs for the new tab's scope, passing the same global session set. An article read in one tab is visible (dimmed) in any other tab it belongs to.
-- **App restart / cold open:** session set is cleared → fresh unread-only view.
+- **Scoped per tab:** the session read set is keyed by scope — `kAllScope` for the All tab, the folder's id for a category tab (`SessionReadTracker`). An article marked read is added to the *current* tab's scope only, and stays in the list, dimmed in place, for the rest of the session — **but only in that tab**. It is absent entirely from every other tab, not dimmed, not present. The rule is symmetric: an article read in a category tab is equally gone from All.
+- **Why it stays visible in its own tab:** scrolling past the top of the viewport marks an article read; if it then vanished from the list being actively scrolled, everything below it would jump up under the user's thumb. The list-stability and exact-scroll-restoration guarantees above are unchanged — this only narrows their scope from "every tab" to "the tab it was read in".
+- **Tab switching:** the query re-runs for the new tab's scope, passing that scope's own session set — not a shared global one.
+- **Mark as unread:** clears the article from every scope, so it reappears everywhere immediately.
+- **App restart / cold open:** every scope is cleared → fresh unread-only view everywhere.
 
 **Mark as Read — On Scroll**
 - Articles are automatically marked as read as they scroll past the midpoint of the viewport

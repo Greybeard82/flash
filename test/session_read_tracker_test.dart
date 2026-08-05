@@ -80,33 +80,35 @@ void main() {
     setUp(() => SessionReadTracker.instance.clear());
 
     test('starts empty', () {
-      expect(SessionReadTracker.instance.ids, isEmpty);
+      expect(SessionReadTracker.instance.allIds, isEmpty);
     });
 
     test('add and contains', () {
-      SessionReadTracker.instance.add(1);
-      SessionReadTracker.instance.add(2);
-      expect(SessionReadTracker.instance.ids, containsAll([1, 2]));
+      SessionReadTracker.instance.add(1, scope: kAllScope);
+      SessionReadTracker.instance.add(2, scope: kAllScope);
+      expect(SessionReadTracker.instance.allIds, containsAll([1, 2]));
     });
 
     test('remove', () {
-      SessionReadTracker.instance.add(5);
-      SessionReadTracker.instance.remove(5);
-      expect(SessionReadTracker.instance.ids, isEmpty);
+      SessionReadTracker.instance.add(5, scope: kAllScope);
+      SessionReadTracker.instance.removeEverywhere(5);
+      expect(SessionReadTracker.instance.allIds, isEmpty);
     });
 
     test('clear removes all', () {
-      SessionReadTracker.instance.addAll([1, 2, 3]);
+      SessionReadTracker.instance.addAll([1, 2, 3], scope: kAllScope);
       SessionReadTracker.instance.clear();
-      expect(SessionReadTracker.instance.ids, isEmpty);
+      expect(SessionReadTracker.instance.allIds, isEmpty);
     });
 
     test('removeWhere removes matching ids', () {
-      SessionReadTracker.instance.addAll([1, 2, 3, 4]);
-      SessionReadTracker.instance.removeWhere({2, 4}.contains);
-      expect(SessionReadTracker.instance.ids, containsAll([1, 3]));
-      expect(SessionReadTracker.instance.ids, isNot(contains(2)));
-      expect(SessionReadTracker.instance.ids, isNot(contains(4)));
+      SessionReadTracker.instance.addAll([1, 2, 3, 4], scope: kAllScope);
+      for (final id in {2, 4}) {
+        SessionReadTracker.instance.removeEverywhere(id);
+      }
+      expect(SessionReadTracker.instance.allIds, containsAll([1, 3]));
+      expect(SessionReadTracker.instance.allIds, isNot(contains(2)));
+      expect(SessionReadTracker.instance.allIds, isNot(contains(4)));
     });
 
     test('is a singleton', () {
@@ -191,12 +193,12 @@ void main() {
 
       // Simulate: user reads article 1 in All tab.
       await _repo.markAsRead(id1);
-      SessionReadTracker.instance.add(id1);
+      SessionReadTracker.instance.add(id1, scope: kAllScope);
 
       // Folder query with tracker — article 1 still visible, dimmed.
       final result = await _repo.getArticlesByFolder(
         folderId,
-        sessionReadIds: SessionReadTracker.instance.ids,
+        sessionReadIds: SessionReadTracker.instance.allIds,
       );
       expect(result.length, 2);
       expect(result.firstWhere((a) => a.id == id1).isRead, isTrue);
@@ -207,26 +209,26 @@ void main() {
       final id1 = await _idForGuid('guid-1');
 
       await _repo.markAsRead(id1);
-      SessionReadTracker.instance.add(id1);
-      expect(SessionReadTracker.instance.ids, contains(id1));
+      SessionReadTracker.instance.add(id1, scope: kAllScope);
+      expect(SessionReadTracker.instance.allIds, contains(id1));
 
       await _repo.markAsUnread(id1);
-      SessionReadTracker.instance.remove(id1);
-      expect(SessionReadTracker.instance.ids, isNot(contains(id1)));
+      SessionReadTracker.instance.removeEverywhere(id1);
+      expect(SessionReadTracker.instance.allIds, isNot(contains(id1)));
 
-      final result = await _repo.getAllArticles(sessionReadIds: SessionReadTracker.instance.ids);
+      final result = await _repo.getAllArticles(sessionReadIds: SessionReadTracker.instance.allIds);
       expect(result.first.isRead, isFalse);
     });
 
     test('mark-all-read (All tab) + clear tracker → empty list on reload', () async {
       await _insertAndMaybeMarkRead([_art(1), _art(2)]);
       final id1 = await _idForGuid('guid-1');
-      SessionReadTracker.instance.add(id1);
+      SessionReadTracker.instance.add(id1, scope: kAllScope);
 
       await _repo.markAllAsRead();
       SessionReadTracker.instance.clear();
 
-      final result = await _repo.getAllArticles(sessionReadIds: SessionReadTracker.instance.ids);
+      final result = await _repo.getAllArticles(sessionReadIds: SessionReadTracker.instance.allIds);
       expect(result, isEmpty);
     });
 
@@ -257,18 +259,20 @@ void main() {
       // Read articles from both folders this session.
       await _repo.markAsRead(id10);
       await _repo.markAsRead(id20);
-      SessionReadTracker.instance.addAll([id10, id20]);
+      SessionReadTracker.instance.addAll([id10, id20], scope: kAllScope);
 
       final folder1Id = (await db.query(TableNames.folders, where: 'name = ?', whereArgs: ['Tech'])).first['id'] as int;
 
       // "Mark all read" on folder 1: remove its session IDs from tracker.
       final folder1ArticleIds = {id10}; // simulates _articles IDs for that tab
       await _repo.markAllAsReadByFolder(folder1Id);
-      SessionReadTracker.instance.removeWhere(folder1ArticleIds.contains);
+      for (final id in folder1ArticleIds) {
+        SessionReadTracker.instance.removeEverywhere(id);
+      }
 
       // Folder 1 articles no longer in tracker; folder 2 article still there.
-      expect(SessionReadTracker.instance.ids, isNot(contains(id10)));
-      expect(SessionReadTracker.instance.ids, contains(id20));
+      expect(SessionReadTracker.instance.allIds, isNot(contains(id10)));
+      expect(SessionReadTracker.instance.allIds, contains(id20));
     });
   });
 }

@@ -11,7 +11,7 @@
 //  4. Swipe (either direction) marks article as read and dims in-place
 //  5. Articles with isRead=true are rendered at reduced opacity but stay in list
 //  6. Tab switch restores that tab's saved scroll offset (or top if none)
-//  7. Read state is global: reading in one scope dims it in any other scope
+//  7. Read state is scoped: reading in one tab hides it from other tabs, keeps it dimmed in its own
 //  8. Mark-unread removes from session tracker and restores full weight
 
 import 'package:flutter_test/flutter_test.dart';
@@ -209,28 +209,31 @@ void main() {
     });
   });
 
-  group('Read state is global across tabs (session tracker)', () {
-    test('article read in All tab stays visible (dimmed) in folder tab', () {
-      // Simulate: All tab loaded, user reads article 5.
+  group('Read state is scoped per tab (session tracker)', () {
+    test('article read in All tab is absent from folder tab', () {
+      // Simulate: All tab loaded, user reads article 5. Recorded under All's
+      // own scope — a folder tab's union query never sees it.
       final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
-      final tracker = <int>{};
+      final allScopeTracker = <int>{};
 
       final updatedAll = _dimArticle(allTabArticles, 5);
-      tracker.add(5);
+      allScopeTracker.add(5);
 
-      // Folder tab re-runs union query with the global tracker.
+      // Folder tab re-runs its union query with its own (empty) scope tracker.
       final folderTabArticles = [
         _article(id: 5, feedId: 2, isRead: true),
         _article(id: 7, feedId: 2),
       ];
-      final folderResult = _unionQuery(folderTabArticles, tracker);
+      final folderScopeTracker = <int>{};
+      final folderResult = _unionQuery(folderTabArticles, folderScopeTracker);
 
-      // Article 5 is in tracker → still visible, dimmed.
-      expect(folderResult.any((a) => a.id == 5 && a.isRead), isTrue);
-      expect(folderResult.length, 2);
+      // Article 5 was read elsewhere (All scope) — absent entirely, not dimmed.
+      expect(folderResult.any((a) => a.id == 5), isFalse);
+      expect(folderResult.length, 1);
 
-      // All tab still shows it dimmed too.
+      // All tab still shows it, dimmed, in its own scope.
       expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
+      expect(allScopeTracker, contains(5));
     });
 
     test('mark-all-read (All) + clear tracker → reload shows unread-only', () {
