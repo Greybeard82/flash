@@ -7,13 +7,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../models/folder.dart';
+import '../models/unread_counts.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/loading_controller.dart';
 import '../services/refresh_service.dart';
 import '../services/session_read_tracker.dart';
 import '../services/share_service.dart';
+import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/folder_tab_bar.dart';
@@ -59,8 +62,8 @@ class _FeedScreenState extends State<FeedScreen>
   // ── UI state ───────────────────────────────────────────────────────────────
   List<Folder> _folders = [];
   List<Article> _articles = [];
-  Map<int, int> _folderUnreadCounts = {};
-  int _allUnreadCount = 0;
+  UnreadCounts _counts = const UnreadCounts.empty();
+  Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
   bool _booting = true;
   bool _loading = false;
@@ -74,6 +77,12 @@ class _FeedScreenState extends State<FeedScreen>
 
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkReadUI = {};
+
+  static const _resumePolicy = ResumeRefreshPolicy();
+  DateTime? _pausedAt;
+  DateTime? _lastFetchAt;
+
+  int? _folderOf(Article a) => _feedFolderId[a.feedId];
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -108,35 +117,69 @@ class _FeedScreenState extends State<FeedScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_booting && !_loading) {
-      _reloadArticles();
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      _pausedAt = DateTime.now();
+      return;
     }
+    if (state == AppLifecycleState.resumed) {
+      final resumedAt = DateTime.now();
+      final shouldFetch = _resumePolicy.shouldFetch(
+        pausedAt: _pausedAt,
+        resumedAt: resumedAt,
+        lastFetchAt: _lastFetchAt,
+      );
+      _pausedAt = null;
+      if (_booting || _loading) return;
+      if (shouldFetch) {
+        _fetchOnResume();
+      } else {
+        _reloadArticles();
+      }
+    }
+  }
+
+  Future<void> _fetchOnResume() async {
+    await LoadingController.instance.run(() async {
+      final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+      try {
+        await RefreshService(_settingsRepo).refreshAll(coldStart: false);
+        _lastFetchAt = DateTime.now();
+      } catch (_) {}
+      await _loadArticles();
+      _restoreScrollOffset(offset);
+    }, label: 'Refreshing');
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
   Future<void> _boot() async {
-    final settings = await _settingsRepo.getAll();
-    _markReadOnScroll = settings.markReadOnScroll;
-    if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
+    await LoadingController.instance.run(() async {
+      final settings = await _settingsRepo.getAll();
+      _markReadOnScroll = settings.markReadOnScroll;
+      if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
 
-    if (mounted) setState(() => _booting = true);
+      if (mounted) setState(() => _booting = true);
 
-    // Cold start: cleanup first, then fetch.
-    try {
-      await RefreshService(_settingsRepo).refreshAll(coldStart: true);
-    } catch (_) {}
+      // Cold start: cleanup first, then fetch.
+      try {
+        await RefreshService(_settingsRepo).refreshAll(coldStart: true);
+        _lastFetchAt = DateTime.now();
+      } catch (_) {}
 
-    await _loadArticles();
-    if (mounted) setState(() => _booting = false);
-    _scrollController.addListener(_onScroll);
+      await _loadArticles();
+      if (mounted) setState(() => _booting = false);
+      _scrollController.addListener(_onScroll);
+    }, label: 'Loading');
   }
 
   // ── Core data operations ───────────────────────────────────────────────────
 
   Future<void> _loadArticles() async {
     if (!mounted) return;
+    await LoadingController.instance.run(_loadArticlesBody, label: 'Loading');
+  }
 
+  Future<void> _loadArticlesBody() async {
     final (folders, feeds) = await (
       _folderRepo.getAll(),
       _feedRepo.getAll(),
@@ -157,20 +200,34 @@ class _FeedScreenState extends State<FeedScreen>
       _selectedTabIndex = safeTab;
       _articles = articles;
       _syncCardKeys(articles);
-      _folderUnreadCounts = folderCounts;
-      _allUnreadCount = allCount;
+      _feedFolderId = {for (final f in feeds) f.id!: f.folderId};
+      _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
     });
     AppBadgePlus.updateBadge(allCount);
   }
 
+  Future<void> _refreshCountsFromDb() async {
+    final (folderCounts, allCount) = await (
+      _articleRepo.getAllFolderUnreadCounts(),
+      _articleRepo.getTotalUnreadCount(),
+    ).wait;
+    if (!mounted) return;
+    setState(() {
+      _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
+    });
+    AppBadgePlus.updateBadge(allCount);
+  }
+
   Future<void> _reloadArticles() async {
-    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-    // Refresh newspaper mode in case it was toggled in Settings.
-    final settings = await _settingsRepo.getAll();
-    if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
-    await _loadArticles();
-    _restoreScrollOffset(offset);
+    await LoadingController.instance.run(() async {
+      final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+      // Refresh newspaper mode in case it was toggled in Settings.
+      final settings = await _settingsRepo.getAll();
+      if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
+      await _loadArticles();
+      _restoreScrollOffset(offset);
+    }, label: 'Loading');
   }
 
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
@@ -205,12 +262,15 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _fetchAndReload() async {
     if (!mounted || _refreshing) return;
     setState(() => _refreshing = true);
-    try {
-      await RefreshService(_settingsRepo).refreshAll();
-    } finally {
-      await _loadArticles();
-      if (mounted) setState(() => _refreshing = false);
-    }
+    await LoadingController.instance.run(() async {
+      try {
+        await RefreshService(_settingsRepo).refreshAll();
+        _lastFetchAt = DateTime.now();
+      } finally {
+        await _loadArticles();
+        if (mounted) setState(() => _refreshing = false);
+      }
+    }, label: 'Refreshing');
   }
 
   // Pull-to-refresh: fetch without cleanup.
@@ -218,27 +278,33 @@ class _FeedScreenState extends State<FeedScreen>
     if (_refreshing) return;
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
-    try {
-      final svc = RefreshService(_settingsRepo);
-      if (_selectedTabIndex == 0) {
-        await svc.refreshAll();
-      } else {
-        final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
-        for (final f in feeds) {
-          await svc.refreshFeed(f);
+    await LoadingController.instance.run(() async {
+      try {
+        final svc = RefreshService(_settingsRepo);
+        if (_selectedTabIndex == 0) {
+          await svc.refreshAll();
+        } else {
+          final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
+          for (final f in feeds) {
+            await svc.refreshFeed(f);
+          }
         }
+        _lastFetchAt = DateTime.now();
+      } finally {
+        await _loadArticles();
+        if (mounted) setState(() => _refreshing = false);
       }
-    } finally {
-      await _loadArticles();
-      if (mounted) setState(() => _refreshing = false);
-    }
+    }, label: 'Refreshing');
   }
 
   // ── Tab switching ──────────────────────────────────────────────────────────
 
   Future<void> _onTabSelected(int index) async {
     if (index == _selectedTabIndex) return;
+    await LoadingController.instance.run(() => _onTabSelectedBody(index), label: 'Loading');
+  }
 
+  Future<void> _onTabSelectedBody(int index) async {
     if (_scrollController.hasClients) {
       _tabScrollPositions[_selectedTabIndex] = _scrollController.offset;
     }
@@ -275,6 +341,7 @@ class _FeedScreenState extends State<FeedScreen>
     final offset = _scrollController.offset;
     double cumulative = 0.0;
     final toWrite = <int>[];
+    final readFolderIds = <int?>[];
     for (final article in _articles) {
       final key = article.id != null ? _cardKeys[article.id!] : null;
       double h = 120.0;
@@ -285,6 +352,7 @@ class _FeedScreenState extends State<FeedScreen>
       if (cumulative + h / 2 < offset) {
         if (!article.isRead && article.id != null) {
           toWrite.add(article.id!);
+          readFolderIds.add(_folderOf(article));
           _pendingMarkReadUI.add(article.id!);
         }
       } else {
@@ -297,8 +365,8 @@ class _FeedScreenState extends State<FeedScreen>
     if (toWrite.isNotEmpty) {
       _articleRepo.markManyRead(toWrite);
       SessionReadTracker.instance.addAll(toWrite);
-      _allUnreadCount = (_allUnreadCount - toWrite.length).clamp(0, _allUnreadCount);
-      AppBadgePlus.updateBadge(_allUnreadCount);
+      _counts = _counts.applyManyRead(readFolderIds);
+      AppBadgePlus.updateBadge(_counts.all);
     }
 
     // UI dim update is debounced.
@@ -316,6 +384,7 @@ class _FeedScreenState extends State<FeedScreen>
           ids.contains(a.id) ? a.copyWith(isRead: true) : a,
       ];
     });
+    unawaited(_refreshCountsFromDb());
   }
 
   // ── Article actions ────────────────────────────────────────────────────────
@@ -337,9 +406,9 @@ class _FeedScreenState extends State<FeedScreen>
             for (final a in _articles)
               a.id == article.id ? a.copyWith(isRead: true) : a,
           ];
-          _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
+          _counts = _counts.applyRead(_folderOf(article));
         });
-        AppBadgePlus.updateBadge(_allUnreadCount);
+        AppBadgePlus.updateBadge(_counts.all);
       }
     }
 
@@ -399,13 +468,15 @@ class _FeedScreenState extends State<FeedScreen>
     if (mounted) _restoreScrollOffset(scrollOffset);
   }
 
-  Future<bool> _preflightIsHtml(Uri uri) async {
-    try {
-      final r = await http.head(uri).timeout(const Duration(seconds: 5));
-      return (r.headers['content-type'] ?? '').contains('text/html');
-    } catch (_) {
-      return true;
-    }
+  Future<bool> _preflightIsHtml(Uri uri) {
+    return LoadingController.instance.run(() async {
+      try {
+        final r = await http.head(uri).timeout(const Duration(seconds: 5));
+        return (r.headers['content-type'] ?? '').contains('text/html');
+      } catch (_) {
+        return true;
+      }
+    }, label: 'Loading');
   }
 
   Future<void> _markRead(Article article) async {
@@ -419,9 +490,9 @@ class _FeedScreenState extends State<FeedScreen>
         for (final a in _articles)
           a.id == article.id ? a.copyWith(isRead: true) : a,
       ];
-      _allUnreadCount = (_allUnreadCount - 1).clamp(0, _allUnreadCount);
+      _counts = _counts.applyRead(_folderOf(article));
     });
-    AppBadgePlus.updateBadge(_allUnreadCount);
+    AppBadgePlus.updateBadge(_counts.all);
   }
 
   Future<void> _markUnread(Article article) async {
@@ -435,9 +506,9 @@ class _FeedScreenState extends State<FeedScreen>
         for (final a in _articles)
           a.id == article.id ? a.copyWith(isRead: false) : a,
       ];
-      _allUnreadCount++;
+      _counts = _counts.applyUnread(_folderOf(article));
     });
-    AppBadgePlus.updateBadge(_allUnreadCount);
+    AppBadgePlus.updateBadge(_counts.all);
   }
 
   Future<void> _toggleSaved(Article article) async {
@@ -458,7 +529,10 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _markAllRead() async {
     HapticFeedback.mediumImpact();
+    await LoadingController.instance.run(_markAllReadBody, label: 'Marking all read');
+  }
 
+  Future<void> _markAllReadBody() async {
     final settings = await _settingsRepo.getAll();
     final cleanupDays = settings.cleanupAgeDays;
 
@@ -471,11 +545,12 @@ class _FeedScreenState extends State<FeedScreen>
       if (!mounted) return;
       setState(() {
         _booting = true;
-        _allUnreadCount = 0;
+        _counts = _counts.clearedAll();
       });
       AppBadgePlus.updateBadge(0);
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
+        _lastFetchAt = DateTime.now();
       } catch (_) {}
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
@@ -488,6 +563,8 @@ class _FeedScreenState extends State<FeedScreen>
           .where((a) => a.id != null)
           .map((a) => a.id!)
           .toSet();
+
+      if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
       await _articleRepo.markAllAsReadByFolder(folderId);
       SessionReadTracker.instance.removeWhere(folderIds.contains);
@@ -513,8 +590,7 @@ class _FeedScreenState extends State<FeedScreen>
       setState(() {
         _articles = freshArticles;
         _syncCardKeys(freshArticles);
-        _folderUnreadCounts = folderCounts;
-        _allUnreadCount = allCount;
+        _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       });
       AppBadgePlus.updateBadge(allCount);
       _bannerKey.currentState?.show(AppLocalizations.of(context)!.allMarkedRead);
@@ -535,7 +611,8 @@ class _FeedScreenState extends State<FeedScreen>
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _hasFeeds && !_booting
           ? Padding(
-              padding: EdgeInsets.only(bottom: _folders.length > 1 ? 48.0 : 0.0),
+              padding: EdgeInsets.only(
+                  bottom: _folders.length > 1 ? FolderTabBar.barHeight : 0.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -583,8 +660,8 @@ class _FeedScreenState extends State<FeedScreen>
             FolderTabBar(
               folders: _folders,
               selectedIndex: _selectedTabIndex,
-              folderUnreadCounts: _folderUnreadCounts,
-              allUnreadCount: _allUnreadCount,
+              folderUnreadCounts: _counts.byFolder,
+              allUnreadCount: _counts.all,
               onTabSelected: _onTabSelected,
               onMarkAllRead: _markAllRead,
             ),

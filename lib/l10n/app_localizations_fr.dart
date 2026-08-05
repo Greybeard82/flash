@@ -381,6 +381,16 @@ class AppLocalizationsFr extends AppLocalizations {
       'Généré sur l\'appareil par Gemini Nano. Peut ne pas être entièrement précis.';
 
   @override
+  String get aiSummaryReading => 'Lecture de l\'article…';
+
+  @override
+  String get aiSummaryWriting => 'Rédaction du résumé…';
+
+  @override
+  String get aiSummaryTeaserOnly =>
+      'Basé uniquement sur l\'aperçu de l\'article.';
+
+  @override
   String get copySummary => 'Copier le résumé';
 
   @override

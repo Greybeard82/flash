@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../services/article_extractor.dart';
 import '../services/gemini_nano_service.dart';
+import '../services/loading_controller.dart';
+import '../services/summary_source.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
@@ -18,13 +21,15 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
   String? _summary;
   String _pending = ''; // chunks buffered here silently; never rendered
   bool _done = false;
+  bool _writing = false; // extraction finished, streaming has started
+  bool _teaserOnly = false;
   String? _errorMessage;
   StreamSubscription<String>? _sub;
 
   @override
   void initState() {
     super.initState();
-    _generate();
+    LoadingController.instance.run(_generate, label: 'Summarising');
   }
 
   @override
@@ -48,7 +53,30 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     }
 
     final locale = Platform.localeName.split('_').first;
-    final content = widget.article.description ?? widget.article.title;
+    final description = widget.article.description;
+
+    String content;
+    var teaserOnly = false;
+    try {
+      final blocks = await ArticleExtractor().extract(widget.article.url);
+      final extracted = SummarySource.fromBlocks(blocks, fallback: description);
+      if (SummarySource.isSubstantial(extracted)) {
+        content = extracted;
+      } else {
+        content = description ?? widget.article.title;
+        teaserOnly = true;
+      }
+    } catch (_) {
+      content = description ?? widget.article.title;
+      teaserOnly = true;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _writing = true;
+      _teaserOnly = teaserOnly;
+    });
+
     final stream = await nano.summarizeStream(widget.article.title, content,
         locale: locale);
 
@@ -150,14 +178,27 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
               child: SingleChildScrollView(
                 physics: const NeverScrollableScrollPhysics(),
                 child: !_done
-                    ? _LoadingDots(key: const ValueKey('summaryLoading'))
+                    ? Column(
+                        key: const ValueKey('summaryLoading'),
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const _LoadingDots(),
+                          Text(
+                            _writing ? l10n.aiSummaryWriting : l10n.aiSummaryReading,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                            ),
+                          ),
+                        ],
+                      )
                     : _errorMessage != null
                         ? _UnavailableMessage(
                             key: const ValueKey('summaryUnavailable'),
                             l10n: l10n, theme: theme, debugReason: _errorMessage)
                         : _SummaryText(
                             key: const ValueKey('summaryText'),
-                            summary: _summary!, theme: theme, l10n: l10n, done: _done),
+                            summary: _summary!, theme: theme, l10n: l10n, done: _done,
+                            teaserOnly: _teaserOnly),
               ),
             ),
           ],
@@ -269,13 +310,15 @@ class _SummaryText extends StatelessWidget {
   final ThemeData theme;
   final AppLocalizations l10n;
   final bool done;
+  final bool teaserOnly;
 
   const _SummaryText(
       {super.key,
       required this.summary,
       required this.theme,
       required this.l10n,
-      required this.done});
+      required this.done,
+      this.teaserOnly = false});
 
   @override
   Widget build(BuildContext context) {
@@ -302,6 +345,13 @@ class _SummaryText extends StatelessWidget {
                 : Text(line, style: bodyStyle),
           ),
         if (done) ...[
+          if (teaserOnly) ...[
+            const SizedBox(height: 8),
+            Text(l10n.aiSummaryTeaserOnly,
+                style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    fontStyle: FontStyle.italic)),
+          ],
           const SizedBox(height: 16),
           Row(
             children: [

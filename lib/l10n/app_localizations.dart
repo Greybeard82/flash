@@ -782,6 +782,24 @@ abstract class AppLocalizations {
   /// **'Generated on-device by Gemini Nano. May not be fully accurate.'**
   String get aiSummaryDisclaimer;
 
+  /// No description provided for @aiSummaryReading.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading the article…'**
+  String get aiSummaryReading;
+
+  /// No description provided for @aiSummaryWriting.
+  ///
+  /// In en, this message translates to:
+  /// **'Writing the summary…'**
+  String get aiSummaryWriting;
+
+  /// No description provided for @aiSummaryTeaserOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on the article preview only.'**
+  String get aiSummaryTeaserOnly;
+
   /// No description provided for @copySummary.
   ///
   /// In en, this message translates to:

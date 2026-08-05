@@ -5,6 +5,7 @@ import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../services/favicon_service.dart';
 import '../services/feedly_service.dart';
+import '../services/loading_controller.dart';
 import '../services/rss_service.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/settings_repository.dart';
@@ -138,11 +139,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
       final folder = _folders.removeAt(oldIndex);
       _folders.insert(newIndex, folder);
     });
-    _folderRepo.reorder(_folders);
+    LoadingController.instance.run(() => _folderRepo.reorder(_folders), label: 'Reordering');
   }
 
   Future<void> _reorderFeeds(Folder folder, List<Feed> feeds) async {
-    await _feedRepo.reorder(feeds);
+    await LoadingController.instance.run(() => _feedRepo.reorder(feeds), label: 'Reordering');
   }
 
   Widget _emptyFeedsState() {
@@ -199,14 +200,14 @@ class _FeedsScreenState extends State<FeedsScreen> {
       isScrollControlled: true,
       builder: (ctx) => _FolderNameSheet(
         title: l10n.newCategory,
-        onSave: (name) async {
+        onSave: (name) => LoadingController.instance.run(() async {
           final position = await _folderRepo.getNextPosition();
           final now = DateTime.now().millisecondsSinceEpoch;
           await _folderRepo.insert(
             Folder(name: name, position: position, createdAt: now),
           );
-          _load();
-        },
+          await _load();
+        }, label: 'Adding category'),
       ),
     );
   }
@@ -221,10 +222,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
       builder: (ctx) => _FolderNameSheet(
         title: l10n.renameCategory,
         initialValue: folder.name,
-        onSave: (name) async {
+        onSave: (name) => LoadingController.instance.run(() async {
           await _folderRepo.update(folder.copyWith(name: name));
-          _load();
-        },
+          await _load();
+        }, label: 'Renaming category'),
       ),
     );
   }
@@ -243,8 +244,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
       ),
     );
     if (confirmed == true) {
-      await _folderRepo.delete(folder.id!);
-      _load();
+      await LoadingController.instance.run(() async {
+        await _folderRepo.delete(folder.id!);
+        await _load();
+      }, label: 'Deleting category');
     }
   }
 
@@ -277,13 +280,15 @@ class _FeedsScreenState extends State<FeedsScreen> {
       ),
     );
     if (confirmed == true) {
-      await _feedRepo.delete(feed.id!);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.feedRemoved(feed.title))),
-        );
-      }
-      _load();
+      await LoadingController.instance.run(() async {
+        await _feedRepo.delete(feed.id!);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(l10n.feedRemoved(feed.title))),
+          );
+        }
+        await _load();
+      }, label: 'Removing feed');
     }
   }
 }
@@ -586,7 +591,8 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
     if (widget.feedlyService.looksLikeUrl(query)) {
       await _addByUrl(query);
     } else {
-      final results = await widget.feedlyService.search(query);
+      final results = await LoadingController.instance
+          .run(() => widget.feedlyService.search(query), label: 'Searching');
       if (mounted) {
         setState(() {
           _results = results;
@@ -600,6 +606,10 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   Future<void> _addByUrl(String url) async {
     final l10n = AppLocalizations.of(context)!;
     setState(() => _adding = true);
+    await LoadingController.instance.run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
+  }
+
+  Future<void> _addByUrlBody(String url, AppLocalizations l10n) async {
     try {
       // Ensure folder exists
       final folderId = await _ensureFolder(context);

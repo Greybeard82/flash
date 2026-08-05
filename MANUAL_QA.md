@@ -153,3 +153,61 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 | Clear app data (`adb shell pm clear io.getflash.app`) and relaunch | Onboarding flow appears |
 | Complete the flow | Flag persisted; relaunching the app goes directly to the feed |
 | Repeat launch | Onboarding never shown again |
+
+---
+
+## 15. Cross-Tab Unread Counts (Live)
+
+| Step | Expected |
+|------|----------|
+| Note the "All" tab's badge and the "Gaming" tab's badge | — |
+| Stay on the All tab and scroll past several Gaming articles (mark-read-on-scroll on) | Both badges decrement together, live, without switching tabs |
+| Switch to the Gaming tab | The badge shown there already matches what the tab bar displayed before switching |
+| Open an unread article directly, then go back | Both the opened article's folder badge and All badge decrement immediately |
+| Wait ~1 second after a scroll-read burst | Counts still match the DB (reconciliation query self-heals any drift) |
+
+---
+
+## 16. Folder Tab Size
+
+| Step | Expected |
+|------|----------|
+| Open the folder tab bar with 2+ folders | Tabs are visibly taller than before (60dp bar vs the old 48dp) |
+| Tap a tab with a light, imprecise thumb tap near its edge | Registers reliably — no need to aim precisely |
+| Tap a tab | A visible ripple plays from the tap point |
+| Switch tabs repeatedly | Selected tab auto-scrolls into view within the horizontal tab strip |
+
+---
+
+## 17. Global Loading Indicator
+
+| Step | Expected |
+|------|----------|
+| Add a feed, delete a folder, run an OPML import, open an AI summary, restore from Drive | Each operation shows a thin progress bar at the top of the content area |
+| Trigger a fast, near-instant operation (e.g. toggling a settings switch) | No flash of the indicator — it only appears after ~150ms |
+| Force an error (enable airplane mode, then add a feed) | The indicator disappears once the operation fails — it never hangs visible |
+| Trigger two operations back to back | Indicator stays visible continuously across both, only disappearing once the last one finishes |
+
+---
+
+## 18. Resume Refresh
+
+| Step | Expected |
+|------|----------|
+| Open an article in the external browser, then return to Flash within ~10 seconds | No network fetch runs; scroll position is untouched |
+| Background the app for at least 2 minutes, then return | A network fetch runs automatically; new articles appear at the top |
+| After that fetch | Previously-read articles remain dimmed in their original position — they are NOT purged from the list |
+| Return to the app again immediately after the above fetch | No second fetch fires (5-minute minimum interval) |
+
+---
+
+## 19. AI Summary Reads the Full Article
+
+| Step | Expected |
+|------|----------|
+| Pick an article whose RSS description is a one- or two-sentence teaser | — |
+| Long-press → ✦ Summary | Sheet shows "Reading the article…" first, then "Writing the summary…" once generation starts |
+| Wait for the summary | The summary contains information NOT present in the teaser (i.e. it summarised the full article, not the RSS blurb) |
+| Trigger a summary on an article that is a single-topic piece (no distinct sub-points) | Summary renders as flowing prose with no bullet points |
+| Trigger a summary on an article covering several distinct points | Summary renders as an opening sentence followed by short bullets |
+| Trigger a summary on an article whose extraction fails (e.g. a URL that 404s) | Summary still generates from the RSS description, with a small "Based on the article preview only." note under the disclaimer |

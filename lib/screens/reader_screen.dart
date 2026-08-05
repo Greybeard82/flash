@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../services/article_extractor.dart';
+import '../services/loading_controller.dart';
 import '../utils/date_utils.dart';
 import '../utils/reading_time.dart';
 
@@ -50,19 +51,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Future<void> _loadArticle() async {
-    try {
-      final blocks = await ArticleExtractor().extract(widget.article.url);
-      if (_cancelled || !mounted) return;
-      if (blocks == null || blocks.isEmpty) {
+    await LoadingController.instance.run(() async {
+      try {
+        final blocks = await ArticleExtractor().extract(widget.article.url);
+        if (_cancelled || !mounted) return;
+        if (blocks == null || blocks.isEmpty) {
+          _fallbackToBrowser();
+          return;
+        }
+        setState(() { _blocks = blocks; _loading = false; });
+        widget.onExtractionSucceeded?.call();
+      } catch (_) {
+        if (_cancelled || !mounted) return;
         _fallbackToBrowser();
-        return;
       }
-      setState(() { _blocks = blocks; _loading = false; });
-      widget.onExtractionSucceeded?.call();
-    } catch (_) {
-      if (_cancelled || !mounted) return;
-      _fallbackToBrowser();
-    }
+    }, label: 'Extracting article');
   }
 
   /// Pop this screen, show a brief notice, and open the article in the browser.

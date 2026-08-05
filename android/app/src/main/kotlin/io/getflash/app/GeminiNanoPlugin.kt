@@ -76,6 +76,24 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         }
     }
 
+    private fun langInstructionFor(locale: String): String = when (locale) {
+        "es" -> "Write the summary in Spanish."
+        "fr" -> "Write the summary in French."
+        "de" -> "Write the summary in German."
+        "it" -> "Write the summary in Italian."
+        else -> "Write the summary in English."
+    }
+
+    private fun writePrompt(title: String, langInstruction: String, source: String): String {
+        return "Write a summary of a news article in approximately 120 words, based on the key points " +
+            "below. $langInstruction Begin with a single sentence stating the focal point — the one thing " +
+            "that matters most, cutting through any clickbait or misleading framing in the title. If the " +
+            "key points list contains only one substantive point, write the whole summary as a short " +
+            "paragraph and use no bullet points at all. Only if there are several genuinely distinct points " +
+            "should you present them as short bullets (using \"- \") after the opening sentence. Prefer " +
+            "prose. Be factual and neutral. No preamble.\n\nTitle: $title\n\n$source\n\nSummary:"
+    }
+
     // Streams chunks back to Flutter via reverse invokeMethod calls so text
     // appears as it generates rather than waiting for the full response.
     private fun summarize(title: String, body: String, locale: String, result: MethodChannel.Result) {
@@ -83,28 +101,36 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         result.success(null)
         scope.launch {
             try {
-                // 3000 chars (~750 tokens) gives the model enough of the article
-                // to extract buried facts, while staying well within Nano's window.
-                val trimmed = body.take(3000)
-                val langInstruction = when (locale) {
-                    "es" -> "Write the summary in Spanish."
-                    "fr" -> "Write the summary in French."
-                    "de" -> "Write the summary in German."
-                    "it" -> "Write the summary in Italian."
-                    else -> "Write the summary in English."
+                // 6000 chars (~1500 tokens) covers a full extracted article body,
+                // not just an RSS teaser, while staying within Nano's context window.
+                val trimmed = body.take(6000)
+                val langInstruction = langInstructionFor(locale)
+
+                // Pass 1 — read (non-streaming). Extract key points; never shown to the user.
+                var keyPoints: String? = null
+                try {
+                    withTimeout(45_000) {
+                        val readPrompt =
+                            "Read the following article and list the key factual points it contains, one " +
+                            "per line, in order of importance. Do not write a summary. Do not add " +
+                            "commentary. If the article makes only one substantive point, list only that " +
+                            "one point.\n\nTitle: $title\n\nContent: $trimmed\n\nKey points:"
+                        val response = getModel().generateContent(readPrompt)
+                        keyPoints = response.candidates.firstOrNull()?.text?.trim()
+                    }
+                } catch (_: Exception) {
+                    keyPoints = null
                 }
-                val prompt =
-                    "You summarize news articles for a reader who wants only the substance. $langInstruction\n" +
-                    "Rules:\n" +
-                    "- Total length: strictly under 60 words. Never exceed this.\n" +
-                    "- Line 1: one sentence stating the single most important fact, finding, or decision in the " +
-                    "article. If the title teases, exaggerates, or withholds information (clickbait), this " +
-                    "sentence must state the actual answer or payoff directly.\n" +
-                    "- Then 2 to 3 bullet points, each starting with \"- \" and under 13 words, covering the " +
-                    "remaining substantive facts: numbers, names, dates, findings, decisions, consequences.\n" +
-                    "- Use only information present in the article. Do not add opinions or speculation.\n" +
-                    "- Do not restate the headline. No filler such as \"This article discusses\" or \"In summary\".\n\n" +
-                    "Title: $title\n\nContent: $trimmed\n\nSummary:"
+
+                // Pass 2 — write (streaming). Feed it the key points, or fall back to the
+                // raw article directly if pass 1 timed out or returned nothing.
+                val writeSource = if (!keyPoints.isNullOrBlank()) {
+                    "Key points:\n$keyPoints"
+                } else {
+                    "Content: $trimmed"
+                }
+                val prompt = writePrompt(title, langInstruction, writeSource)
+
                 withTimeout(45_000) {
                     getModel().generateContentStream(prompt).collect { response ->
                         val chunk = response.candidates.firstOrNull()?.text ?: ""

@@ -4,6 +4,8 @@ import '../models/folder.dart';
 import 'unread_badge.dart';
 
 class FolderTabBar extends StatefulWidget {
+  static const double barHeight = 60.0;
+
   final List<Folder> folders;
   final int selectedIndex; // 0 = All, 1+ = folders[index-1]
   final Map<int, int> folderUnreadCounts;
@@ -27,6 +29,7 @@ class FolderTabBar extends StatefulWidget {
 
 class _FolderTabBarState extends State<FolderTabBar> {
   final ScrollController _scrollController = ScrollController();
+  final Map<int, GlobalKey> _tabKeys = {};
 
   @override
   void dispose() {
@@ -42,11 +45,13 @@ class _FolderTabBarState extends State<FolderTabBar> {
     }
   }
 
+  GlobalKey _keyFor(int i) => _tabKeys.putIfAbsent(i, GlobalKey.new);
+
   void _scrollToSelected() {
-    if (!_scrollController.hasClients) return;
-    final target = widget.selectedIndex * 80.0;
-    _scrollController.animateTo(
-      target.clamp(0.0, _scrollController.position.maxScrollExtent),
+    final context = _tabKeys[widget.selectedIndex]?.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(
+      context,
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
     );
@@ -70,7 +75,7 @@ class _FolderTabBarState extends State<FolderTabBar> {
     ];
 
     return Container(
-      height: 48,
+      height: FolderTabBar.barHeight,
       color: surface,
       child: SingleChildScrollView(
         controller: _scrollController,
@@ -81,6 +86,8 @@ class _FolderTabBarState extends State<FolderTabBar> {
             final tab = tabs[i];
             final isSelected = i == widget.selectedIndex;
             return _FolderTab(
+              key: ValueKey('folder_tab_$i'),
+              tabKey: _keyFor(i),
               label: tab.label,
               unreadCount: tab.unreadCount,
               isSelected: isSelected,
@@ -103,6 +110,7 @@ class _TabItem {
 }
 
 class _FolderTab extends StatelessWidget {
+  final GlobalKey tabKey;
   final String label;
   final int unreadCount;
   final bool isSelected;
@@ -111,6 +119,8 @@ class _FolderTab extends StatelessWidget {
   final VoidCallback? onLongPress;
 
   const _FolderTab({
+    required super.key,
+    required this.tabKey,
     required this.label,
     required this.unreadCount,
     required this.isSelected,
@@ -126,43 +136,49 @@ class _FolderTab extends StatelessWidget {
         ? accent
         : theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 64),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: 3,
-              width: isSelected ? 24 : 0,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+    return Container(
+      key: tabKey,
+      constraints: const BoxConstraints(minWidth: 72, minHeight: 48),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: labelColor,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500,
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 3,
+                  width: isSelected ? 24 : 0,
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                if (unreadCount > 0) ...[
-                  const SizedBox(width: 4),
-                  UnreadBadge(count: unreadCount, small: true),
-                ],
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      label,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: labelColor,
+                        fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                    if (unreadCount > 0) ...[
+                      const SizedBox(width: 4),
+                      UnreadBadge(count: unreadCount, small: true),
+                    ],
+                  ],
+                ),
               ],
             ),
-          ],
+          ),
         ),
       ),
     );

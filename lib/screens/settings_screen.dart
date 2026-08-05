@@ -8,6 +8,7 @@ import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/drive_backup_service.dart';
+import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
 import '../services/opml_service.dart';
 import '../services/refresh_service.dart';
@@ -65,17 +66,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _save(String key, String value) async {
-    await _settingsRepo.set(key, value);
-    await _load();
+    await LoadingController.instance.run(() async {
+      await _settingsRepo.set(key, value);
+      await _load();
+    }, label: 'Saving');
   }
 
   Future<void> _connectGoogle() async {
-    final account = await _backupService.signIn();
+    final account = await LoadingController.instance
+        .run(() => _backupService.signIn(), label: 'Connecting');
     if (mounted) setState(() => _googleUser = account);
   }
 
   Future<void> _signOutGoogle() async {
-    await _backupService.signOut();
+    await LoadingController.instance
+        .run(() => _backupService.signOut(), label: 'Signing out');
     if (mounted) setState(() { _googleUser = null; _lastBackupAt = null; });
   }
 
@@ -83,22 +88,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_backupBusy) return;
     setState(() => _backupBusy = true);
     try {
-      final folders = await FolderRepository().getAll();
-      final feeds = await FeedRepository().getAll();
-      final keywords = await KeywordRepository().getAll();
-      final when = await _backupService.backup(
-        folders: folders,
-        feeds: feeds,
-        keywords: keywords,
-      );
-      await _settingsRepo.set(
-          'drive_last_backup_at', when.millisecondsSinceEpoch.toString());
-      if (mounted) {
-        setState(() => _lastBackupAt = when);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context)!.backupSuccess),
-        ));
-      }
+      await LoadingController.instance.run(() async {
+        final folders = await FolderRepository().getAll();
+        final feeds = await FeedRepository().getAll();
+        final keywords = await KeywordRepository().getAll();
+        final when = await _backupService.backup(
+          folders: folders,
+          feeds: feeds,
+          keywords: keywords,
+        );
+        await _settingsRepo.set(
+            'drive_last_backup_at', when.millisecondsSinceEpoch.toString());
+        if (mounted) {
+          setState(() => _lastBackupAt = when);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(AppLocalizations.of(context)!.backupSuccess),
+          ));
+        }
+      }, label: 'Backing up');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -114,14 +121,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_localBusy) return;
     setState(() => _localBusy = true);
     try {
-      final folders = await FolderRepository().getAll();
-      final feeds = await FeedRepository().getAll();
-      final keywords = await KeywordRepository().getAll();
-      await LocalBackupService.exportBackup(
-        folders: folders,
-        feeds: feeds,
-        keywords: keywords,
-      );
+      await LoadingController.instance.run(() async {
+        final folders = await FolderRepository().getAll();
+        final feeds = await FeedRepository().getAll();
+        final keywords = await KeywordRepository().getAll();
+        await LocalBackupService.exportBackup(
+          folders: folders,
+          feeds: feeds,
+          keywords: keywords,
+        );
+      }, label: 'Exporting');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -160,7 +169,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _localBusy = true);
     try {
-      final count = await LocalBackupService.importBackup();
+      final count = await LoadingController.instance
+          .run(() => LocalBackupService.importBackup(), label: 'Restoring');
       if (!mounted) return;
       if (count == -1) return; // user cancelled picker
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -187,14 +197,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_opmlBusy) return;
     setState(() => _opmlBusy = true);
     try {
-      final folders = await FolderRepository().getAll();
-      final feeds = await FeedRepository().getAll();
-      await OpmlService.exportToFile(folders: folders, feeds: feeds);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.opmlExportSuccess)),
-        );
-      }
+      await LoadingController.instance.run(() async {
+        final folders = await FolderRepository().getAll();
+        final feeds = await FeedRepository().getAll();
+        await OpmlService.exportToFile(folders: folders, feeds: feeds);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context)!.opmlExportSuccess)),
+          );
+        }
+      }, label: 'Exporting OPML');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
@@ -208,12 +220,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_opmlBusy) return;
     setState(() => _opmlBusy = true);
     try {
-      final count = await OpmlService.importFromFile(
+      final count = await LoadingController.instance.run(() => OpmlService.importFromFile(
         folderRepo: FolderRepository(),
         feedRepo: FeedRepository(),
         settingsRepo: _settingsRepo,
         articleRepo: ArticleRepository(),
-      );
+      ), label: 'Importing OPML');
       if (!mounted) return;
       if (count == -1) return; // cancelled
       ScaffoldMessenger.of(context).showSnackBar(
@@ -255,7 +267,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _backupBusy = true);
     try {
-      final count = await _backupService.restore();
+      final count = await LoadingController.instance
+          .run(() => _backupService.restore(), label: 'Restoring');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(AppLocalizations.of(context)!.restoreSuccess(count)),

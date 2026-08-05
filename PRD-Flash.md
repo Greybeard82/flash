@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.2
+**Version:** 2.3
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** July 2026
+**Last Updated:** August 2026
 
 ---
 
@@ -66,9 +66,9 @@ Specific mandates:
 - **Gemini Nano** via a native Android plugin (`GeminiNanoPlugin.kt`) for on-device AI features
 - No API key required for Gemini Nano features
 
-### 3.8 Cloud AI (Optional)
-- **Anthropic API** (Claude Haiku) for AI article summaries
-- User supplies their own API key in Settings; stored securely on-device
+### 3.8 Cloud AI (Optional) — Not Implemented
+- **Anthropic API** (Claude Haiku) for AI article summaries was the original plan; it was never built
+- The shipped summary feature is entirely on-device via Gemini Nano (§3.7) — no API key, no network call, no cloud dependency
 
 ### 3.9 Backup
 - **Google Drive** via `google_sign_in` + Drive appdata scope — saves `flash_backup.json` to the app's private Drive folder
@@ -115,6 +115,7 @@ Specific mandates:
 - Folders appear as **scrollable tabs at the bottom** of the feed view (above the nav bar) — not at the top
 - Tab order is user-reorderable
 - Each folder tab shows an unread count badge
+- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause.
 - A special **"All"** tab aggregates articles across all folders
 - All category tabs behave identically to "All" — same session-read model, scroll, and mark-all-read rules apply (category mark-all-read also refreshes that folder's feeds)
 
@@ -135,6 +136,12 @@ Specific mandates:
 - A full-screen lightning bolt (⚡) pulse animation replaces the content area during the cold-start fetch; the FABs are hidden until the fetch completes
 - Before fetching, stale articles (read, unsaved, older than the configured cleanup window) are purged from the database
 - This ensures the list is always up to date within seconds of opening the app
+
+**Auto-Refresh on Resume**
+- Returning to Flash from the background after being away **≥30 seconds**, with no fetch in the last 5 minutes, triggers a silent network fetch (`ResumeRefreshPolicy`, both thresholds configurable)
+- Unlike cold open, this fetch runs with **no cleanup** — purging read articles mid-session would break the session-read list-persistence guarantee above — and shows no boot animation, since the user is already looking at their list
+- Scroll position is captured before the fetch and restored after; because new articles insert above the current position, the list can still visually shift when there's fresh content — a known limitation, not yet anchor-corrected
+- A brief excursion (e.g. popping out to the browser and back) never triggers a fetch; only DB state is reloaded
 
 **What the feed shows — the session-read model**
 
@@ -300,24 +307,27 @@ Applied to every feed fetch before articles are written to the database:
 
 **Trigger:** Long-press card → radial menu → ✦ Summary
 
+Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt`) — no API key, no network call, no cloud dependency. Unavailable on devices without AICore support (Pixel 8 Pro / 9 Pro class, Android 14+).
+
 **Flow:**
-1. On-device summary generated locally by Gemini Nano (AICore) — title + article description/body sent to the model
-2. Prompt requests ~122 words (up from the original 70), leads with a one-sentence focal point that states the single most important piece of information and cuts through clickbait/misleading titles, then presents the remaining detail as bullet points when the article covers several points of interest (plain paragraph otherwise)
-3. Response streams into the sheet as it generates
+1. On open, the sheet checks Nano availability, then extracts the article's full body from its URL (`ArticleExtractor` → `SummarySource`, capped at 6,000 characters) rather than summarising the short RSS teaser. If extraction fails or the result is too short to be substantial, it falls back to the RSS description and the sheet shows a quiet "Based on the article preview only." note in the footer.
+2. Generation is **two-pass** on the native side:
+   - **Pass 1 — read** (non-streaming): the model lists the article's key factual points, one per line, in order of importance. These notes are internal and never shown to the user.
+   - **Pass 2 — write** (streaming): the model writes a ~120-word summary from those key points — a single opening sentence stating the focal point (cutting through clickbait/misleading titles), followed by short bullets **only if the article covers several genuinely distinct points**; a single-topic article gets flowing prose with no bullets at all.
+   - If pass 1 times out or returns nothing, pass 2 falls back to summarising the raw article content directly — a degraded summary beats an error sheet.
+3. Nothing is rendered until pass 2's stream completes: chunks are buffered silently as they arrive and the full result is revealed in one step, so no partial/flickering text is ever shown.
 
 **UI:**
-- Full-screen bottom sheet (fills the available screen height below the status bar) slides up immediately with a loading indicator
-- On response: text streams in live, rendered with bullet formatting where the model returns list items
+- Bottom sheet sized to its content (not forced full-screen) slides up immediately, showing an animated loading indicator with a status line: "Reading the article…" during extraction, then "Writing the summary…" once generation starts
+- Content area is not user-scrollable — the prompt's word budget is tuned to fit on one screen; `NeverScrollableScrollPhysics` is a safety net, not the primary length control
 - All text is selectable
-- Footer: disclaimer + "Copy" button
+- Footer: disclaimer + "Copy" button (+ the teaser-only note when applicable)
 - Dismiss: tap outside or swipe down
 
 **Error States:**
-- No API key: prompt to add key in Settings
-- Network/API failure: "Couldn't load summary. Tap to retry."
-- Paywall/blocked: "This article couldn't be retrieved. Open it in your browser."
-
-**Cost:** ~€0.0001 per summary at Claude Haiku pricing
+- Device doesn't support Gemini Nano: unavailable message with the reason
+- Model still downloading: retry-shortly message
+- Stream error or empty result: unavailable message, no partial text ever shown
 
 ---
 
@@ -381,6 +391,7 @@ Core UX principle — the app is designed for one-handed operation.
 ### 5.2 Layout Rules
 
 - **Folder tabs are at the bottom**, directly above the nav bar — not at the top. This is a hard requirement.
+- Folder tab bar is **60dp tall** (`FolderTabBar.barHeight`), with each tab enforcing a 48×48dp minimum tap target — verified by a widget test, not just eyeballed
 - FABs are bottom-right, stacked vertically
 - Context menus and action sheets open as **bottom sheets**, never top dropdowns
 - Minimum tap target: **48×48dp** on all interactive elements
@@ -420,7 +431,6 @@ Content area:
 | Mark as read on scroll | On | On, Off |
 | Reader mode | Off | On, Off |
 | Article font size | Medium | Small, Medium, Large |
-| Anthropic API key | — | Text input (masked) |
 | Google Drive backup | — | Sign in / Sign out, Backup now, Restore |
 | Local backup | — | Export, Import |
 | OPML | — | Import, Export |
@@ -484,15 +494,17 @@ Content area:
 - Google Drive backup + restore
 - Local file backup + restore (via share sheet)
 - OPML import + export
-- AI article summary (Claude Haiku, cached)
-- Gemini Nano integration
+- AI article summary — on-device Gemini Nano, two-pass read-then-write, streaming, no API key
 - Localisation: EN, DE, ES, FR, IT
 - Dynamic colour theming (Material You)
-- Unread badges on folder tabs and app icon
+- Unread badges on folder tabs and app icon, updating live from any tab
 - Empty state screens
 - Settings screen with all options
 - Session-read model: mark-all-read on a category tab now also refreshes that folder's feeds
 - Newspaper mode: opt-in serif theme (bundled PT Serif / Playfair Display OFL fonts), masthead nameplate on the feed screen, DB-persisted toggle in Settings
+- Folder tab bar: 60dp height, 48×48dp minimum tap targets, ripple feedback, auto-scroll to selected tab
+- Global loading indicator: a top-edge progress bar backed by a reference-counted `LoadingController`, covering every user-initiated async operation app-wide
+- Resume refresh: returning from background after ≥30s triggers a silent, cleanup-free network fetch (5-minute minimum interval)
 
 ### Not Yet Built
 - iOS support

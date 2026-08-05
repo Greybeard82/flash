@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/loading_controller.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 import 'reader_screen.dart';
@@ -31,13 +32,15 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _load() async {
-    final articles = await _articleRepo.getSaved();
-    if (mounted) {
-      setState(() {
-        _articles = articles;
-        _loading = false;
-      });
-    }
+    await LoadingController.instance.run(() async {
+      final articles = await _articleRepo.getSaved();
+      if (mounted) {
+        setState(() {
+          _articles = articles;
+          _loading = false;
+        });
+      }
+    }, label: 'Loading');
   }
 
   Future<void> _openArticle(Article article) async {
@@ -70,11 +73,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _toggleSaved(Article article) async {
     if (article.id == null) return;
-    await _articleRepo.setSaved(article.id!, saved: false);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() => _articles.removeWhere((a) => a.id == article.id));
-    }
+    await LoadingController.instance.run(() async {
+      await _articleRepo.setSaved(article.id!, saved: false);
+      HapticFeedback.lightImpact();
+      if (mounted) {
+        setState(() => _articles.removeWhere((a) => a.id == article.id));
+      }
+    }, label: 'Removing bookmark');
   }
 
   Future<void> _markRead(Article article) async {

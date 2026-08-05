@@ -6,6 +6,7 @@ import '../models/article.dart';
 import '../models/keyword_block.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/keyword_repository.dart';
+import '../services/loading_controller.dart';
 
 class KeywordBlocklistScreen extends StatefulWidget {
   const KeywordBlocklistScreen({super.key});
@@ -48,35 +49,41 @@ class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
     );
     if (result == null) return;
 
-    final kw = await _keywordRepo.insert(KeywordBlock(
-      keyword: result.keyword,
-      wholeWord: result.wholeWord,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-    ));
-    await _articleRepo.retroactivelyBlock(kw.keyword, kw.wholeWord);
-    HapticFeedback.lightImpact();
-    _load();
+    await LoadingController.instance.run(() async {
+      final kw = await _keywordRepo.insert(KeywordBlock(
+        keyword: result.keyword,
+        wholeWord: result.wholeWord,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+      await _articleRepo.retroactivelyBlock(kw.keyword, kw.wholeWord);
+      HapticFeedback.lightImpact();
+      await _load();
+    }, label: 'Adding keyword');
   }
 
   Future<void> _delete(KeywordBlock kw) async {
-    await _keywordRepo.delete(kw.id!);
-    await _articleRepo.unblockByKeyword(kw.keyword);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
-      );
-    }
-    _load();
+    await LoadingController.instance.run(() async {
+      await _keywordRepo.delete(kw.id!);
+      await _articleRepo.unblockByKeyword(kw.keyword);
+      HapticFeedback.lightImpact();
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
+        );
+      }
+      await _load();
+    }, label: 'Removing keyword');
   }
 
   Future<void> _toggleWholeWord(KeywordBlock kw) async {
-    final updated = kw.copyWith(wholeWord: !kw.wholeWord);
-    await _keywordRepo.setWholeWord(kw.id!, updated.wholeWord);
-    await _articleRepo.unblockByKeyword(kw.keyword);
-    await _articleRepo.retroactivelyBlock(updated.keyword, updated.wholeWord);
-    _load();
+    await LoadingController.instance.run(() async {
+      final updated = kw.copyWith(wholeWord: !kw.wholeWord);
+      await _keywordRepo.setWholeWord(kw.id!, updated.wholeWord);
+      await _articleRepo.unblockByKeyword(kw.keyword);
+      await _articleRepo.retroactivelyBlock(updated.keyword, updated.wholeWord);
+      await _load();
+    }, label: 'Updating keyword');
   }
 
   Future<void> _openArticle(Article article) async {

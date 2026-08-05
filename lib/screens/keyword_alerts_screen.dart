@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/keyword_alert.dart';
 import '../repositories/keyword_alert_repository.dart';
+import '../services/loading_controller.dart';
 
 class KeywordAlertsScreen extends StatefulWidget {
   const KeywordAlertsScreen({super.key});
@@ -35,30 +36,36 @@ class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
       builder: (_) => const _AddAlertSheet(),
     );
     if (result == null) return;
-    await _repo.insert(KeywordAlert(
-      keyword: result.keyword,
-      wholeWord: result.wholeWord,
-      createdAt: DateTime.now().millisecondsSinceEpoch,
-    ));
-    HapticFeedback.lightImpact();
-    _load();
+    await LoadingController.instance.run(() async {
+      await _repo.insert(KeywordAlert(
+        keyword: result.keyword,
+        wholeWord: result.wholeWord,
+        createdAt: DateTime.now().millisecondsSinceEpoch,
+      ));
+      HapticFeedback.lightImpact();
+      await _load();
+    }, label: 'Adding keyword');
   }
 
   Future<void> _delete(KeywordAlert kw) async {
-    await _repo.delete(kw.id!);
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
-      );
-    }
-    _load();
+    await LoadingController.instance.run(() async {
+      await _repo.delete(kw.id!);
+      HapticFeedback.lightImpact();
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
+        );
+      }
+      await _load();
+    }, label: 'Removing keyword');
   }
 
   Future<void> _toggleWholeWord(KeywordAlert kw) async {
-    await _repo.setWholeWord(kw.id!, !kw.wholeWord);
-    _load();
+    await LoadingController.instance.run(() async {
+      await _repo.setWholeWord(kw.id!, !kw.wholeWord);
+      await _load();
+    }, label: 'Updating keyword');
   }
 
   @override

@@ -9,6 +9,7 @@ import 'screens/onboarding_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/form_factor.dart';
+import 'widgets/global_loading_indicator.dart';
 
 class FlashApp extends StatefulWidget {
   const FlashApp({super.key});
@@ -153,18 +154,28 @@ class _AppShellState extends State<_AppShell> {
     if (!_onboardingComplete) {
       return OnboardingScreen(onDone: _finishOnboarding);
     }
-    return IndexedStack(
-      index: _currentIndex,
+    return Stack(
       children: [
-        FeedScreen(
-          onNavigateToFeeds: () => _navigateTo(1),
-          refreshTrigger: _feedRefreshTrigger,
+        IndexedStack(
+          index: _currentIndex,
+          children: [
+            FeedScreen(
+              onNavigateToFeeds: () => _navigateTo(1),
+              refreshTrigger: _feedRefreshTrigger,
+            ),
+            const FeedsScreen(),
+            const BookmarksScreen(),
+            SettingsScreen(
+              themeModeNotifier: widget.themeModeNotifier,
+              newspaperModeNotifier: widget.newspaperModeNotifier,
+            ),
+          ],
         ),
-        const FeedsScreen(),
-        const BookmarksScreen(),
-        SettingsScreen(
-          themeModeNotifier: widget.themeModeNotifier,
-          newspaperModeNotifier: widget.newspaperModeNotifier,
+        const Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: GlobalLoadingIndicator(),
         ),
       ],
     );

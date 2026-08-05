@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/loading_controller.dart';
 import 'reader_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -48,7 +49,8 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
     setState(() => _loading = true);
-    final results = await _repo.search(query);
+    final results = await LoadingController.instance
+        .run(() => _repo.search(query), label: 'Searching');
     if (mounted && query == _lastQuery) {
       setState(() { _results = results; _loading = false; });
     }
