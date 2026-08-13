@@ -2,7 +2,7 @@ import '../models/content_block.dart';
 
 /// Turns extracted [ContentBlock]s into the plain text handed to the model.
 class SummarySource {
-  static const int defaultMaxChars = 6000;
+  static const int defaultMaxChars = 2500;
 
   static String fromBlocks(
     List<ContentBlock>? blocks, {

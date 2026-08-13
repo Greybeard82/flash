@@ -7,11 +7,16 @@ import '../models/article.dart';
 import '../services/article_extractor.dart';
 import '../services/gemini_nano_service.dart';
 import '../services/loading_controller.dart';
+import '../services/summary_cache.dart';
+import '../services/summary_formatter.dart';
 import '../services/summary_source.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
   const ArticleSummarySheet({super.key, required this.article});
+
+  /// Hard ceiling on article extraction before falling back to the RSS teaser.
+  static const Duration extractionBudget = Duration(seconds: 2);
 
   @override
   State<ArticleSummarySheet> createState() => _ArticleSummarySheetState();
@@ -39,6 +44,18 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
   }
 
   Future<void> _generate() async {
+    final url = widget.article.url;
+    final cached = SummaryCache.instance.get(url);
+    if (cached != null) {
+      if (mounted) {
+        setState(() {
+          _summary = cached;
+          _done = true;
+        });
+      }
+      return;
+    }
+
     final nano = GeminiNanoService.instance;
     final available = await nano.isAvailable;
 
@@ -58,7 +75,9 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     String content;
     var teaserOnly = false;
     try {
-      final blocks = await ArticleExtractor().extract(widget.article.url);
+      final blocks = await ArticleExtractor()
+          .extract(widget.article.url)
+          .timeout(ArticleSummarySheet.extractionBudget);
       final extracted = SummarySource.fromBlocks(blocks, fallback: description);
       if (SummarySource.isSubstantial(extracted)) {
         content = extracted;
@@ -96,11 +115,12 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
       onDone: () {
         if (mounted) {
           setState(() {
-            final result = _pending.trim();
+            final result = SummaryFormatter.clamp(_pending);
             if (result.isEmpty) {
               _errorMessage = 'Empty summary returned';
             } else {
               _summary = result;
+              SummaryCache.instance.put(url, result);
             }
             _done = true;
           });
@@ -122,8 +142,11 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
-    final maxSheetHeight =
-        MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top;
+    // useSafeArea: true on the enclosing showModalBottomSheet (radial_menu.dart)
+    // already insets for the safe area, so subtracting padding.top here would
+    // double-count it. 90% of the screen height keeps this reading as a sheet
+    // rather than a full-screen page.
+    final maxSheetHeight = MediaQuery.of(context).size.height * 0.9;
 
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: maxSheetHeight),
@@ -170,13 +193,12 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             ),
             const SizedBox(height: 16),
 
-            // Content area: one page, never user-scrollable. Summary length is
-            // controlled by the generation prompt (native side); the
-            // NeverScrollableScrollPhysics is only a safety net so a rare
-            // over-long summary clips instead of throwing a layout overflow.
+            // Content area. The summary scrolls only when it exceeds the
+            // sheet; length is governed by the generation prompt, with
+            // SummaryFormatter as a backstop.
             Flexible(
               child: SingleChildScrollView(
-                physics: const NeverScrollableScrollPhysics(),
+                physics: const ClampingScrollPhysics(),
                 child: !_done
                     ? Column(
                         key: const ValueKey('summaryLoading'),
@@ -184,9 +206,12 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                         children: [
                           const _LoadingDots(),
                           Text(
-                            _writing ? l10n.aiSummaryWriting : l10n.aiSummaryReading,
+                            _writing
+                                ? l10n.aiSummaryWriting
+                                : l10n.aiSummaryReading,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.5),
                             ),
                           ),
                         ],
@@ -194,10 +219,15 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                     : _errorMessage != null
                         ? _UnavailableMessage(
                             key: const ValueKey('summaryUnavailable'),
-                            l10n: l10n, theme: theme, debugReason: _errorMessage)
+                            l10n: l10n,
+                            theme: theme,
+                            debugReason: _errorMessage)
                         : _SummaryText(
                             key: const ValueKey('summaryText'),
-                            summary: _summary!, theme: theme, l10n: l10n, done: _done,
+                            summary: _summary!,
+                            theme: theme,
+                            l10n: l10n,
+                            done: _done,
                             teaserOnly: _teaserOnly),
               ),
             ),
@@ -209,7 +239,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
 }
 
 class _LoadingDots extends StatefulWidget {
-  const _LoadingDots({super.key});
+  const _LoadingDots();
 
   @override
   State<_LoadingDots> createState() => _LoadingDotsState();

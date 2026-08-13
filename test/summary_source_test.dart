@@ -106,8 +106,9 @@ void main() {
       expect(text.trim().split(' ').last, anyOf('word', '…', 'word…'));
     });
 
-    test('default cap is well above the old 1200-character truncation', () {
-      expect(SummarySource.defaultMaxChars, greaterThanOrEqualTo(4000));
+    test('default cap matches the native trim', () {
+      expect(SummarySource.defaultMaxChars, 2500,
+          reason: 'Matches the native trim; larger inputs dominate Nano TTFT.');
     });
   });
 

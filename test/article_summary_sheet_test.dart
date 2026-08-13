@@ -6,6 +6,7 @@ import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/screens/article_summary_sheet.dart';
 import 'package:flash/services/gemini_nano_service.dart';
+import 'package:flash/services/summary_cache.dart';
 
 const _channelName = 'io.getflash.app/gemini_nano';
 const _codec = StandardMethodCodec();
@@ -66,26 +67,30 @@ Future<void> _pumpSheet(WidgetTester tester) async {
   await tester.pump();
 }
 
-/// A summary at the prompt's maximum budget: 1 focal sentence + 3 bullets,
-/// under 60 words total. If this fits on one page, any compliant output fits.
+/// A summary at the *prompt's* budget: 1 focal sentence + 5 bullets.
+/// A compliant summary should still fit on one page without scrolling — the
+/// scroll affordance added in Pass 03 is for text-scale and runaway cases.
 String _maxLengthSummary() {
   const focal =
       'The startup actually shut down after losing its largest client, '
       'which accounted for most of its recurring annual revenue stream.'; // 20 words
   final bullets = List.generate(
-      3,
-      (i) =>
-          '- Point number ${i + 1} covers one additional relevant reported '
-          'fact with names and figures'); // 12 words each
+      5,
+      (i) => '- Point number ${i + 1} covers one additional relevant reported '
+          'fact with names and figures attached for context'); // 20 words each
   return '$focal\n${bullets.join('\n')}';
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  setUp(GeminiNanoService.resetForTesting);
+  setUp(() {
+    GeminiNanoService.resetForTesting();
+    SummaryCache.instance.clear();
+  });
 
-  testWidgets('shows only loading animation while chunks stream in — '
+  testWidgets(
+      'shows only loading animation while chunks stream in — '
       'partial text is never rendered', (tester) async {
     _mockNative(tester);
     await _pumpSheet(tester);
@@ -122,19 +127,52 @@ void main() {
     expect(find.byKey(_loading), findsNothing);
   });
 
-  testWidgets('summary area is not user-scrollable', (tester) async {
+  testWidgets('a short summary does not scroll', (tester) async {
     _mockNative(tester);
     await _pumpSheet(tester);
-    await _fromNative(tester, 'summaryChunk', _maxLengthSummary());
+    await _fromNative(tester, 'summaryChunk', 'One short focal fact.');
     await _fromNative(tester, 'summaryDone', null);
     await tester.pump();
 
-    final scrollView = tester
-        .widget<SingleChildScrollView>(find.byType(SingleChildScrollView));
-    expect(scrollView.physics, isA<NeverScrollableScrollPhysics>());
+    final position =
+        tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    expect(position.maxScrollExtent, 0,
+        reason: 'Content fits, so there is nothing to scroll.');
   });
 
-  testWidgets('a maximum-budget summary fits on one Pixel-class page '
+  testWidgets('an oversized summary becomes scrollable instead of clipping',
+      (tester) async {
+    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.devicePixelRatio = 2.625;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    _mockNative(tester);
+    await _pumpSheet(tester);
+    // At the formatter's backstop ceiling — well beyond the prompt's budget.
+    await _fromNative(
+        tester, 'summaryChunk', List.generate(180, (i) => 'word$i').join(' '));
+    await _fromNative(tester, 'summaryDone', null);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull,
+        reason: 'Overflow must scroll, not throw or clip.');
+
+    final scrollable = find.byType(Scrollable);
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    expect(position.physics, isNot(isA<NeverScrollableScrollPhysics>()));
+
+    await tester.drag(scrollable, const Offset(0, -300));
+    await tester.pump();
+    expect(
+        tester.state<ScrollableState>(scrollable).position.pixels,
+        greaterThan(0),
+        reason: 'The user must actually be able to reach the bottom.');
+  });
+
+  testWidgets(
+      'a maximum-budget summary fits on one Pixel-class page '
       'with no overflow and no scrolling', (tester) async {
     // Pixel-class portrait: 1080x2400 physical @ 2.625 dpr = ~412x914 logical.
     tester.view.physicalSize = const Size(1080, 2400);
@@ -155,7 +193,7 @@ void main() {
     // fully on-screen — i.e. the whole summary fits without scrolling.
     final copyButton = find.byIcon(Icons.copy_rounded);
     expect(copyButton, findsOneWidget);
-    final logicalHeight = 2400 / 2.625;
+    const logicalHeight = 2400 / 2.625;
     expect(tester.getBottomRight(copyButton).dy, lessThan(logicalHeight));
   });
 

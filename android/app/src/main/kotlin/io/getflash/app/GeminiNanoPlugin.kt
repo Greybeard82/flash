@@ -85,13 +85,44 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
     }
 
     private fun writePrompt(title: String, langInstruction: String, source: String): String {
-        return "Write a summary of a news article in approximately 120 words, based on the key points " +
-            "below. $langInstruction Begin with a single sentence stating the focal point — the one thing " +
-            "that matters most, cutting through any clickbait or misleading framing in the title. If the " +
-            "key points list contains only one substantive point, write the whole summary as a short " +
-            "paragraph and use no bullet points at all. Only if there are several genuinely distinct points " +
-            "should you present them as short bullets (using \"- \") after the opening sentence. Prefer " +
-            "prose. Be factual and neutral. No preamble.\n\nTitle: $title\n\n$source\n\nSummary:"
+        return """
+You are a ruthless news summariser. Report only what the article text states.
+
+$langInstruction
+
+RULES
+1. The headline makes a promise. Deliver it in the first line. If the headline
+   names a count of things ("4 games", "three changes"), list exactly those
+   things, one per line, before anything else.
+2. Facts only: names, numbers, dates, prices, versions, outcomes, who did what.
+   Every line must contain at least one concrete fact.
+3. Never write filler such as "aims to", "is expected to", "will likely",
+   "is set to", "generating excitement", "fans are eager", "remains to be seen",
+   or "details are scarce". If a thing is not stated, leave it out entirely.
+4. Do not restate the headline. Do not describe what the article is about.
+   Report what it says.
+5. Never infer, guess, or fill gaps with general knowledge.
+6. 120 words maximum. Shorter is always better. Stop when the facts run out.
+7. No preamble, no sign-off, no headers, no markdown bold.
+
+FORMAT
+Line 1: the single most important fact, one sentence.
+Then up to 5 lines, each starting with "- ", each a distinct fact.
+If the article names specific items, one line per item:
+  - Name — what it is, under 12 words.
+
+IF THE TEXT IS THIN
+If the text below is only a teaser and lacks the details the headline promises,
+output the facts that are present and then stop. Do not compensate for missing
+detail by writing longer.
+
+ARTICLE
+Title: $title
+
+$source
+
+Summary:
+""".trimIndent()
     }
 
     // Streams chunks back to Flutter via reverse invokeMethod calls so text
@@ -101,37 +132,14 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         result.success(null)
         scope.launch {
             try {
-                // 6000 chars (~1500 tokens) covers a full extracted article body,
-                // not just an RSS teaser, while staying within Nano's context window.
-                val trimmed = body.take(6000)
+                // 2500 chars covers the lede and substantive middle of a news
+                // article — where list-type payloads live — and cuts
+                // time-to-first-token materially versus sending the whole body.
+                val trimmed = body.take(2500)
                 val langInstruction = langInstructionFor(locale)
+                val prompt = writePrompt(title, langInstruction, "Content: $trimmed")
 
-                // Pass 1 — read (non-streaming). Extract key points; never shown to the user.
-                var keyPoints: String? = null
-                try {
-                    withTimeout(45_000) {
-                        val readPrompt =
-                            "Read the following article and list the key factual points it contains, one " +
-                            "per line, in order of importance. Do not write a summary. Do not add " +
-                            "commentary. If the article makes only one substantive point, list only that " +
-                            "one point.\n\nTitle: $title\n\nContent: $trimmed\n\nKey points:"
-                        val response = getModel().generateContent(readPrompt)
-                        keyPoints = response.candidates.firstOrNull()?.text?.trim()
-                    }
-                } catch (_: Exception) {
-                    keyPoints = null
-                }
-
-                // Pass 2 — write (streaming). Feed it the key points, or fall back to the
-                // raw article directly if pass 1 timed out or returned nothing.
-                val writeSource = if (!keyPoints.isNullOrBlank()) {
-                    "Key points:\n$keyPoints"
-                } else {
-                    "Content: $trimmed"
-                }
-                val prompt = writePrompt(title, langInstruction, writeSource)
-
-                withTimeout(45_000) {
+                withTimeout(20_000) {
                     getModel().generateContentStream(prompt).collect { response ->
                         val chunk = response.candidates.firstOrNull()?.text ?: ""
                         if (chunk.isNotEmpty()) {
