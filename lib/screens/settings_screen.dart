@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
@@ -70,6 +71,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _settingsRepo.set(key, value);
       await _load();
     }, label: 'Saving');
+  }
+
+  /// Applies [apply] to the in-memory settings immediately (so the UI reacts
+  /// on this frame, not after a DB round-trip) and persists in the
+  /// background. Use for toggles/selectors whose visible effect (theme,
+  /// segmented-button highlight) must never lag behind the tap.
+  void _saveInstant(String key, String value, AppSettings Function(AppSettings) apply) {
+    final current = _settings;
+    if (current == null) return;
+    setState(() => _settings = apply(current));
+    unawaited(_settingsRepo.set(key, value));
   }
 
   Future<void> _connectGoogle() async {
@@ -310,13 +322,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: s.markReadOnScroll,
             onChanged: (v) => _save('mark_read_on_scroll', v.toString()),
           ),
-          _toggle(
-            title: l10n.readerMode,
-            subtitle: l10n.readerModeSubtitle,
-            value: s.readerMode,
-            onChanged: (v) => _save('reader_mode', v.toString()),
-          ),
-          if (s.readerMode) _fontSizeSelector(s, l10n),
 
           // ── Refresh ──
           _sectionHeader(l10n.refresh),
@@ -574,44 +579,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _fontSizeSelector(AppSettings s, AppLocalizations l10n) {
-    final sizes = [
-      ('small',  l10n.fontSizeSmall),
-      ('medium', l10n.fontSizeMedium),
-      ('large',  l10n.fontSizeLarge),
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.fontSize,
-                    style: Theme.of(context).textTheme.bodyMedium),
-              ],
-            ),
-          ),
-          SegmentedButton<String>(
-            showSelectedIcon: false,
-            segments: sizes
-                .map((e) => ButtonSegment(
-                      value: e.$1,
-                      label: SizedBox(width: 28, child: Text(e.$2, textAlign: TextAlign.center)),
-                    ))
-                .toList(),
-            selected: {s.articleFontSize},
-            onSelectionChanged: (v) => _save('article_font_size', v.first),
-            style: const ButtonStyle(
-              visualDensity: VisualDensity.compact,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _themeSelector(AppSettings s, AppLocalizations l10n) {
     final disabled = s.newspaperMode;
     return Padding(
@@ -639,8 +606,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
               selected: {s.theme},
               onSelectionChanged: disabled ? null : (sel) {
-                _save('theme', sel.first);
-                widget.themeModeNotifier.value = sel.first;
+                final value = sel.first;
+                widget.themeModeNotifier.value = value;
+                _saveInstant('theme', value, (s) => s.copyWith(theme: value));
               },
               style: SegmentedButton.styleFrom(
                 minimumSize: const Size(0, 44),
@@ -667,8 +635,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subtitle: Text(l10n.newspaperModeSubtitle),
       value: s.newspaperMode,
       onChanged: (v) {
-        _save('newspaper_mode', v.toString());
         widget.newspaperModeNotifier.value = v;
+        _saveInstant('newspaper_mode', v.toString(), (s) => s.copyWith(newspaperMode: v));
       },
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
@@ -736,7 +704,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         entry('Long-press radial menu (share, bookmark, AI summary)', isDone: true),
         entry('Article search', isDone: true),
         entry('Bookmarks / saved articles', isDone: true),
-        entry('In-app reader mode (ad-free)', isDone: true),
         entry('Dead feed indicator (⚠)', isDone: true),
         version('v0.1 — FILTERS & ALERTS'),
         entry('Keyword blocking (case-sensitive)', isDone: true),
@@ -745,7 +712,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         version('v0.1 — UI & PERSONALISATION'),
         entry('Dark / light / system theme', isDone: true),
         entry('Dynamic colour (Android 12+)', isDone: true),
-        entry('Font size selector in reader', isDone: true),
         entry('5 languages: EN, ES, FR, DE, IT', isDone: true),
         version('v0.1 — DATA'),
         entry('OPML import / export', isDone: true),
@@ -753,7 +719,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         entry('Google Drive backup', isWip: true),
         version('PLANNED'),
         entry('AI summaries on more devices (requires Gemini Nano)'),
-        entry('Article sharing from reader screen'),
         entry('Per-feed article limits'),
         entry('Search scoped to current category'),
         entry('iPad / wider screen layout'),

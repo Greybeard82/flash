@@ -136,8 +136,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'onboarding_complete', 'value': 'false'},
   {'key': 'schema_version', 'value': '3'},
   {'key': 'cleanup_age_days', 'value': '7'},
-  {'key': 'article_font_size', 'value': 'medium'},
-  {'key': 'reader_mode', 'value': 'false'},
   {'key': 'newspaper_mode', 'value': 'false'},
 ];
 

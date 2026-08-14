@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
-import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
@@ -22,7 +21,6 @@ import '../widgets/empty_state.dart';
 import '../widgets/folder_tab_bar.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
-import 'reader_screen.dart';
 import 'search_screen.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -398,7 +396,6 @@ class _FeedScreenState extends State<FeedScreen>
     final scrollOffset =
         _scrollController.hasClients ? _scrollController.offset : 0.0;
 
-    final settings = await _settingsRepo.getAll();
     final wasUnread = article.id != null && !article.isRead;
 
     // Mark read immediately and dim in-place.
@@ -422,67 +419,10 @@ class _FeedScreenState extends State<FeedScreen>
     final uri = Uri.tryParse(article.url);
     if (uri == null) return;
 
-    if (settings.readerMode) {
-      final domain = uri.host;
-      final cached = await _settingsRepo.get('reader_compat_$domain');
-      if (cached == 'fail') {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (cached == null) {
-          final isHtml = await _preflightIsHtml(uri);
-          if (!isHtml) {
-            await _settingsRepo.set('reader_compat_$domain', 'fail');
-            if (mounted) await launchUrl(uri, mode: LaunchMode.externalApplication);
-          } else {
-            if (!mounted) return;
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ReaderScreen(
-                  article: article.copyWith(isRead: true),
-                  fontSize: settings.articleFontSize,
-                  onExtractionSucceeded: () =>
-                      _settingsRepo.set('reader_compat_$domain', 'ok'),
-                  onExtractionFailed: () =>
-                      _settingsRepo.set('reader_compat_$domain', 'fail'),
-                ),
-              ),
-            );
-          }
-        } else {
-          if (!mounted) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ReaderScreen(
-                article: article.copyWith(isRead: true),
-                fontSize: settings.articleFontSize,
-                onExtractionSucceeded: () =>
-                    _settingsRepo.set('reader_compat_$domain', 'ok'),
-                onExtractionFailed: () =>
-                    _settingsRepo.set('reader_compat_$domain', 'fail'),
-              ),
-            ),
-          );
-        }
-      }
-    } else {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
 
     // Restore scroll — list is unchanged except the tapped card is grey.
     if (mounted) _restoreScrollOffset(scrollOffset);
-  }
-
-  Future<bool> _preflightIsHtml(Uri uri) {
-    return LoadingController.instance.run(() async {
-      try {
-        final r = await http.head(uri).timeout(const Duration(seconds: 5));
-        return (r.headers['content-type'] ?? '').contains('text/html');
-      } catch (_) {
-        return true;
-      }
-    }, label: 'Loading');
   }
 
   Future<void> _markRead(Article article) async {

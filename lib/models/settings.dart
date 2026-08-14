@@ -8,8 +8,6 @@ class AppSettings {
   final bool anthropicApiKeySet;
   final String? googleAccountEmail;
   final bool onboardingComplete;
-  final String articleFontSize; // 'small' | 'medium' | 'large'
-  final bool readerMode;
   final int cleanupAgeDays; // [5, 20]
   final bool newspaperMode;
 
@@ -23,8 +21,6 @@ class AppSettings {
     this.anthropicApiKeySet = false,
     this.googleAccountEmail,
     this.onboardingComplete = false,
-    this.articleFontSize = 'medium',
-    this.readerMode = false,
     this.cleanupAgeDays = 7,
     this.newspaperMode = false,
   });
@@ -42,8 +38,6 @@ class AppSettings {
       anthropicApiKeySet: (map['anthropic_api_key_set'] ?? 'false') == 'true',
       googleAccountEmail: map['google_account_email'] == 'null' ? null : map['google_account_email'],
       onboardingComplete: (map['onboarding_complete'] ?? 'false') == 'true',
-      articleFontSize: map['article_font_size'] ?? 'medium',
-      readerMode: (map['reader_mode'] ?? 'false') == 'true',
       cleanupAgeDays: (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(5, 20),
       newspaperMode: (map['newspaper_mode'] ?? 'false') == 'true',
     );
@@ -59,8 +53,6 @@ class AppSettings {
     bool? anthropicApiKeySet,
     String? googleAccountEmail,
     bool? onboardingComplete,
-    String? articleFontSize,
-    bool? readerMode,
     int? cleanupAgeDays,
     bool? newspaperMode,
   }) {
@@ -74,8 +66,6 @@ class AppSettings {
       anthropicApiKeySet: anthropicApiKeySet ?? this.anthropicApiKeySet,
       googleAccountEmail: googleAccountEmail ?? this.googleAccountEmail,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
-      articleFontSize: articleFontSize ?? this.articleFontSize,
-      readerMode: readerMode ?? this.readerMode,
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
       newspaperMode: newspaperMode ?? this.newspaperMode,
     );

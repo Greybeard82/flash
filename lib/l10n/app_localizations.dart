@@ -830,36 +830,6 @@ abstract class AppLocalizations {
   /// **'No articles match \"{query}\"'**
   String noSearchResults(String query);
 
-  /// No description provided for @readFullArticle.
-  ///
-  /// In en, this message translates to:
-  /// **'Read full article'**
-  String get readFullArticle;
-
-  /// No description provided for @fontSizeSmall.
-  ///
-  /// In en, this message translates to:
-  /// **'S'**
-  String get fontSizeSmall;
-
-  /// No description provided for @fontSizeMedium.
-  ///
-  /// In en, this message translates to:
-  /// **'M'**
-  String get fontSizeMedium;
-
-  /// No description provided for @fontSizeLarge.
-  ///
-  /// In en, this message translates to:
-  /// **'L'**
-  String get fontSizeLarge;
-
-  /// No description provided for @fontSize.
-  ///
-  /// In en, this message translates to:
-  /// **'Font size'**
-  String get fontSize;
-
   /// No description provided for @summary.
   ///
   /// In en, this message translates to:
@@ -895,36 +865,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove bookmark'**
   String get unbookmark;
-
-  /// No description provided for @readerMode.
-  ///
-  /// In en, this message translates to:
-  /// **'Reader mode'**
-  String get readerMode;
-
-  /// No description provided for @loadingArticle.
-  ///
-  /// In en, this message translates to:
-  /// **'Loading article…'**
-  String get loadingArticle;
-
-  /// No description provided for @extractionFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not load the full article.'**
-  String get extractionFailed;
-
-  /// No description provided for @readOnWebsite.
-  ///
-  /// In en, this message translates to:
-  /// **'Read on website'**
-  String get readOnWebsite;
-
-  /// No description provided for @readerModeSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Open articles directly in the app, ad-free. Not all websites are supported — falls back to the browser automatically.'**
-  String get readerModeSubtitle;
 
   /// No description provided for @keywordAlerts.
   ///

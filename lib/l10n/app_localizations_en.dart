@@ -404,21 +404,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get readFullArticle => 'Read full article';
-
-  @override
-  String get fontSizeSmall => 'S';
-
-  @override
-  String get fontSizeMedium => 'M';
-
-  @override
-  String get fontSizeLarge => 'L';
-
-  @override
-  String get fontSize => 'Font size';
-
-  @override
   String get summary => 'Summary';
 
   @override
@@ -436,22 +421,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unbookmark => 'Remove bookmark';
-
-  @override
-  String get readerMode => 'Reader mode';
-
-  @override
-  String get loadingArticle => 'Loading article…';
-
-  @override
-  String get extractionFailed => 'Could not load the full article.';
-
-  @override
-  String get readOnWebsite => 'Read on website';
-
-  @override
-  String get readerModeSubtitle =>
-      'Open articles directly in the app, ad-free. Not all websites are supported — falls back to the browser automatically.';
 
   @override
   String get keywordAlerts => 'Keyword alerts';

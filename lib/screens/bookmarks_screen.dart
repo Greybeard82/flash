@@ -4,11 +4,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
-import '../repositories/settings_repository.dart';
 import '../services/loading_controller.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
-import 'reader_screen.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -19,7 +17,6 @@ class BookmarksScreen extends StatefulWidget {
 
 class _BookmarksScreenState extends State<BookmarksScreen> {
   final _articleRepo = ArticleRepository();
-  final _settingsRepo = SettingsRepository();
   final _shareService = ShareService();
 
   List<Article> _articles = [];
@@ -44,8 +41,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   }
 
   Future<void> _openArticle(Article article) async {
-    final settings = await _settingsRepo.getAll();
-
     if (article.id != null) {
       await _articleRepo.markRead(article.id!);
       if (mounted) {
@@ -58,17 +53,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     }
 
     if (!mounted) return;
-    if (settings.readerMode) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ReaderScreen(article: article, fontSize: settings.articleFontSize),
-        ),
-      );
-    } else {
-      final uri = Uri.tryParse(article.url);
-      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    final uri = Uri.tryParse(article.url);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   Future<void> _toggleSaved(Article article) async {

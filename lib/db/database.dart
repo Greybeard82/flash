@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -116,6 +116,13 @@ class AppDatabase {
       final now = DateTime.now().millisecondsSinceEpoch;
       await db.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('newspaper_mode', 'false', $now)",
+      );
+    }
+    if (oldVersion < 8) {
+      // Reader mode removed: purge its settings and per-domain compat cache.
+      await db.execute(
+        "DELETE FROM settings WHERE key IN ('reader_mode', 'article_font_size') "
+        "OR key LIKE 'reader_compat_%'",
       );
     }
   }

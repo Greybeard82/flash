@@ -4,9 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
-import '../repositories/settings_repository.dart';
 import '../services/loading_controller.dart';
-import 'reader_screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -17,7 +15,6 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _repo = ArticleRepository();
-  final _settingsRepo = SettingsRepository();
   final _controller = TextEditingController();
   List<Article> _results = [];
   bool _loading = false;
@@ -57,8 +54,6 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _open(Article article) async {
-    final settings = await _settingsRepo.getAll();
-
     if (!article.isRead && article.id != null) {
       await _repo.markRead(article.id!);
       if (mounted) {
@@ -71,17 +66,8 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (!mounted) return;
-    if (settings.readerMode) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ReaderScreen(article: article, fontSize: settings.articleFontSize),
-        ),
-      );
-    } else {
-      final uri = Uri.tryParse(article.url);
-      if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+    final uri = Uri.tryParse(article.url);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override

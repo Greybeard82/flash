@@ -29,7 +29,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 | Step | Expected |
 |------|----------|
-| Open an article in Reader mode, then drag the back edge slowly | Predictive back peek animation plays (partial screen reveal of the previous screen) |
+| Open Settings, then drag the back edge slowly | Predictive back peek animation plays (partial screen reveal of the previous screen) |
 | Complete the gesture | Returns to feed; scroll position is restored |
 | Trigger predictive back from Search screen | Returns to main feed smoothly |
 | Trigger predictive back from Settings | Returns to previous nav destination |
@@ -96,7 +96,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 |------|----------|
 | Go to Settings → Anthropic API key → enter a valid key | Key saved and masked |
 | Long-press an article → ✦ Summary | Bottom sheet loads; summary arrives as 4 bullet points |
-| Tap "Open article" in the sheet | Launches article URL externally or in Reader |
+| Tap "Open article" in the sheet | Launches article URL externally |
 | Remove the API key then trigger summary | "No API key — add one in Settings" message shown |
 | Enter an invalid key | "Couldn't load summary. Tap to retry." shown; no crash |
 

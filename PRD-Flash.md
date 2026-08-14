@@ -179,7 +179,7 @@ Behaviour differs by tab:
 No confirmation dialog is ever shown. Scroll position for the affected tab resets to top after reload.
 
 **Scroll position**
-- The **scroll position is always restored exactly** when the user returns to the feed — whether from the in-app reader, the system browser, or switching tabs
+- The **scroll position is always restored exactly** when the user returns to the feed — whether from the system browser or switching tabs
 - Switching to a different category tab resets that tab's scroll to the top (correct behaviour); the previous tab's position is saved and restored when switching back
 - These behaviours have no user toggle — they are hardcoded
 
@@ -204,35 +204,21 @@ Three mini FABs, visible only when at least one feed exists:
 
 **Open Article**
 - Tap a card to open the article; the card dims in-place immediately (marks as read, added to session set); exact scroll position is restored on return — no reload
-- If **Reader Mode** is on (Settings toggle): opens the in-app Reader screen with extracted article text
-  - Pre-flight HTML check determines if the URL serves readable HTML
-  - Per-domain compatibility is cached (`reader_compat_<domain>`) to avoid repeated checks
-  - Falls back to the system browser for incompatible domains
-- If Reader Mode is off: opens directly in the system browser
+- Opens directly in the system browser
 
 ---
 
-### 4.4 In-App Reader
-
-- Full-screen reading experience with extracted article body
-- Article text is extracted from the URL using a lightweight HTML parser, stripping navigation, ads, and boilerplate (`article_extractor.dart`)
-- Configurable font size: Small, Medium, Large (set in Settings, applied globally)
-- Reader mode is per-article-open, not per-feed
-- Falls back to browser if extraction fails for a given domain
-
----
-
-### 4.5 Search
+### 4.4 Search
 
 - Full-text search across article titles and descriptions
 - Debounced (350ms) as the user types
 - Race-condition safe — stale results from a previous query are discarded
 - Results use the same read/unread visual treatment as the feed
-- Tapping a result opens the article (respects Reader Mode setting)
+- Tapping a result opens the article in the system browser
 
 ---
 
-### 4.6 Bookmarks
+### 4.5 Bookmarks
 
 - Any article can be bookmarked via long-press radial menu or swipe action
 - Bookmarked articles appear in the Bookmarks tab in the bottom navigation
@@ -241,7 +227,7 @@ Three mini FABs, visible only when at least one feed exists:
 
 ---
 
-### 4.7 Keyword Blocking
+### 4.6 Keyword Blocking
 
 Flagship feature — fixes Palabre's broken implementation.
 
@@ -265,7 +251,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.8 Keyword Alerts
+### 4.7 Keyword Alerts
 
 - User can add keywords to an alert list
 - When a new article matches an alert keyword, it is highlighted or surfaced separately
@@ -273,7 +259,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.9 Article Auto-Cleanup
+### 4.8 Article Auto-Cleanup
 
 - **Age-based:** read, unsaved articles whose `published_at` is older than the configured cleanup window are deleted automatically
 - The cleanup window defaults to **7 days** and is user-configurable from **5 to 20 days** (Settings → Article cleanup window)
@@ -285,7 +271,7 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ---
 
-### 4.10 Fetch Thresholds
+### 4.9 Fetch Thresholds
 
 Applied to every feed fetch before articles are written to the database:
 
@@ -296,7 +282,7 @@ Applied to every feed fetch before articles are written to the database:
 - GUID resolution: feed-level guid is preferred; if absent, the article URL is used as the GUID; if neither exists, the article is skipped (no random or timestamp-based GUIDs)
 - Duplicate (feed\_id + guid) articles are silently ignored on insert — re-fetching never resets the read state of existing articles
 
-### 4.11 Background Refresh
+### 4.10 Background Refresh
 
 - Configurable interval: 15 min, 30 min, 1h, 3h, 6h, Manual only
 - Default: 30 minutes
@@ -306,23 +292,21 @@ Applied to every feed fetch before articles are written to the database:
 
 ---
 
-### 4.12 AI Article Summary
+### 4.11 AI Article Summary
 
 **Trigger:** Long-press card → radial menu → ✦ Summary
 
 Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt`) — no API key, no network call, no cloud dependency. Unavailable on devices without AICore support (Pixel 8 Pro / 9 Pro class, Android 14+).
 
 **Flow:**
-1. On open, the sheet checks Nano availability, then extracts the article's full body from its URL (`ArticleExtractor` → `SummarySource`, capped at 6,000 characters) rather than summarising the short RSS teaser. If extraction fails or the result is too short to be substantial, it falls back to the RSS description and the sheet shows a quiet "Based on the article preview only." note in the footer.
-2. Generation is **two-pass** on the native side:
-   - **Pass 1 — read** (non-streaming): the model lists the article's key factual points, one per line, in order of importance. These notes are internal and never shown to the user.
-   - **Pass 2 — write** (streaming): the model writes a ~120-word summary from those key points — a single opening sentence stating the focal point (cutting through clickbait/misleading titles), followed by short bullets **only if the article covers several genuinely distinct points**; a single-topic article gets flowing prose with no bullets at all.
-   - If pass 1 times out or returns nothing, pass 2 falls back to summarising the raw article content directly — a degraded summary beats an error sheet.
-3. Nothing is rendered until pass 2's stream completes: chunks are buffered silently as they arrive and the full result is revealed in one step, so no partial/flickering text is ever shown.
+1. On open, the sheet checks an in-memory session cache (`SummaryCache`, keyed by article URL, 50-entry LRU) — a hit renders immediately with no native call at all.
+2. On a cache miss, the sheet checks Nano availability, then extracts the article's full body from its URL (`ArticleExtractor` → `SummarySource`, capped at 2,500 characters, raced against a hard 2-second budget) rather than summarising the short RSS teaser. If extraction fails, times out, or the result is too short to be substantial, it falls back to the RSS description and the sheet shows a quiet "Based on the article preview only." note in the footer.
+3. Generation is a **single streaming pass** on the native side (`GeminiNanoPlugin.kt`, 20-second timeout): a ruthless, fact-only prompt instructs the model to lead with the headline's promise on line one, then up to five single-fact bullet lines, banning filler phrasing ("aims to", "is expected to", etc.) and inference beyond what the source states.
+4. Nothing is rendered until the stream completes: chunks are buffered silently as they arrive, then run through `SummaryFormatter` (strips stray preambles/markdown, normalises bullet markers, backstops at 180 words / 8 bullets) and the full clamped result is revealed in one step — no partial/flickering text is ever shown. A successful result is written to the cache for the rest of the session.
 
 **UI:**
-- Bottom sheet sized to its content (not forced full-screen) slides up immediately, showing an animated loading indicator with a status line: "Reading the article…" during extraction, then "Writing the summary…" once generation starts
-- Content area is not user-scrollable — the prompt's word budget is tuned to fit on one screen; `NeverScrollableScrollPhysics` is a safety net, not the primary length control
+- Bottom sheet sized to its content (not forced full-screen, capped at 90% of screen height) slides up immediately, showing an animated loading indicator with a status line: "Reading the article…" during extraction, then "Writing the summary…" once generation starts
+- Content scrolls only when it exceeds the sheet — `ClampingScrollPhysics`, not a fixed one-page assumption; a compliant summary still fits on one page at default text scale
 - All text is selectable
 - Footer: disclaimer + "Copy" button (+ the teaser-only note when applicable)
 - Dismiss: tap outside or swipe down
@@ -334,7 +318,7 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 ---
 
-### 4.13 Backup & Restore
+### 4.12 Backup & Restore
 
 **Backup format:** Single JSON file (`flash_backup.json`) containing folders, feeds, and keyword blocklist. Version-tagged for forward compatibility.
 
@@ -363,7 +347,7 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 ---
 
-### 4.14 OPML Import / Export
+### 4.13 OPML Import / Export
 
 - Import: reads an OPML file and adds all feeds, preserving folder structure where possible
 - Export: generates a standard OPML file shared via the system share sheet
@@ -371,7 +355,7 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 ---
 
-### 4.15 Onboarding
+### 4.14 Onboarding
 
 - Shown on first launch only
 - Walks the user through adding their first feed and creating a folder
@@ -432,8 +416,6 @@ Content area:
 | Theme | System | Light, Dark, System |
 | Background refresh interval | 30 min | 15m, 30m, 1h, 3h, 6h, Manual |
 | Mark as read on scroll | On | On, Off |
-| Reader mode | Off | On, Off |
-| Article font size | Medium | Small, Medium, Large |
 | Google Drive backup | — | Sign in / Sign out, Backup now, Restore |
 | Local backup | — | Export, Import |
 | OPML | — | Import, Export |
@@ -486,7 +468,6 @@ Content area:
 - INSERT OR IGNORE deduplication — re-fetch never resets read state
 - Per-tab scroll position preservation
 - `NotificationBanner` slide-in widget (replaces snackbar for confirmations)
-- In-app Reader with article extraction, per-domain compatibility caching
 - Article search (full-text, debounced, race-safe)
 - Bookmarks screen
 - Keyword blocklist with retroactive blocking
@@ -497,7 +478,7 @@ Content area:
 - Google Drive backup + restore
 - Local file backup + restore (via share sheet)
 - OPML import + export
-- AI article summary — on-device Gemini Nano, two-pass read-then-write, streaming, no API key
+- AI article summary — on-device Gemini Nano, single streaming pass, no API key
 - Localisation: EN, DE, ES, FR, IT
 - Dynamic colour theming (Material You)
 - Unread badges on folder tabs and app icon, updating live from any tab
