@@ -170,10 +170,21 @@ class _FolderTab extends StatelessWidget {
                             isSelected ? FontWeight.w700 : FontWeight.w500,
                       ),
                     ),
-                    if (unreadCount > 0) ...[
-                      const SizedBox(width: 4),
-                      UnreadBadge(count: unreadCount, small: true),
-                    ],
+                    const SizedBox(width: 4),
+                    // Fixed-width slot (sized for the widest "999+" badge) so
+                    // a live count update — even one from a tab the user
+                    // isn't viewing — never shifts this tab's own width, and
+                    // therefore never shifts every tab after it in the row.
+                    // Reserved even at zero so the badge appearing/
+                    // disappearing doesn't shift the label either.
+                    SizedBox(
+                      width: UnreadBadge.maxWidth(small: true),
+                      child: unreadCount > 0
+                          ? Center(
+                              child: UnreadBadge(count: unreadCount, small: true),
+                            )
+                          : null,
+                    ),
                   ],
                 ),
               ],

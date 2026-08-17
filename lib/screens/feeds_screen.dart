@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../repositories/feed_repository.dart';
@@ -24,10 +26,24 @@ class _FeedsScreenState extends State<FeedsScreen> {
   final _folderRepo = FolderRepository();
   final _feedlyService = FeedlyService();
   final _faviconService = FaviconService();
-  List<Feed> _feeds = [];
+  final _scrollController = ScrollController();
+  final _listKey = GlobalKey();
+
   List<Folder> _folders = [];
+  Map<int, List<Feed>> _feedsByFolder = {};
+  List<Feed> _orphanFeeds = [];
   Map<int, int> _unreadCounts = {};
   bool _loading = true;
+
+  // Auto-scroll while a feed is being dragged near the top/bottom edge.
+  Timer? _autoScrollTimer;
+
+  @override
+  void dispose() {
+    _autoScrollTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -42,12 +58,99 @@ class _FeedsScreenState extends State<FeedsScreen> {
     final counts = await _feedRepo.getUnreadCounts();
     if (mounted) {
       setState(() {
-        _feeds = feeds;
         _folders = folders;
         _unreadCounts = counts;
+        final folderIds = folders.map((f) => f.id).toSet();
+        final byFolder = <int, List<Feed>>{};
+        final orphans = <Feed>[];
+        for (final feed in feeds) {
+          if (folderIds.contains(feed.folderId)) {
+            byFolder.putIfAbsent(feed.folderId, () => []).add(feed);
+          } else {
+            orphans.add(feed);
+          }
+        }
+        _feedsByFolder = byFolder;
+        _orphanFeeds = orphans;
         _loading = false;
       });
     }
+  }
+
+  // ── Drag and drop across categories ──────────────────────────────────────
+
+  /// Moves [feed] into [targetFolderId] at [targetIndex] within that
+  /// folder's list. Works for both a cross-category move (folder changes)
+  /// and a same-category reorder (folder unchanged) — in both cases the
+  /// destination list is renumbered 0..n-1 and persisted in one batch.
+  ///
+  /// [targetIndex] is expressed against the destination list *as currently
+  /// rendered* (i.e. still including [feed] if it's a same-folder reorder),
+  /// matching ReorderableListView's own convention — so a same-folder drop
+  /// past the feed's original position is adjusted back by one to land in
+  /// the intended slot once the feed is removed from its old spot first.
+  void _moveFeed(Feed feed, int targetFolderId, int targetIndex) {
+    final sourceFolderId = feed.folderId;
+    final destList = List<Feed>.of(_feedsByFolder[targetFolderId] ?? []);
+
+    var index = targetIndex;
+    if (sourceFolderId == targetFolderId) {
+      final originalIndex = destList.indexWhere((f) => f.id == feed.id);
+      if (originalIndex != -1 && targetIndex > originalIndex) index--;
+    }
+    destList.removeWhere((f) => f.id == feed.id);
+    final clamped = index.clamp(0, destList.length);
+    final moved = feed.copyWith(folderId: targetFolderId);
+    destList.insert(clamped, moved);
+
+    setState(() {
+      if (sourceFolderId != targetFolderId) {
+        final sourceList = List<Feed>.of(_feedsByFolder[sourceFolderId] ?? [])
+          ..removeWhere((f) => f.id == feed.id);
+        _feedsByFolder[sourceFolderId] = sourceList;
+      }
+      _feedsByFolder[targetFolderId] = destList;
+    });
+
+    LoadingController.instance.run(
+      () => _feedRepo.moveToFolder(moved, targetFolderId, destList),
+      label: 'Moving feed',
+    );
+  }
+
+  void _onFeedDragStarted() => HapticFeedback.mediumImpact();
+
+  void _onFeedDragEnd() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+  }
+
+  void _onFeedDragUpdate(DragUpdateDetails details) {
+    final box = _listKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !_scrollController.hasClients) return;
+    final local = box.globalToLocal(details.globalPosition);
+    const edge = 56.0;
+    final height = box.size.height;
+
+    double direction = 0;
+    if (local.dy < edge && local.dy >= -edge) {
+      direction = -1;
+    } else if (local.dy > height - edge && local.dy <= height + edge) {
+      direction = 1;
+    }
+
+    if (direction == 0) {
+      _autoScrollTimer?.cancel();
+      _autoScrollTimer = null;
+      return;
+    }
+    _autoScrollTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
+      if (!_scrollController.hasClients) return;
+      final pos = _scrollController.position;
+      final next =
+          (pos.pixels + direction * 12).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      _scrollController.jumpTo(next);
+    });
   }
 
   @override
@@ -79,40 +182,36 @@ class _FeedsScreenState extends State<FeedsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _feeds.isEmpty && _folders.isEmpty
+          : _feedsByFolder.values.every((f) => f.isEmpty) &&
+                  _orphanFeeds.isEmpty &&
+                  _folders.isEmpty
               ? _emptyFeedsState()
               : RefreshIndicator(onRefresh: _load, child: _buildList()),
     );
   }
 
   Widget _buildList() {
-    // Group feeds by folder
-    final grouped = <int?, List<Feed>>{};
-    for (final feed in _feeds) {
-      grouped.putIfAbsent(feed.folderId, () => []).add(feed);
-    }
-
-    // Uncategorized feeds pinned at the bottom, outside the reorderable list
-    final folderIds = _folders.map((f) => f.id).toSet();
-    final orphanFeeds =
-        _feeds.where((f) => !folderIds.contains(f.folderId)).toList();
-
     return ReorderableListView(
+      key: _listKey,
+      scrollController: _scrollController,
       padding: const EdgeInsets.only(bottom: 80),
       buildDefaultDragHandles: false,
       onReorder: _onReorderFolders,
-      footer: orphanFeeds.isNotEmpty
+      footer: _orphanFeeds.isNotEmpty
           ? _FolderSection(
               key: const ValueKey('orphan'),
               folder: null,
-              feeds: orphanFeeds,
+              feeds: _orphanFeeds,
               unreadCounts: _unreadCounts,
               onRenameFolder: null,
               onDeleteFolder: null,
               onEditFeed: (feed) => _showEditFeedSheet(feed),
               onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
-              onReorderFeeds: null,
               dragIndex: null,
+              onFeedDragStarted: _onFeedDragStarted,
+              onFeedDragUpdate: _onFeedDragUpdate,
+              onFeedDragEnd: _onFeedDragEnd,
+              onFeedDropped: null,
             )
           : null,
       children: [
@@ -120,14 +219,18 @@ class _FeedsScreenState extends State<FeedsScreen> {
           _FolderSection(
             key: ValueKey(_folders[i].id),
             folder: _folders[i],
-            feeds: grouped[_folders[i].id] ?? [],
+            feeds: _feedsByFolder[_folders[i].id] ?? [],
             unreadCounts: _unreadCounts,
             onRenameFolder: () => _showRenameFolderSheet(_folders[i]),
             onDeleteFolder: () => _confirmDeleteFolder(_folders[i]),
             onEditFeed: (feed) => _showEditFeedSheet(feed),
             onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
-            onReorderFeeds: (feeds) => _reorderFeeds(_folders[i], feeds),
             dragIndex: i,
+            onFeedDragStarted: _onFeedDragStarted,
+            onFeedDragUpdate: _onFeedDragUpdate,
+            onFeedDragEnd: _onFeedDragEnd,
+            onFeedDropped: (feed, targetIndex) =>
+                _moveFeed(feed, _folders[i].id!, targetIndex),
           ),
       ],
     );
@@ -140,10 +243,6 @@ class _FeedsScreenState extends State<FeedsScreen> {
       _folders.insert(newIndex, folder);
     });
     LoadingController.instance.run(() => _folderRepo.reorder(_folders), label: 'Reordering');
-  }
-
-  Future<void> _reorderFeeds(Folder folder, List<Feed> feeds) async {
-    await LoadingController.instance.run(() => _feedRepo.reorder(feeds), label: 'Reordering');
   }
 
   Widget _emptyFeedsState() {
@@ -303,8 +402,20 @@ class _FolderSection extends StatefulWidget {
   final VoidCallback? onDeleteFolder;
   final ValueChanged<Feed> onEditFeed;
   final ValueChanged<Feed> onDeleteFeed;
-  final ValueChanged<List<Feed>>? onReorderFeeds;
   final int? dragIndex;
+
+  // Cross-category feed drag plumbing, lifted to FeedsScreen so a drag
+  // started in one section's row is accepted by a DragTarget in any other
+  // section — LongPressDraggable/DragTarget work through the Overlay, so
+  // this needs no shared list ancestor the way ReorderableListView would.
+  final VoidCallback onFeedDragStarted;
+  final ValueChanged<DragUpdateDetails> onFeedDragUpdate;
+  final VoidCallback onFeedDragEnd;
+  /// Called with (droppedFeed, targetIndex) when a feed is dropped into
+  /// this folder. Null for the uncategorised section — feeds always belong
+  /// to a real folder in the DB (folder_id is NOT NULL), so it isn't a
+  /// valid move target.
+  final void Function(Feed feed, int targetIndex)? onFeedDropped;
 
   const _FolderSection({
     super.key,
@@ -315,8 +426,11 @@ class _FolderSection extends StatefulWidget {
     required this.onDeleteFolder,
     required this.onEditFeed,
     required this.onDeleteFeed,
-    required this.onReorderFeeds,
     required this.dragIndex,
+    required this.onFeedDragStarted,
+    required this.onFeedDragUpdate,
+    required this.onFeedDragEnd,
+    required this.onFeedDropped,
   });
 
   @override
@@ -327,25 +441,15 @@ class _FolderSectionState extends State<_FolderSection>
     with SingleTickerProviderStateMixin {
   bool _expanded = true;
   late final AnimationController _chevronController;
-  late List<Feed> _localFeeds;
 
   @override
   void initState() {
     super.initState();
-    _localFeeds = List.of(widget.feeds);
     _chevronController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
       value: 1.0, // starts expanded
     );
-  }
-
-  @override
-  void didUpdateWidget(_FolderSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.feeds != widget.feeds) {
-      _localFeeds = List.of(widget.feeds);
-    }
   }
 
   @override
@@ -363,110 +467,116 @@ class _FolderSectionState extends State<_FolderSection>
     }
   }
 
-  void _onReorderFeeds(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) newIndex--;
-    setState(() {
-      final feed = _localFeeds.removeAt(oldIndex);
-      _localFeeds.insert(newIndex, feed);
-    });
-    widget.onReorderFeeds?.call(_localFeeds);
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final name = widget.folder?.name ?? l10n.uncategorised;
     final canReorderFolders = widget.dragIndex != null;
-    final canReorderFeeds = widget.onReorderFeeds != null;
+    final canAcceptDrops = widget.onFeedDropped != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Folder header — tap to collapse, long-press for actions
-        InkWell(
-          onTap: _toggle,
-          onLongPress: widget.folder != null
-              ? () => showModalBottomSheet(
-                    context: context,
-                    builder: (ctx) => _FolderActionsSheet(
-                      folder: widget.folder!,
-                      onRename: widget.onRenameFolder,
-                      onDelete: widget.onDeleteFolder,
+        // Folder header — tap to collapse, long-press for actions. Also a
+        // drop target in its own right: dropping a source directly on the
+        // header (e.g. while this category is collapsed, so no row/slot is
+        // visible) appends it to the end of this folder's list.
+        DragTarget<Feed>(
+          onWillAcceptWithDetails: (_) => canAcceptDrops,
+          onAcceptWithDetails: (details) =>
+              widget.onFeedDropped!(details.data, widget.feeds.length),
+          builder: (context, candidateData, rejectedData) {
+            final isHovering = candidateData.isNotEmpty;
+            return InkWell(
+              onTap: _toggle,
+              onLongPress: widget.folder != null
+                  ? () => showModalBottomSheet(
+                        context: context,
+                        builder: (ctx) => _FolderActionsSheet(
+                          folder: widget.folder!,
+                          onRename: widget.onRenameFolder,
+                          onDelete: widget.onDeleteFolder,
+                        ),
+                      )
+                  : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                color: isHovering
+                    ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                    : Colors.transparent,
+                padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.label_outline_rounded,
+                        size: 16, color: theme.colorScheme.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        name,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
                     ),
-                  )
-              : null,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
-            child: Row(
-              children: [
-                Icon(Icons.label_outline_rounded,
-                    size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    name,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: theme.colorScheme.primary,
+                    RotationTransition(
+                      turns: Tween(begin: -0.25, end: 0.0)
+                          .animate(_chevronController),
+                      child: Icon(Icons.expand_more_rounded,
+                          size: 18,
+                          color: theme.colorScheme.primary
+                              .withValues(alpha: 0.7)),
                     ),
-                  ),
+                    if (canReorderFolders) ...[
+                      const SizedBox(width: 4),
+                      ReorderableDragStartListener(
+                        index: widget.dragIndex!,
+                        child: Icon(Icons.drag_handle_rounded,
+                            size: 20,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.35)),
+                      ),
+                    ],
+                  ],
                 ),
-                RotationTransition(
-                  turns: Tween(begin: -0.25, end: 0.0)
-                      .animate(_chevronController),
-                  child: Icon(Icons.expand_more_rounded,
-                      size: 18,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.7)),
-                ),
-                if (canReorderFolders) ...[
-                  const SizedBox(width: 4),
-                  ReorderableDragStartListener(
-                    index: widget.dragIndex!,
-                    child: Icon(Icons.drag_handle_rounded,
-                        size: 20,
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.35)),
-                  ),
-                ],
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
         // Animated expand/collapse
         AnimatedSize(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeInOut,
           child: _expanded
-              ? canReorderFeeds && _localFeeds.isNotEmpty
-                  ? ReorderableListView(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      buildDefaultDragHandles: false,
-                      onReorder: _onReorderFeeds,
-                      children: [
-                        for (int i = 0; i < _localFeeds.length; i++)
-                          _ReorderableFeedRow(
-                            key: ValueKey(_localFeeds[i].id),
-                            feed: _localFeeds[i],
-                            unreadCount:
-                                widget.unreadCounts[_localFeeds[i].id] ?? 0,
-                            onEdit: () =>
-                                _showFeedMenu(context, _localFeeds[i]),
-                            dragIndex: i,
-                          ),
-                      ],
-                    )
-                  : Column(
-                      children: _localFeeds
-                          .map((feed) => FeedCard(
-                                feed: feed,
-                                unreadCount:
-                                    widget.unreadCounts[feed.id] ?? 0,
-                                onEdit: () => _showFeedMenu(context, feed),
-                              ))
-                          .toList(),
-                    )
+              ? Column(
+                  children: [
+                    _FeedDropSlot(
+                      key: ValueKey('slot_${widget.folder?.id}_0'),
+                      index: 0,
+                      enabled: canAcceptDrops,
+                      onFeedDropped: widget.onFeedDropped,
+                    ),
+                    for (int i = 0; i < widget.feeds.length; i++) ...[
+                      _DraggableFeedRow(
+                        key: ValueKey(widget.feeds[i].id),
+                        feed: widget.feeds[i],
+                        unreadCount:
+                            widget.unreadCounts[widget.feeds[i].id] ?? 0,
+                        onEdit: () => _showFeedMenu(context, widget.feeds[i]),
+                        onDragStarted: widget.onFeedDragStarted,
+                        onDragUpdate: widget.onFeedDragUpdate,
+                        onDragEnd: widget.onFeedDragEnd,
+                      ),
+                      _FeedDropSlot(
+                        key: ValueKey('slot_${widget.folder?.id}_${i + 1}'),
+                        index: i + 1,
+                        enabled: canAcceptDrops,
+                        onFeedDropped: widget.onFeedDropped,
+                      ),
+                    ],
+                  ],
+                )
               : const SizedBox.shrink(),
         ),
         const Divider(height: 1),
@@ -486,46 +596,97 @@ class _FolderSectionState extends State<_FolderSection>
   }
 }
 
-// ── Reorderable feed row ──
+// ── Feed drop slot ──
+//
+// A thin insertion point rendered before every row and once after the
+// last one (n feeds → n+1 slots). Highlights and grows when a compatible
+// drag hovers over it, giving the Material "this is where it'll land" cue
+// that a plain reorder-on-drop wouldn't show.
+class _FeedDropSlot extends StatelessWidget {
+  final int index;
+  final bool enabled;
+  final void Function(Feed feed, int index)? onFeedDropped;
 
-class _ReorderableFeedRow extends StatelessWidget {
-  final Feed feed;
-  final int unreadCount;
-  final VoidCallback onEdit;
-  final int dragIndex;
-
-  const _ReorderableFeedRow({
+  const _FeedDropSlot({
     super.key,
-    required this.feed,
-    required this.unreadCount,
-    required this.onEdit,
-    required this.dragIndex,
+    required this.index,
+    required this.enabled,
+    required this.onFeedDropped,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Expanded(
-          child: FeedCard(
-            feed: feed,
-            unreadCount: unreadCount,
-            onEdit: onEdit,
-          ),
+    if (!enabled) return const SizedBox(height: 4);
+    return DragTarget<Feed>(
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (details) => onFeedDropped!(details.data, index),
+      builder: (context, candidateData, rejectedData) {
+        final isHovering = candidateData.isNotEmpty;
+        final accent = Theme.of(context).colorScheme.primary;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          height: isHovering ? 28 : 4,
+          margin: isHovering
+              ? const EdgeInsets.symmetric(horizontal: 16, vertical: 2)
+              : EdgeInsets.zero,
+          decoration: isHovering
+              ? BoxDecoration(
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: accent, width: 1.5),
+                )
+              : null,
+        );
+      },
+    );
+  }
+}
+
+// ── Draggable feed row ──
+
+class _DraggableFeedRow extends StatelessWidget {
+  final Feed feed;
+  final int unreadCount;
+  final VoidCallback onEdit;
+  final VoidCallback onDragStarted;
+  final ValueChanged<DragUpdateDetails> onDragUpdate;
+  final VoidCallback onDragEnd;
+
+  const _DraggableFeedRow({
+    super.key,
+    required this.feed,
+    required this.unreadCount,
+    required this.onEdit,
+    required this.onDragStarted,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final row = FeedCard(
+      feed: feed,
+      unreadCount: unreadCount,
+      onEdit: onEdit,
+    );
+
+    return LongPressDraggable<Feed>(
+      data: feed,
+      onDragStarted: onDragStarted,
+      onDragUpdate: onDragUpdate,
+      onDragEnd: (_) => onDragEnd(),
+      onDraggableCanceled: (_, __) => onDragEnd(),
+      feedback: Material(
+        elevation: 6,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: MediaQuery.sizeOf(context).width - 32,
+          child: row,
         ),
-        ReorderableDragStartListener(
-          index: dragIndex,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(
-              Icons.drag_handle_rounded,
-              size: 20,
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.35),
-            ),
-          ),
-        ),
-      ],
+      ),
+      childWhenDragging: Opacity(opacity: 0.3, child: row),
+      child: row,
     );
   }
 }

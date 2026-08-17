@@ -6,6 +6,23 @@ class UnreadBadge extends StatelessWidget {
 
   const UnreadBadge({super.key, required this.count, this.small = false});
 
+  /// The widest this badge ever renders (the "999+" overflow label), so
+  /// callers that show/hide or update it in place — e.g. a tab bar where
+  /// every tab's count updates live — can reserve a fixed-width slot instead
+  /// of letting the badge's intrinsic width shift sibling layout.
+  static double maxWidth({bool small = false}) {
+    final fontSize = small ? 10.0 : 11.0;
+    final horizontalPadding = small ? 8.0 : 12.0; // 4+4 or 6+6, see build()
+    final painter = TextPainter(
+      text: TextSpan(
+        text: '999+',
+        style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w700),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter.width + horizontalPadding;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (count <= 0) return const SizedBox.shrink();

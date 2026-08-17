@@ -134,6 +134,35 @@ class FeedRepository {
     await batch.commit(noResult: true);
   }
 
+  /// Moves [feed] into [folderId] and renumbers positions for
+  /// [destinationOrder] — the destination folder's full feed list, in its
+  /// final desired order, with [feed] already included at its drop index.
+  /// Used for both a cross-category drag (folder_id changes) and a
+  /// same-category reorder (folder_id is unchanged, only position moves).
+  Future<void> moveToFolder(
+    Feed feed,
+    int folderId,
+    List<Feed> destinationOrder,
+  ) async {
+    final db = await _db;
+    final batch = db.batch();
+    batch.update(
+      TableNames.feeds,
+      {'folder_id': folderId},
+      where: 'id = ?',
+      whereArgs: [feed.id],
+    );
+    for (int i = 0; i < destinationOrder.length; i++) {
+      batch.update(
+        TableNames.feeds,
+        {'position': i},
+        where: 'id = ?',
+        whereArgs: [destinationOrder[i].id],
+      );
+    }
+    await batch.commit(noResult: true);
+  }
+
   Future<int> getUnreadCountForFeed(int feedId) async {
     final db = await _db;
     final result = await db.rawQuery('''

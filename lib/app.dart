@@ -11,14 +11,45 @@ import 'theme/app_theme.dart';
 import 'utils/form_factor.dart';
 import 'widgets/global_loading_indicator.dart';
 
+/// Maps the persisted mode selector to Flutter's [ThemeMode]. Kept as a
+/// free function (rather than inline) so both the real DB-backed load path
+/// and the test-only seed path use the exact same mapping.
+ThemeMode themeModeFromString(String value) => value == 'light'
+    ? ThemeMode.light
+    : value == 'dark'
+        ? ThemeMode.dark
+        : ThemeMode.system;
+
 class FlashApp extends StatefulWidget {
-  const FlashApp({super.key});
+  /// Test-only seam: seeds initial theme/newspaper state directly instead
+  /// of reading it from the database in initState. Widget tests can't
+  /// combine testWidgets() with real sqflite I/O (the real FFI Future never
+  /// resolves inside flutter_test's FakeAsync zone), so this lets tests
+  /// drive theme resolution — including the resume/live-brightness hooks —
+  /// without touching the DB at all. Unused in production.
+  @visibleForTesting
+  final ({String theme, bool newspaperMode})? initialSettingsForTesting;
+
+  /// Test-only seam: replaces the real `home` (`_AppShell`, which eagerly
+  /// builds all four main screens — each of which hits the real DB in its
+  /// own initState) with a trivial widget. The theme/lifecycle machinery
+  /// under test lives entirely in this widget's own State, above `home`,
+  /// so this isolates it from unrelated DB-backed subtrees. Unused in
+  /// production.
+  @visibleForTesting
+  final Widget? homeOverrideForTesting;
+
+  const FlashApp({
+    super.key,
+    this.initialSettingsForTesting,
+    this.homeOverrideForTesting,
+  });
 
   @override
   State<FlashApp> createState() => _FlashAppState();
 }
 
-class _FlashAppState extends State<FlashApp> {
+class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
   final _settingsRepo = SettingsRepository();
   ThemeMode _themeMode = ThemeMode.system;
   bool _newspaper = false;
@@ -30,13 +61,27 @@ class _FlashAppState extends State<FlashApp> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    WidgetsBinding.instance.addObserver(this);
+    final seed = widget.initialSettingsForTesting;
+    if (seed != null) {
+      _themeMode = themeModeFromString(seed.theme);
+      _newspaper = seed.newspaperMode;
+      // Keep the notifiers' cached value in sync with the seed — otherwise
+      // a notifier sitting on its unset default silently no-ops the next
+      // time it's set to that same value (ValueNotifier only notifies on
+      // an actual change), before any listener is attached to observe it.
+      themeModeNotifier.value = seed.theme;
+      newspaperModeNotifier.value = seed.newspaperMode;
+    } else {
+      _loadSettings();
+    }
     themeModeNotifier.addListener(_onThemeChanged);
     newspaperModeNotifier.addListener(_onNewspaperChanged);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     themeModeNotifier.removeListener(_onThemeChanged);
     themeModeNotifier.dispose();
     newspaperModeNotifier.removeListener(_onNewspaperChanged);
@@ -45,8 +90,15 @@ class _FlashAppState extends State<FlashApp> {
   }
 
   Future<void> _loadSettings() async {
+    // 'theme' is always the mode selector ('system'/'light'/'dark'), never
+    // a resolved brightness — System re-derives from the live OS brightness
+    // on every build via ThemeMode.system, so nothing here is cached stale.
     final theme = await _settingsRepo.get('theme') ?? 'system';
     final newspaper = (await _settingsRepo.get('newspaper_mode')) == 'true';
+    // Keep the notifiers' cached value in sync with what's actually loaded
+    // — see the matching comment in initState for why this matters.
+    themeModeNotifier.value = theme;
+    newspaperModeNotifier.value = newspaper;
     _applyTheme(theme);
     if (mounted) setState(() => _newspaper = newspaper);
   }
@@ -57,12 +109,40 @@ class _FlashAppState extends State<FlashApp> {
   }
 
   void _applyTheme(String value) {
-    final mode = value == 'light'
-        ? ThemeMode.light
-        : value == 'dark'
-            ? ThemeMode.dark
-            : ThemeMode.system;
-    if (mounted) setState(() => _themeMode = mode);
+    if (mounted) setState(() => _themeMode = themeModeFromString(value));
+  }
+
+  // ── Keep "System" tracking the live OS theme ────────────────────────────
+  //
+  // MaterialApp(themeMode: ThemeMode.system) already re-resolves platform
+  // brightness on every build, so in principle a rebuild alone is enough —
+  // these two hooks exist because a background app can miss/delay the
+  // platform's brightness-change notification (the reported bug: OS was
+  // Light at 9am, app opened Dark because it never re-checked after being
+  // backgrounded overnight). Forcing a rebuild here costs nothing when the
+  // brightness didn't actually change, and fixes it when it did.
+
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    _reresolveSystemTheme();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _reresolveSystemTheme();
+    }
+  }
+
+  /// Newspaper mode overrides System/Light/Dark entirely (build() forces
+  /// ThemeMode.light whenever it's on), and an explicit Light/Dark choice
+  /// is a sticky override that must never follow the OS — so there is
+  /// nothing to re-resolve in either case; only System mode needs a nudge.
+  void _reresolveSystemTheme() {
+    if (_newspaper || _themeMode != ThemeMode.system) return;
+    if (mounted) setState(() {});
   }
 
   @override
@@ -91,10 +171,11 @@ class _FlashAppState extends State<FlashApp> {
         Locale('de'),
         Locale('it'),
       ],
-      home: _AppShell(
-        themeModeNotifier: themeModeNotifier,
-        newspaperModeNotifier: newspaperModeNotifier,
-      ),
+      home: widget.homeOverrideForTesting ??
+          _AppShell(
+            themeModeNotifier: themeModeNotifier,
+            newspaperModeNotifier: newspaperModeNotifier,
+          ),
     );
   }
 }
