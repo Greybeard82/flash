@@ -8,6 +8,26 @@ import '../utils/form_factor.dart';
 import '../utils/reading_time.dart';
 import 'radial_menu.dart';
 
+/// Pure per-pixel desaturation (Rec. 709 luma weights), used to grey out the
+/// imagery of a read article.
+///
+/// Replaces `ColorFilter.mode(Colors.white, BlendMode.saturation)`, which was
+/// the cause of the dark-mode scroll flicker: `saturation` is a non-separable
+/// blend mode, so it mixes with the backdrop rather than acting on the child
+/// alone. Wrapped around a partly-transparent Opacity layer with a
+/// not-yet-decoded image inside, it resolved toward its hardcoded white source
+/// and painted a flat light block — measured at #A6A6A6 against the dark
+/// theme's #0D1B2A page while scrolling. On the light theme the same block was
+/// invisible against white, which is why it went unnoticed. A matrix filter
+/// has no backdrop term: an undecoded image stays transparent, and a decoded
+/// one becomes true greyscale.
+const ColorFilter kGreyscaleFilter = ColorFilter.matrix(<double>[
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0,      0,      0,      1, 0,
+]);
+
 class ArticleCard extends StatelessWidget {
   final Article article;
   final VoidCallback onTap;
@@ -199,9 +219,9 @@ class _FaviconWidget extends StatelessWidget {
           );
 
     if (!dimmed) return widget;
-    return ColorFiltered(
-      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.saturation),
-      child: Opacity(opacity: 0.4, child: widget),
+    return Opacity(
+      opacity: 0.4,
+      child: ColorFiltered(colorFilter: kGreyscaleFilter, child: widget),
     );
   }
 }
@@ -219,7 +239,7 @@ class _ThumbnailWidget extends StatelessWidget {
 
     // Local cache first — no existsSync(), Image.file handles missing files via errorBuilder
     if (article.thumbnailPath != null) {
-      return _thumb(Image.file(
+      return _thumb(theme, Image.file(
         File(article.thumbnailPath!),
         fit: BoxFit.cover,
         errorBuilder: (_, __, ___) => _placeholder(theme),
@@ -229,6 +249,7 @@ class _ThumbnailWidget extends StatelessWidget {
     // Remote URL
     if (article.thumbnailUrl != null && article.thumbnailUrl!.isNotEmpty) {
       return _thumb(
+        theme,
         CachedNetworkImage(
           imageUrl: article.thumbnailUrl!,
           fit: BoxFit.cover,
@@ -245,15 +266,27 @@ class _ThumbnailWidget extends StatelessWidget {
     return _placeholder(theme);
   }
 
-  Widget _thumb(Widget child) {
+  Widget _thumb(ThemeData theme, Widget child) {
+    // A solid themed base under every thumbnail, so an image that hasn't
+    // decoded yet reveals the surface colour rather than whatever happens to
+    // be behind — Image.file paints nothing at all while decoding.
     Widget clipped = ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: SizedBox(width: 72, height: 72, child: child),
+      child: SizedBox(
+        width: 72,
+        height: 72,
+        child: ColoredBox(
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: child,
+        ),
+      ),
     );
     if (!dimmed) return clipped;
-    return ColorFiltered(
-      colorFilter: const ColorFilter.mode(Colors.white, BlendMode.saturation),
-      child: Opacity(opacity: 0.4, child: clipped),
+    // Opacity alone now does the dimming, and it dims *toward the page*:
+    // darker on the dark theme, lighter on the light one.
+    return Opacity(
+      opacity: 0.4,
+      child: ColorFiltered(colorFilter: kGreyscaleFilter, child: clipped),
     );
   }
 

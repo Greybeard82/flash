@@ -1,12 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+<!-- Window background for the pre-engine frames.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+     Deliberately NOT ?android:colorBackground: that resolves against
+     LaunchTheme's parent, which follows the OS uiMode, so a user running the
+     app in Dark while the OS was in light mode got a white splash behind a
+     dark UI. MainActivity.onCreate immediately overrides this with the app's
+     own persisted colour; this is only the very first frame. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/window_background" />
 </layer-list>

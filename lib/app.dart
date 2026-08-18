@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
@@ -145,12 +147,41 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
+  /// Keeps the native window background in step with whatever this build
+  /// actually renders — including Newspaper mode, and including System mode
+  /// resolving against the live OS brightness. Without this the Activity
+  /// guesses from the OS uiMode and gets it wrong for every explicit
+  /// Light/Dark choice that disagrees with the system.
+  void _syncNativeWindowBackground(
+    ThemeData light,
+    ThemeData dark,
+    ThemeMode mode,
+  ) {
+    final resolved = switch (mode) {
+      ThemeMode.light => light,
+      ThemeMode.dark => dark,
+      ThemeMode.system =>
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.dark
+            ? dark
+            : light,
+    };
+    final colour = resolved.scaffoldBackgroundColor;
+    if (colour == _lastNativeBackground) return;
+    _lastNativeBackground = colour;
+    unawaited(setNativeWindowBackground(colour));
+  }
+
+  Color? _lastNativeBackground;
+
   @override
   Widget build(BuildContext context) {
     // Newspaper mode always renders as paper (light), ignoring the theme choice.
     final theme      = _newspaper ? flashNewspaperTheme() : flashLightTheme();
     final darkTheme  = _newspaper ? flashNewspaperTheme() : flashDarkTheme();
     final themeMode  = _newspaper ? ThemeMode.light : _themeMode;
+
+    _syncNativeWindowBackground(theme, darkTheme, themeMode);
 
     return MaterialApp(
       title: 'Flash',
