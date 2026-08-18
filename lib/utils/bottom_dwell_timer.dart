@@ -14,7 +14,7 @@ class BottomDwellTimer {
   Timer? _timer;
 
   BottomDwellTimer({
-    this.duration = const Duration(seconds: 10),
+    this.duration = const Duration(seconds: 5),
     required this.onComplete,
     Timer Function(Duration, void Function())? createTimer,
   }) : _createTimer = createTimer ?? Timer.new;

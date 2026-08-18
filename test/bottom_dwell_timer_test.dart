@@ -1,7 +1,7 @@
 // BottomDwellTimer state-machine tests.
 //
 // Plain Dart, no Flutter/DB — this is the pure timer logic behind the
-// "reached bottom of a feed, wait 10s, then mark all read" feature, kept
+// "reached bottom of a feed, wait 5s, then mark all read" feature, kept
 // isolated from FeedScreen precisely so it can be exercised with FakeAsync
 // (this codebase's widget tests can't combine testWidgets() with real
 // sqflite I/O, see feed_repository_test.dart).
@@ -17,7 +17,7 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 10));
+      async.elapse(const Duration(seconds: 5));
 
       expect(fired, 1);
     });
@@ -29,7 +29,7 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 9));
+      async.elapse(const Duration(milliseconds: 4500));
 
       expect(fired, 0);
       expect(dwell.isPending, isTrue);
@@ -42,9 +42,9 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 5));
+      async.elapse(const Duration(seconds: 2));
       dwell.updateAtBottom(false);
-      async.elapse(const Duration(seconds: 10));
+      async.elapse(const Duration(seconds: 5));
 
       expect(fired, 0);
       expect(dwell.isPending, isFalse);
@@ -57,9 +57,9 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 5));
+      async.elapse(const Duration(seconds: 2));
       dwell.cancel();
-      async.elapse(const Duration(seconds: 10));
+      async.elapse(const Duration(seconds: 5));
 
       expect(fired, 0);
       expect(dwell.isPending, isFalse);
@@ -73,11 +73,11 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 3));
+      async.elapse(const Duration(seconds: 2));
       dwell.updateAtBottom(false);
-      async.elapse(const Duration(seconds: 1));
-      dwell.updateAtBottom(true); // restarts a fresh 10s wait
-      async.elapse(const Duration(seconds: 10));
+      async.elapse(const Duration(milliseconds: 500));
+      dwell.updateAtBottom(true); // restarts a fresh 5s wait
+      async.elapse(const Duration(seconds: 5));
 
       expect(fired, 1);
     });
@@ -89,11 +89,11 @@ void main() {
       final dwell = BottomDwellTimer(onComplete: () => fired++);
 
       dwell.updateAtBottom(true);
-      async.elapse(const Duration(seconds: 4));
+      async.elapse(const Duration(seconds: 2));
       dwell.updateAtBottom(true); // still at bottom — must not restart
-      async.elapse(const Duration(seconds: 6));
+      async.elapse(const Duration(seconds: 3));
 
-      expect(fired, 1, reason: 'should fire once at the original 10s mark, '
+      expect(fired, 1, reason: 'should fire once at the original 5s mark, '
           'not be pushed back by the redundant updateAtBottom(true) call');
     });
   });
