@@ -177,13 +177,16 @@ class _FolderTab extends StatelessWidget {
                     // therefore never shifts every tab after it in the row.
                     // Reserved even at zero so the badge appearing/
                     // disappearing doesn't shift the label either.
+                    // UnreadBadge is always built here (never swapped for a
+                    // null/placeholder child) — it self-manages appearing/
+                    // disappearing via AnimatedOpacity, so this slot's
+                    // element is never destroyed and recreated by a count
+                    // update, which is what caused the badge to flicker.
                     SizedBox(
                       width: UnreadBadge.maxWidth(small: true),
-                      child: unreadCount > 0
-                          ? Center(
-                              child: UnreadBadge(count: unreadCount, small: true),
-                            )
-                          : null,
+                      child: Center(
+                        child: UnreadBadge(count: unreadCount, small: true),
+                      ),
                     ),
                   ],
                 ),

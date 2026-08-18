@@ -15,6 +15,7 @@ import '../services/loading_controller.dart';
 import '../services/refresh_service.dart';
 import '../services/session_read_tracker.dart';
 import '../services/share_service.dart';
+import '../utils/bottom_dwell_timer.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
 import '../widgets/empty_state.dart';
@@ -75,6 +76,8 @@ class _FeedScreenState extends State<FeedScreen>
 
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkReadUI = {};
+  late final BottomDwellTimer _bottomDwellTimer =
+      BottomDwellTimer(onComplete: _onBottomDwellComplete);
 
   static const _resumePolicy = ResumeRefreshPolicy();
   DateTime? _pausedAt;
@@ -111,6 +114,7 @@ class _FeedScreenState extends State<FeedScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _scrollDebounce?.cancel();
+    _bottomDwellTimer.cancel();
     _scrollController.dispose();
     _pulseCtrl.dispose();
     super.dispose();
@@ -120,6 +124,9 @@ class _FeedScreenState extends State<FeedScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
       _pausedAt = DateTime.now();
+      // Don't complete a bulk mark-as-read the user didn't witness while
+      // the app sits in the background.
+      _bottomDwellTimer.cancel();
       return;
     }
     if (state == AppLifecycleState.resumed) {
@@ -307,6 +314,7 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<void> _onTabSelectedBody(int index) async {
+    _bottomDwellTimer.cancel();
     if (_scrollController.hasClients) {
       _tabScrollPositions[_selectedTabIndex] = _scrollController.offset;
     }
@@ -339,6 +347,7 @@ class _FeedScreenState extends State<FeedScreen>
   // ── Mark as read on scroll ─────────────────────────────────────────────────
 
   void _onScroll() {
+    _updateBottomDwellTimer();
     if (!_markReadOnScroll || _articles.isEmpty) return;
     final offset = _scrollController.offset;
     double cumulative = 0.0;
@@ -386,6 +395,42 @@ class _FeedScreenState extends State<FeedScreen>
         for (final a in _articles)
           ids.contains(a.id) ? a.copyWith(isRead: true) : a,
       ];
+    });
+    unawaited(_refreshCountsFromDb());
+  }
+
+  // ── Delayed mark-all-as-read on reaching the bottom of a feed ──────────────
+
+  void _updateBottomDwellTimer() {
+    if (_articles.isEmpty || !_scrollController.hasClients) {
+      _bottomDwellTimer.cancel();
+      return;
+    }
+    _bottomDwellTimer
+        .updateAtBottom(_scrollController.position.extentAfter == 0);
+  }
+
+  Future<void> _onBottomDwellComplete() async {
+    if (!mounted || _articles.isEmpty) return;
+    final scope = _scopeForTab(_selectedTabIndex);
+
+    // Reuse the exact same per-article read path used elsewhere (tap/swipe
+    // to read) so unread-count propagation to every tab an article appears
+    // in — its own category and "All" — stays consistent with the rest of
+    // the app, rather than a bespoke bulk-update path.
+    if (_selectedTabIndex == 0) {
+      await _articleRepo.markAllAsRead();
+    } else {
+      await _articleRepo.markAllAsReadByFolder(scope);
+    }
+    SessionReadTracker.instance.addAll(
+      [for (final a in _articles) if (a.id != null) a.id!],
+      scope: scope,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _articles = [for (final a in _articles) a.copyWith(isRead: true)];
     });
     unawaited(_refreshCountsFromDb());
   }

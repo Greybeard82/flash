@@ -108,16 +108,107 @@ void main() {
       expect(find.text('7'), findsOneWidget);
     });
 
-    testWidgets('hides entirely at zero', (tester) async {
+    testWidgets('invisible (opacity 0, non-hittable) at zero, but the '
+        'container element is still mounted — not torn down', (tester) async {
       await tester.pumpWidget(_harness(const UnreadBadge(count: 0)));
       await tester.pump();
-      expect(find.byType(Container), findsNothing);
+
+      // Element persists (this is the flicker fix): only its visibility
+      // is animated to zero, so a later count update never has to destroy
+      // and recreate the badge.
+      expect(find.byType(Container), findsOneWidget);
+      final opacity = tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity));
+      expect(opacity.opacity, 0.0);
+      final ignore = tester
+          .widgetList<IgnorePointer>(find.byType(IgnorePointer))
+          .firstWhere((w) => w.ignoring);
+      expect(ignore.ignoring, isTrue);
     });
 
     testWidgets('caps at "999+" above 999', (tester) async {
       await tester.pumpWidget(_harness(const UnreadBadge(count: 5000)));
       await tester.pump();
       expect(find.text('999+'), findsOneWidget);
+    });
+  });
+
+  group('no flicker on count update', () {
+    testWidgets('container element identity persists across a count update '
+        '— only the digits change', (tester) async {
+      final containerKey = GlobalKey();
+      Widget harness(int count) => MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: KeyedSubtree(
+                  key: containerKey,
+                  child: UnreadBadge(count: count),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(harness(5));
+      await tester.pump();
+      final elementBefore = tester.element(find.byType(Container));
+
+      await tester.pumpWidget(harness(31));
+      await tester.pumpAndSettle();
+
+      final elementAfter = tester.element(find.byType(Container));
+      expect(identical(elementBefore, elementAfter), isTrue,
+          reason: 'the badge container must never be destroyed/recreated '
+              'by a count update — that churn is what reads as a flicker');
+      expect(find.text('31'), findsOneWidget);
+      expect(find.text('5'), findsNothing);
+    });
+
+    testWidgets('container decoration is unchanged across a count update',
+        (tester) async {
+      Widget harness(int count) => _harness(UnreadBadge(count: count));
+
+      await tester.pumpWidget(harness(1));
+      await tester.pump();
+      final decorationBefore =
+          (tester.widget<Container>(find.byType(Container)).decoration)
+              as BoxDecoration;
+
+      await tester.pumpWidget(harness(2));
+      await tester.pumpAndSettle();
+      final decorationAfter =
+          (tester.widget<Container>(find.byType(Container)).decoration)
+              as BoxDecoration;
+
+      expect(decorationAfter.color, decorationBefore.color);
+      expect(decorationAfter.borderRadius, decorationBefore.borderRadius);
+    });
+
+    testWidgets(
+        'transitioning from zero to non-zero animates opacity in place, '
+        'never destroys/recreates the container', (tester) async {
+      final containerKey = GlobalKey();
+      Widget harness(int count) => MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: KeyedSubtree(
+                  key: containerKey,
+                  child: UnreadBadge(count: count),
+                ),
+              ),
+            ),
+          );
+
+      await tester.pumpWidget(harness(0));
+      await tester.pump();
+      final elementBefore = tester.element(find.byType(Container));
+
+      await tester.pumpWidget(harness(3));
+      await tester.pumpAndSettle();
+
+      final elementAfter = tester.element(find.byType(Container));
+      expect(identical(elementBefore, elementAfter), isTrue);
+      final opacity =
+          tester.widget<AnimatedOpacity>(find.byType(AnimatedOpacity));
+      expect(opacity.opacity, 1.0);
     });
   });
 }

@@ -34,8 +34,6 @@ class UnreadBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (count <= 0) return const SizedBox.shrink();
-
     final color = Theme.of(context).colorScheme.primary;
     final label = count > 999 ? '999+' : count.toString();
     final fontSize = small ? 10.0 : 11.0;
@@ -43,28 +41,50 @@ class UnreadBadge extends StatelessWidget {
         ? const EdgeInsets.symmetric(horizontal: 4, vertical: 1)
         : const EdgeInsets.symmetric(horizontal: 6, vertical: 2);
 
-    return Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        label,
-        maxLines: 1,
-        softWrap: false,
-        overflow: TextOverflow.clip,
-        // Pinned to the device's base scale, matching the unscaled
-        // TextPainter used by maxWidth() below — a fixed-width box sized
-        // against unscaled metrics but rendering text that DOES follow the
-        // system font-size setting is exactly what wraps digits onto a
-        // second line (#…): the two must always agree.
-        textScaler: TextScaler.noScaling,
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onPrimary,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          height: 1.2,
+    // The container (background/shape/border) below is always mounted and
+    // never swapped for a different widget as the count changes — only its
+    // opacity is animated, and only the digits inside it crossfade
+    // (AnimatedSwitcher scoped to the Text alone). Returning a completely
+    // different widget per count (the old `if (count <= 0) return
+    // SizedBox.shrink()`) made Flutter destroy and recreate the whole badge
+    // element on every update that crossed zero or changed digit count —
+    // that element churn, not the digits themselves, was what read as a
+    // flicker of the entire container.
+    return IgnorePointer(
+      ignoring: count <= 0,
+      child: AnimatedOpacity(
+        opacity: count > 0 ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 150),
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: Text(
+              label,
+              key: ValueKey(label),
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.clip,
+              // Pinned to the device's base scale, matching the unscaled
+              // TextPainter used by maxWidth() below — a fixed-width box
+              // sized against unscaled metrics but rendering text that DOES
+              // follow the system font-size setting is exactly what wraps
+              // digits onto a second line (#…): the two must always agree.
+              textScaler: TextScaler.noScaling,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onPrimary,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                height: 1.2,
+              ),
+            ),
+          ),
         ),
       ),
     );

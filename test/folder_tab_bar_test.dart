@@ -166,7 +166,14 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('0'), findsNothing);
+      // The badge container stays mounted at count zero (see UnreadBadge:
+      // it self-manages visibility via AnimatedOpacity rather than being
+      // swapped out, so a later count update never has to destroy/recreate
+      // it) — so assert it's invisible rather than absent from the tree.
+      for (final opacity in tester.widgetList<AnimatedOpacity>(
+          find.byType(AnimatedOpacity))) {
+        expect(opacity.opacity, 0.0);
+      }
     });
   });
 
