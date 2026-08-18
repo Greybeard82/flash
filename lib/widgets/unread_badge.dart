@@ -18,8 +18,8 @@ class UnreadBadge extends StatelessWidget {
   /// is added on top as insurance against any remaining sub-pixel drift
   /// between an out-of-tree TextPainter measurement and actual layout.
   static double maxWidth({bool small = false}) {
-    final fontSize = small ? 10.0 : 11.0;
-    final horizontalPadding = small ? 8.0 : 12.0; // 4+4 or 6+6, see build()
+    final fontSize = small ? 13.0 : 11.0;
+    final horizontalPadding = small ? 12.0 : 12.0; // 6+6, see build()
     const safetyBuffer = 2.0;
     final painter = TextPainter(
       text: TextSpan(
@@ -36,9 +36,12 @@ class UnreadBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = Theme.of(context).colorScheme.primary;
     final label = count > 999 ? '999+' : count.toString();
-    final fontSize = small ? 10.0 : 11.0;
+    // Sized one point below the folder-tab label's font size (labelLarge,
+    // 14) so the count reads as clearly related to — but visually
+    // subordinate to — the category name next to it.
+    final fontSize = small ? 13.0 : 11.0;
     final padding = small
-        ? const EdgeInsets.symmetric(horizontal: 4, vertical: 1)
+        ? const EdgeInsets.symmetric(horizontal: 6, vertical: 2)
         : const EdgeInsets.symmetric(horizontal: 6, vertical: 2);
 
     // The container (background/shape/border) below is always mounted and
