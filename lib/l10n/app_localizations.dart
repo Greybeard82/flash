@@ -182,12 +182,6 @@ abstract class AppLocalizations {
   /// **'Remove feed'**
   String get removeFeed;
 
-  /// No description provided for @uncategorised.
-  ///
-  /// In en, this message translates to:
-  /// **'Uncategorised'**
-  String get uncategorised;
-
   /// No description provided for @addAFeed.
   ///
   /// In en, this message translates to:
@@ -1021,6 +1015,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Appearance is set by Newspaper mode'**
   String get newspaperModeOverridesTheme;
+
+  /// No description provided for @moveFeedFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save that change'**
+  String get moveFeedFailed;
+
+  /// No description provided for @refreshFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t refresh — check your connection'**
+  String get refreshFailed;
 }
 
 class _AppLocalizationsDelegate

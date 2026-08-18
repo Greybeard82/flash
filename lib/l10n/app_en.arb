@@ -14,7 +14,6 @@
   "renameCategory": "Rename category",
   "deleteCategory": "Delete category",
   "removeFeed": "Remove feed",
-  "uncategorised": "Uncategorised",
   "addAFeed": "Add a feed",
   "searchHint": "Search by name or paste a URL",
   "noFeedsFound": "No feeds found. Try a URL instead.",
@@ -207,5 +206,7 @@
   "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
   "newspaperMode": "Newspaper mode",
   "newspaperModeSubtitle": "Read your feed as a printed paper",
-  "newspaperModeOverridesTheme": "Appearance is set by Newspaper mode"
+  "newspaperModeOverridesTheme": "Appearance is set by Newspaper mode",
+  "moveFeedFailed": "Couldn't save that change",
+  "refreshFailed": "Couldn't refresh — check your connection"
 }

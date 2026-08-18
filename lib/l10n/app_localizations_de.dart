@@ -50,9 +50,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get removeFeed => 'Feed entfernen';
 
   @override
-  String get uncategorised => 'Ohne Kategorie';
-
-  @override
   String get addAFeed => 'Feed hinzufügen';
 
   @override
@@ -522,4 +519,11 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get newspaperModeOverridesTheme =>
       'Erscheinungsbild wird vom Zeitungsmodus bestimmt';
+
+  @override
+  String get moveFeedFailed => 'Änderung konnte nicht gespeichert werden';
+
+  @override
+  String get refreshFailed =>
+      'Aktualisierung fehlgeschlagen — bitte Verbindung prüfen';
 }

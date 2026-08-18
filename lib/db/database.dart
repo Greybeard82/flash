@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 8,
+      version: 9,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -125,6 +125,25 @@ class AppDatabase {
         "OR key LIKE 'reader_compat_%'",
       );
     }
+    if (oldVersion < 9) {
+      // The 'schema_version' settings row duplicated PRAGMA user_version and
+      // had drifted permanently to '3' (seeded at that value, and rewritten
+      // to it by the oldVersion < 5 step above). Nothing ever read it, so it
+      // was a second, always-wrong answer to "what schema is this DB on".
+      // PRAGMA user_version is now the only source of truth.
+      await db.execute("DELETE FROM settings WHERE key = 'schema_version'");
+    }
+  }
+
+  /// Runs the real [_onUpgrade] path against the open database as though it
+  /// were coming from [fromVersion]. Migrations are otherwise only reachable
+  /// via openDatabase's own version bookkeeping, which makes them impossible
+  /// to exercise in a test — and untested migrations are how the stale
+  /// `schema_version` row survived five schema bumps unnoticed.
+  @visibleForTesting
+  Future<void> migrateForTesting({required int fromVersion}) async {
+    final db = await database;
+    await _onUpgrade(db, fromVersion, 9);
   }
 
   Future<void> close() async {

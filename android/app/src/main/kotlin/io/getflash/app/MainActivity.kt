@@ -12,6 +12,16 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channel = "io.getflash.app/device"
 
+    private companion object {
+        // Must match lib/theme/app_theme.dart: `darkBg` and the light theme's
+        // scaffoldBackgroundColor. Dart owns the real palette; these exist only
+        // to paint the window before the first Flutter frame and on refocus.
+        // Change one, change the other, or the launch background flashes the
+        // wrong colour against the rendered UI.
+        const val DARK_BG = "#0D1B2A"
+        const val LIGHT_BG = "#FFFFFF"
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         flutterEngine.plugins.add(GeminiNanoPlugin())
@@ -38,7 +48,7 @@ class MainActivity : FlutterActivity() {
             val isNight = (resources.configuration.uiMode and
                     Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             window.setBackgroundDrawable(
-                ColorDrawable(if (isNight) Color.parseColor("#0D1B2A") else Color.WHITE)
+                ColorDrawable(Color.parseColor(if (isNight) DARK_BG else LIGHT_BG))
             )
         }
     }

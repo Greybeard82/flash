@@ -12,6 +12,7 @@ import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/loading_controller.dart';
+import '../services/read_state_notifier.dart';
 import '../services/refresh_service.dart';
 import '../services/session_read_tracker.dart';
 import '../services/share_service.dart';
@@ -94,6 +95,11 @@ class _FeedScreenState extends State<FeedScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Bookmarks and Search mutate read state without owning the counts —
+    // re-query them from the DB when they do, so every badge (and the
+    // launcher badge, updated inside _refreshCountsFromDb) stays truthful
+    // without this screen being rebuilt or reloaded.
+    ReadStateNotifier.instance.addListener(_onExternalReadStateChanged);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -113,6 +119,7 @@ class _FeedScreenState extends State<FeedScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     _scrollDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _scrollController.dispose();
@@ -152,10 +159,21 @@ class _FeedScreenState extends State<FeedScreen>
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
         _lastFetchAt = DateTime.now();
-      } catch (_) {}
+      } catch (_) {
+        _reportRefreshFailure();
+      }
       await _loadArticles();
       _restoreScrollOffset(offset);
     }, label: 'Refreshing');
+  }
+
+  /// A refresh threw. These were previously swallowed silently, so on a
+  /// captive-portal wifi or an expired certificate the spinner simply
+  /// finished and nothing changed, with no explanation. The banner this
+  /// screen already owns is the natural place to say so.
+  void _reportRefreshFailure() {
+    if (!mounted) return;
+    _bannerKey.currentState?.show(AppLocalizations.of(context)!.refreshFailed);
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -172,7 +190,9 @@ class _FeedScreenState extends State<FeedScreen>
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: true);
         _lastFetchAt = DateTime.now();
-      } catch (_) {}
+      } catch (_) {
+        _reportRefreshFailure();
+      }
 
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
@@ -213,6 +233,15 @@ class _FeedScreenState extends State<FeedScreen>
       _loading = false;
     });
     AppBadgePlus.updateBadge(allCount);
+  }
+
+  /// An article was read/unread from Bookmarks or Search. Only the counts
+  /// need re-querying — the visible article list is deliberately left alone,
+  /// matching the existing rule that an article read outside the current tab
+  /// is simply absent from it rather than dimmed in place (PRD §4.3).
+  void _onExternalReadStateChanged() {
+    if (!mounted || _booting) return;
+    unawaited(_refreshCountsFromDb());
   }
 
   Future<void> _refreshCountsFromDb() async {
@@ -275,6 +304,8 @@ class _FeedScreenState extends State<FeedScreen>
       try {
         await RefreshService(_settingsRepo).refreshAll();
         _lastFetchAt = DateTime.now();
+      } catch (_) {
+        _reportRefreshFailure();
       } finally {
         await _loadArticles();
         if (mounted) setState(() => _refreshing = false);
@@ -293,12 +324,15 @@ class _FeedScreenState extends State<FeedScreen>
         if (_selectedTabIndex == 0) {
           await svc.refreshAll();
         } else {
-          final feeds = await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
-          for (final f in feeds) {
-            await svc.refreshFeed(f);
-          }
+          final feeds =
+              await _feedRepo.getByFolder(_folders[_selectedTabIndex - 1].id!);
+          // One pass for the whole folder: looping refreshFeed re-read the
+          // keyword and alert tables per feed and serialised every fetch.
+          await svc.refreshFeeds(feeds);
         }
         _lastFetchAt = DateTime.now();
+      } catch (_) {
+        _reportRefreshFailure();
       } finally {
         await _loadArticles();
         if (mounted) setState(() => _refreshing = false);
@@ -543,7 +577,9 @@ class _FeedScreenState extends State<FeedScreen>
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
         _lastFetchAt = DateTime.now();
-      } catch (_) {}
+      } catch (_) {
+        _reportRefreshFailure();
+      }
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
     } else {
@@ -556,14 +592,14 @@ class _FeedScreenState extends State<FeedScreen>
       SessionReadTracker.instance.clearScope(folderId);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
-      // Refresh feeds in this folder.
+      // Refresh feeds in this folder — one pass, not one call per feed.
+      var refreshFailed = false;
       try {
-        final svc = RefreshService(_settingsRepo);
         final feeds = await _feedRepo.getByFolder(folderId);
-        for (final f in feeds) {
-          await svc.refreshFeed(f);
-        }
-      } catch (_) {}
+        await RefreshService(_settingsRepo).refreshFeeds(feeds);
+      } catch (_) {
+        refreshFailed = true;
+      }
 
       final (folderCounts, allCount) = await (
         _articleRepo.getAllFolderUnreadCounts(),
@@ -579,7 +615,11 @@ class _FeedScreenState extends State<FeedScreen>
         _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       });
       AppBadgePlus.updateBadge(allCount);
-      _bannerKey.currentState?.show(AppLocalizations.of(context)!.allMarkedRead);
+      final l10n = AppLocalizations.of(context)!;
+      // The mark-all-read itself succeeded either way; say so, but don't
+      // claim the feeds refreshed when they didn't.
+      _bannerKey.currentState
+          ?.show(refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead);
     }
   }
 

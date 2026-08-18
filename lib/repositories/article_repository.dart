@@ -169,7 +169,6 @@ class ArticleRepository {
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_read = 0 AND a.is_blocked = 0
-        AND f.folder_id IS NOT NULL
       GROUP BY f.folder_id
     ''');
     return {for (final row in rows) row['folder_id'] as int: row['cnt'] as int};
@@ -325,8 +324,4 @@ class ArticleRepository {
     );
   }
 
-  // ── Backward-compatible aliases ────────────────────────────────────────────
-
-  Future<void> markRead(int id) => markAsRead(id);
-  Future<void> markUnread(int id) => markAsUnread(id);
 }

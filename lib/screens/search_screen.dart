@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
 import '../services/loading_controller.dart';
+import '../services/read_state_notifier.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -22,11 +23,6 @@ class _SearchScreenState extends State<SearchScreen> {
   Timer? _debounce;
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
@@ -34,6 +30,10 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _onChanged(String value) {
+    // Rebuild now so the clear button tracks the field. Without this the
+    // only rebuild came from the debounced search 350ms later, so the button
+    // appeared well after the first keystroke and lingered after a clear.
+    setState(() {});
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () => _search(value));
   }
@@ -55,7 +55,8 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _open(Article article) async {
     if (!article.isRead && article.id != null) {
-      await _repo.markRead(article.id!);
+      await _repo.markAsRead(article.id!);
+      ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
           _results = _results
@@ -92,6 +93,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     icon: const Icon(Icons.clear),
                     onPressed: () {
                       _controller.clear();
+                      setState(() {});
                       _search('');
                     },
                   )

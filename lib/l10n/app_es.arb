@@ -14,7 +14,6 @@
   "renameCategory": "Renombrar categoría",
   "deleteCategory": "Eliminar categoría",
   "removeFeed": "Eliminar fuente",
-  "uncategorised": "Sin categoría",
   "addAFeed": "Añadir una fuente",
   "searchHint": "Busca por nombre o pega una URL",
   "noFeedsFound": "No se encontraron fuentes. Prueba con una URL.",
@@ -166,5 +165,7 @@
   "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
   "newspaperMode": "Modo periódico",
   "newspaperModeSubtitle": "Lee tu feed como un periódico impreso",
-  "newspaperModeOverridesTheme": "La apariencia está definida por el modo periódico"
+  "newspaperModeOverridesTheme": "La apariencia está definida por el modo periódico",
+  "moveFeedFailed": "No se pudo guardar ese cambio",
+  "refreshFailed": "No se pudo actualizar — comprueba tu conexión"
 }

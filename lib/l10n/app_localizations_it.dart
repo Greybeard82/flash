@@ -49,9 +49,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get removeFeed => 'Rimuovi feed';
 
   @override
-  String get uncategorised => 'Senza categoria';
-
-  @override
   String get addAFeed => 'Aggiungi un feed';
 
   @override
@@ -522,4 +519,11 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get newspaperModeOverridesTheme =>
       'L\'aspetto è impostato dalla modalità giornale';
+
+  @override
+  String get moveFeedFailed => 'Impossibile salvare la modifica';
+
+  @override
+  String get refreshFailed =>
+      'Aggiornamento non riuscito — controlla la connessione';
 }

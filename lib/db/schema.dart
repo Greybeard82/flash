@@ -134,7 +134,10 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'anthropic_api_key_set', 'value': 'false'},
   {'key': 'google_account_email', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
-  {'key': 'schema_version', 'value': '3'},
+  // NB: no 'schema_version' row. PRAGMA user_version — set by the `version:`
+  // passed to openDatabase in database.dart — is the single source of truth
+  // for the schema version. A settings row duplicating it drifted to a stale
+  // '3' and was removed in the v9 migration.
   {'key': 'cleanup_age_days', 'value': '7'},
   {'key': 'newspaper_mode', 'value': 'false'},
 ];

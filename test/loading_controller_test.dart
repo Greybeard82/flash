@@ -33,28 +33,28 @@ void main() {
 
   group('reference counting', () {
     test('begin makes it busy, matching end makes it idle', () {
-      c.begin();
+      final t = c.begin();
       expect(c.isBusy, isTrue);
       expect(c.activeCount, 1);
-      c.end();
+      c.end(t);
       expect(c.isBusy, isFalse);
       expect(c.activeCount, 0);
     });
 
     test('two concurrent operations require two ends', () {
-      c.begin();
-      c.begin();
+      final first = c.begin();
+      final second = c.begin();
       expect(c.activeCount, 2);
-      c.end();
+      c.end(second);
       expect(c.isBusy, isTrue,
           reason: 'one operation is still in flight');
-      c.end();
+      c.end(first);
       expect(c.isBusy, isFalse);
     });
 
     test('unbalanced end clamps at zero', () {
-      c.end();
-      c.end();
+      c.end(0);
+      c.end(1);
       expect(c.activeCount, 0);
       expect(c.isBusy, isFalse);
       c.begin();
@@ -72,8 +72,8 @@ void main() {
     });
 
     test('clears when everything finishes', () {
-      c.begin('Refreshing feeds');
-      c.end();
+      final t = c.begin('Refreshing feeds');
+      c.end(t);
       expect(c.label, isNull);
     });
   });
@@ -119,8 +119,8 @@ void main() {
       void listener() => notifications++;
       c.addListener(listener);
 
-      c.begin();
-      c.end();
+      final t = c.begin();
+      c.end(t);
 
       expect(notifications, greaterThanOrEqualTo(2));
       c.removeListener(listener);
@@ -131,7 +131,7 @@ void main() {
       void listener() => notifications++;
       c.addListener(listener);
 
-      c.end();
+      c.end(0);
 
       expect(notifications, 0);
       c.removeListener(listener);

@@ -14,7 +14,6 @@
   "renameCategory": "Kategorie umbenennen",
   "deleteCategory": "Kategorie löschen",
   "removeFeed": "Feed entfernen",
-  "uncategorised": "Ohne Kategorie",
   "addAFeed": "Feed hinzufügen",
   "searchHint": "Nach Name suchen oder URL einfügen",
   "noFeedsFound": "Keine Feeds gefunden. Versuche eine URL.",
@@ -166,5 +165,7 @@
   "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
   "newspaperMode": "Zeitungsmodus",
   "newspaperModeSubtitle": "Feed als gedruckte Zeitung lesen",
-  "newspaperModeOverridesTheme": "Erscheinungsbild wird vom Zeitungsmodus bestimmt"
+  "newspaperModeOverridesTheme": "Erscheinungsbild wird vom Zeitungsmodus bestimmt",
+  "moveFeedFailed": "Änderung konnte nicht gespeichert werden",
+  "refreshFailed": "Aktualisierung fehlgeschlagen — bitte Verbindung prüfen"
 }

@@ -171,9 +171,18 @@ void main() {
         reason: 'The user must actually be able to reach the bottom.');
   });
 
+  // NB: this used to assert that a maximum-budget summary fits on one
+  // Pixel-class page with no scrolling, per an earlier PRD sentence. It was
+  // red on main: a compliant summary (one focal line + five bullets, ~120
+  // words) lays out to ~1281px against a ~914px logical page at the body
+  // density this sheet uses. The PRD has been amended to say scrolling is
+  // the normal case — readability of the summary text was chosen over
+  // fitting it above the fold — so what actually needs guarding is that the
+  // whole summary stays *reachable*, which is asserted here and by the
+  // 'oversized summary becomes scrollable' test above.
   testWidgets(
-      'a maximum-budget summary fits on one Pixel-class page '
-      'with no overflow and no scrolling', (tester) async {
+      'a maximum-budget summary lays out without overflow and stays fully '
+      'reachable by scrolling', (tester) async {
     // Pixel-class portrait: 1080x2400 physical @ 2.625 dpr = ~412x914 logical.
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 2.625;
@@ -186,15 +195,24 @@ void main() {
     await _fromNative(tester, 'summaryDone', null);
     await tester.pump();
 
-    // No RenderFlex overflow or any other layout exception.
+    // No RenderFlex overflow or any other layout exception — it scrolls
+    // rather than clipping.
     expect(tester.takeException(), isNull);
 
-    // The last interactive element (copy button, below the summary) must be
-    // fully on-screen — i.e. the whole summary fits without scrolling.
+    final scrollable = find.byType(Scrollable);
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0),
+        reason: 'a full-budget summary is expected to exceed one page');
+
+    // The copy button at the very bottom must be reachable.
+    await tester.drag(scrollable, const Offset(0, -1200));
+    await tester.pumpAndSettle();
+
     final copyButton = find.byIcon(Icons.copy_rounded);
     expect(copyButton, findsOneWidget);
     const logicalHeight = 2400 / 2.625;
-    expect(tester.getBottomRight(copyButton).dy, lessThan(logicalHeight));
+    expect(tester.getBottomRight(copyButton).dy, lessThan(logicalHeight),
+        reason: 'after scrolling to the end, the last control is on-screen');
   });
 
   testWidgets('passes title and content to the native summarize call',

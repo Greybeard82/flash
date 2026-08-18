@@ -49,9 +49,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get removeFeed => 'Eliminar fuente';
 
   @override
-  String get uncategorised => 'Sin categoría';
-
-  @override
   String get addAFeed => 'Añadir una fuente';
 
   @override
@@ -522,4 +519,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get newspaperModeOverridesTheme =>
       'La apariencia está definida por el modo periódico';
+
+  @override
+  String get moveFeedFailed => 'No se pudo guardar ese cambio';
+
+  @override
+  String get refreshFailed => 'No se pudo actualizar — comprueba tu conexión';
 }

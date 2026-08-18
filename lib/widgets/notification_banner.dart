@@ -55,7 +55,16 @@ class NotificationBannerState extends State<NotificationBanner>
   void dismiss() {
     _timer?.cancel();
     _ctrl.reverse().then((_) {
-      if (mounted) setState(() => _visible = false);
+      if (!mounted) return;
+      // Clearing _message as well as _visible is what actually collapses the
+      // banner. Leaving it set kept build()'s early-out unreachable, so the
+      // Container stayed laid out at full height — merely slid off-screen by
+      // the SlideTransition — and left a permanent blank strip above the
+      // article list in the Column that hosts this widget.
+      setState(() {
+        _visible = false;
+        _message = null;
+      });
     });
   }
 

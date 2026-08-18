@@ -136,4 +136,11 @@ class RefreshService {
   /// Refresh a single feed without running cleanup.
   Future<int> refreshFeed(Feed feed) =>
       _doRefresh(runCleanup: false, feeds: [feed]);
+
+  /// Refresh several feeds in one pass. Prefer this over looping
+  /// [refreshFeed]: each call re-reads keyword blocks and alerts from the DB,
+  /// so a loop repeats those queries per feed and serialises the network
+  /// fetches, while one call queries once and fans out via Future.wait.
+  Future<int> refreshFeeds(List<Feed> feeds) =>
+      _doRefresh(runCleanup: false, feeds: feeds);
 }

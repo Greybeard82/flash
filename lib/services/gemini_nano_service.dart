@@ -51,16 +51,40 @@ class GeminiNanoService {
   StreamController<String>? _summaryController;
   String _summaryBuffer = '';
 
+  /// Monotonic id for the current generation. Dismissing the sheet and
+  /// opening another article cannot stop the native coroutine already in
+  /// flight (GeminiNanoPlugin runs it under a 20s withTimeout), so every
+  /// callback carries the id of the request that produced it and anything
+  /// from a superseded request is dropped. Without this, a stale generation's
+  /// chunks were appended to the new article's buffer and its summaryDone
+  /// closed the new article's stream.
+  int _requestId = 0;
+
+  /// Native sends `{'requestId': int, 'value': ...}`.
   Future<void> _handleNativeCall(MethodCall call) async {
+    final args = call.arguments;
+    final int? id;
+    final Object? value;
+    if (args is Map) {
+      id = args['requestId'] as int?;
+      value = args['value'];
+    } else {
+      id = null;
+      value = args;
+    }
+
+    // Drop anything that isn't from the request currently on screen.
+    if (id != null && id != _requestId) return;
+
     switch (call.method) {
       case 'summaryChunk':
-        _summaryBuffer += (call.arguments as String? ?? '');
+        _summaryBuffer += (value as String? ?? '');
         _summaryController?.add(_summaryBuffer);
       case 'summaryDone':
         await _summaryController?.close();
         _summaryController = null;
       case 'summaryError':
-        _summaryController?.addError(call.arguments as String? ?? 'Unknown error');
+        _summaryController?.addError(value as String? ?? 'Unknown error');
         await _summaryController?.close();
         _summaryController = null;
     }
@@ -72,23 +96,28 @@ class GeminiNanoService {
   Future<Stream<String>?> summarizeStream(String title, String content, {String locale = 'en'}) async {
     if (!await isAvailable) return null;
 
-    // Cancel any in-progress summary
+    // Retire any in-progress summary: bumping the id makes every remaining
+    // callback from it a no-op, so it can't write into what follows.
+    final id = ++_requestId;
     await _summaryController?.close();
     _summaryBuffer = '';
-    _summaryController = StreamController<String>();
+    final controller = StreamController<String>();
+    _summaryController = controller;
 
     // Fire-and-forget — result is null (acknowledged immediately by native)
     unawaited(_channel.invokeMethod<void>('summarize', {
+      'requestId': id,
       'title': title,
       'content': content,
       'locale': locale,
     }).catchError((_) {
-      _summaryController?.addError('Failed to start summarization');
-      _summaryController?.close();
-      _summaryController = null;
+      if (id != _requestId) return;
+      controller.addError('Failed to start summarization');
+      controller.close();
+      if (identical(_summaryController, controller)) _summaryController = null;
     }));
 
-    return _summaryController!.stream;
+    return controller.stream;
   }
 
 }

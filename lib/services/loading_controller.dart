@@ -7,31 +7,42 @@ class LoadingController extends ChangeNotifier {
   LoadingController._();
 
   int _activeCount = 0;
-  final List<String?> _labels = [];
+
+  /// Labels keyed by the token [begin] handed out, so [end] retires the label
+  /// belonging to *its own* operation. Popping the last label instead — as
+  /// this did before — showed the wrong caption whenever two operations
+  /// overlapped and the shorter one finished first.
+  final Map<int, String?> _labels = {};
+  int _nextToken = 0;
 
   bool get isBusy => _activeCount > 0;
   int get activeCount => _activeCount;
-  String? get label => _labels.isEmpty ? null : _labels.last;
 
-  void begin([String? label]) {
+  /// The most recently started operation that is still running.
+  String? get label => _labels.isEmpty ? null : _labels[_labels.keys.last];
+
+  /// Returns a token that must be handed back to [end].
+  int begin([String? label]) {
     _activeCount++;
-    _labels.add(label);
+    final token = _nextToken++;
+    _labels[token] = label;
     notifyListeners();
+    return token;
   }
 
-  void end() {
+  void end(int token) {
     if (_activeCount == 0) return;
     _activeCount--;
-    if (_labels.isNotEmpty) _labels.removeLast();
+    _labels.remove(token);
     notifyListeners();
   }
 
   Future<T> run<T>(Future<T> Function() action, {String? label}) async {
-    begin(label);
+    final token = begin(label);
     try {
       return await action();
     } finally {
-      end();
+      end(token);
     }
   }
 

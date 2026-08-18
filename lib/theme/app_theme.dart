@@ -9,6 +9,8 @@ const Color lightAccent = Color(0xFFB8960A);
 const Color lightAccentPressed = Color(0xFFCC5500);
 
 // Dark mode backgrounds
+// NB: darkBg is mirrored in android/.../MainActivity.kt (DARK_BG) to paint the
+// native window before the first Flutter frame. Keep the two in sync.
 const Color darkBg = Color(0xFF0D1B2A);
 const Color darkSurface = Color(0xFF162338);
 

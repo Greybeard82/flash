@@ -9,6 +9,7 @@ import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -25,6 +26,12 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        // Stop in-flight generation *before* closing the model. A coroutine
+        // launched by summarize() runs under a 20s withTimeout and would
+        // otherwise keep collecting from a model closed out from under it,
+        // then post invokeMethod calls to a channel whose handler is gone
+        // and whose engine is being torn down.
+        scope.cancel()
         model?.close()
         model = null
     }
@@ -33,10 +40,11 @@ class GeminiNanoPlugin : FlutterPlugin, MethodChannel.MethodCallHandler {
         when (call.method) {
             "isAvailable"   -> checkAvailability(result)
             "summarize"     -> {
-                val title   = call.argument<String>("title") ?: ""
-                val content = call.argument<String>("content") ?: ""
-                val locale  = call.argument<String>("locale") ?: "en"
-                summarize(title, content, locale, result)
+                val title     = call.argument<String>("title") ?: ""
+                val content   = call.argument<String>("content") ?: ""
+                val locale    = call.argument<String>("locale") ?: "en"
+                val requestId = call.argument<Int>("requestId") ?: 0
+                summarize(requestId, title, content, locale, result)
             }
             else -> result.notImplemented()
         }
@@ -127,7 +135,17 @@ Summary:
 
     // Streams chunks back to Flutter via reverse invokeMethod calls so text
     // appears as it generates rather than waiting for the full response.
-    private fun summarize(title: String, body: String, locale: String, result: MethodChannel.Result) {
+    //
+    // Every callback carries the requestId it belongs to. Dismissing the sheet
+    // can't stop this coroutine, so Flutter uses the id to discard anything
+    // arriving from a generation the user has already moved on from.
+    private fun summarize(
+        requestId: Int,
+        title: String,
+        body: String,
+        locale: String,
+        result: MethodChannel.Result,
+    ) {
         // Acknowledge immediately so Flutter's await returns
         result.success(null)
         scope.launch {
@@ -143,14 +161,20 @@ Summary:
                     getModel().generateContentStream(prompt).collect { response ->
                         val chunk = response.candidates.firstOrNull()?.text ?: ""
                         if (chunk.isNotEmpty()) {
-                            mainThread { channel.invokeMethod("summaryChunk", chunk) }
+                            reply("summaryChunk", requestId, chunk)
                         }
                     }
                 }
-                mainThread { channel.invokeMethod("summaryDone", null) }
+                reply("summaryDone", requestId, null)
             } catch (e: Exception) {
-                mainThread { channel.invokeMethod("summaryError", e.message ?: "Unknown error") }
+                reply("summaryError", requestId, e.message ?: "Unknown error")
             }
+        }
+    }
+
+    private fun reply(method: String, requestId: Int, value: Any?) {
+        mainThread {
+            channel.invokeMethod(method, mapOf("requestId" to requestId, "value" to value))
         }
     }
 

@@ -306,7 +306,7 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 **UI:**
 - Bottom sheet sized to its content (not forced full-screen, capped at 90% of screen height) slides up immediately, showing an animated loading indicator with a status line: "Reading the article…" during extraction, then "Writing the summary…" once generation starts
-- Content scrolls only when it exceeds the sheet — `ClampingScrollPhysics`, not a fixed one-page assumption; a compliant summary still fits on one page at default text scale
+- Content scrolls only when it exceeds the sheet — `ClampingScrollPhysics`, not a fixed one-page assumption. A full-budget summary (one focal line plus five bullets) does exceed one page at the body density used here (16px / 1.8 line height), so scrolling is the normal case rather than the exception; readability of the text was chosen over fitting it above the fold
 - All text is selectable
 - Footer: disclaimer + "Copy" button (+ the teaser-only note when applicable)
 - Dismiss: tap outside or swipe down

@@ -49,9 +49,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get removeFeed => 'Supprimer le flux';
 
   @override
-  String get uncategorised => 'Non classé';
-
-  @override
   String get addAFeed => 'Ajouter un flux';
 
   @override
@@ -523,4 +520,11 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get newspaperModeOverridesTheme =>
       'L\'apparence est définie par le mode journal';
+
+  @override
+  String get moveFeedFailed => 'Impossible d\'enregistrer cette modification';
+
+  @override
+  String get refreshFailed =>
+      'Échec de l\'actualisation — vérifiez votre connexion';
 }

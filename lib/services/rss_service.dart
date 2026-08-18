@@ -235,7 +235,33 @@ class RssService {
     final hour = int.tryParse(timeParts[0]) ?? 0;
     final minute = timeParts.length > 1 ? int.tryParse(timeParts[1]) ?? 0 : 0;
     final second = timeParts.length > 2 ? int.tryParse(timeParts[2]) ?? 0 : 0;
-    return DateTime.utc(year, month, day, hour, minute, second);
+    final utc = DateTime.utc(year, month, day, hour, minute, second);
+    // The wall-clock fields above are in the feed's own zone; subtracting the
+    // stated offset converts them to real UTC. Dropping the offset (as this
+    // did before) skewed every non-UTC feed by up to ±14h, which reordered
+    // articles against feeds in other zones and shifted their cleanup age.
+    final offset = idx + 4 < parts.length ? _rfc822Offset(parts[idx + 4]) : null;
+    return offset == null ? utc : utc.subtract(offset);
+  }
+
+  /// Parses an RFC-822 zone token: a numeric offset (`+0200`, `-0530`) or one
+  /// of the named zones the spec allows. Returns null when the token is
+  /// absent or unrecognised, in which case the timestamp is treated as UTC.
+  static Duration? _rfc822Offset(String token) {
+    final numeric = RegExp(r'^([+-])(\d{2})(\d{2})$').firstMatch(token);
+    if (numeric != null) {
+      final sign = numeric.group(1) == '-' ? -1 : 1;
+      final hours = int.parse(numeric.group(2)!);
+      final minutes = int.parse(numeric.group(3)!);
+      return Duration(hours: sign * hours, minutes: sign * minutes);
+    }
+    const named = {
+      'UT': 0, 'UTC': 0, 'GMT': 0, 'Z': 0,
+      'EST': -5, 'EDT': -4, 'CST': -6, 'CDT': -5,
+      'MST': -7, 'MDT': -6, 'PST': -8, 'PDT': -7,
+    };
+    final hours = named[token.toUpperCase()];
+    return hours == null ? null : Duration(hours: hours);
   }
 
   // ── Feed validation ────────────────────────────────────────────────────────

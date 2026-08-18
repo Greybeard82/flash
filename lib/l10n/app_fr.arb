@@ -14,7 +14,6 @@
   "renameCategory": "Renommer la catégorie",
   "deleteCategory": "Supprimer la catégorie",
   "removeFeed": "Supprimer le flux",
-  "uncategorised": "Non classé",
   "addAFeed": "Ajouter un flux",
   "searchHint": "Rechercher par nom ou coller une URL",
   "noFeedsFound": "Aucun flux trouvé. Essayez une URL.",
@@ -166,5 +165,7 @@
   "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
   "newspaperMode": "Mode journal",
   "newspaperModeSubtitle": "Lisez votre fil comme un journal imprimé",
-  "newspaperModeOverridesTheme": "L'apparence est définie par le mode journal"
+  "newspaperModeOverridesTheme": "L'apparence est définie par le mode journal",
+  "moveFeedFailed": "Impossible d'enregistrer cette modification",
+  "refreshFailed": "Échec de l'actualisation — vérifiez votre connexion"
 }

@@ -14,7 +14,6 @@
   "renameCategory": "Rinomina categoria",
   "deleteCategory": "Elimina categoria",
   "removeFeed": "Rimuovi feed",
-  "uncategorised": "Senza categoria",
   "addAFeed": "Aggiungi un feed",
   "searchHint": "Cerca per nome o incolla un URL",
   "noFeedsFound": "Nessun feed trovato. Prova con un URL.",
@@ -166,5 +165,7 @@
   "@timeYearsAgo": { "placeholders": { "n": { "type": "int" } } },
   "newspaperMode": "Modalità giornale",
   "newspaperModeSubtitle": "Leggi il feed come un giornale stampato",
-  "newspaperModeOverridesTheme": "L'aspetto è impostato dalla modalità giornale"
+  "newspaperModeOverridesTheme": "L'aspetto è impostato dalla modalità giornale",
+  "moveFeedFailed": "Impossibile salvare la modifica",
+  "refreshFailed": "Aggiornamento non riuscito — controlla la connessione"
 }

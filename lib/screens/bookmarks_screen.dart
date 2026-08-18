@@ -5,6 +5,8 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/article_repository.dart';
 import '../services/loading_controller.dart';
+import '../services/read_state_notifier.dart';
+import '../services/session_read_tracker.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 
@@ -42,7 +44,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _openArticle(Article article) async {
     if (article.id != null) {
-      await _articleRepo.markRead(article.id!);
+      await _articleRepo.markAsRead(article.id!);
+      ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
           _articles = _articles
@@ -70,7 +73,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _markRead(Article article) async {
     if (article.id == null) return;
-    await _articleRepo.markRead(article.id!);
+    await _articleRepo.markAsRead(article.id!);
+    ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();
     if (mounted) {
       setState(() {
@@ -83,7 +87,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _markUnread(Article article) async {
     if (article.id == null) return;
-    await _articleRepo.markUnread(article.id!);
+    await _articleRepo.markAsUnread(article.id!);
+    // Clear any session-read entry so the article isn't simultaneously
+    // counted unread by the badge and treated as session-read by the list
+    // query — the same thing FeedScreen._markUnread does.
+    SessionReadTracker.instance.removeEverywhere(article.id!);
+    ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();
     if (mounted) {
       setState(() {

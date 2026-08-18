@@ -31,7 +31,6 @@ class _FeedsScreenState extends State<FeedsScreen> {
 
   List<Folder> _folders = [];
   Map<int, List<Feed>> _feedsByFolder = {};
-  List<Feed> _orphanFeeds = [];
   Map<int, int> _unreadCounts = {};
   bool _loading = true;
 
@@ -52,6 +51,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
   }
 
   Future<void> _load() async {
+    // _load is the completion callback for the add-feed, edit-feed and folder
+    // sheets, each of which awaits network and DB work first — so this can
+    // fire after the user has already left the tab.
+    if (!mounted) return;
     setState(() => _loading = true);
     final feeds = await _feedRepo.getAll();
     final folders = await _folderRepo.getAll();
@@ -60,18 +63,15 @@ class _FeedsScreenState extends State<FeedsScreen> {
       setState(() {
         _folders = folders;
         _unreadCounts = counts;
-        final folderIds = folders.map((f) => f.id).toSet();
+        // Every feed belongs to a real folder: feeds.folder_id is
+        // NOT NULL REFERENCES folders(id) ON DELETE CASCADE, with foreign
+        // keys enabled in AppDatabase._initDatabase, so a feed can never
+        // outlive its folder and there is no uncategorised bucket to build.
         final byFolder = <int, List<Feed>>{};
-        final orphans = <Feed>[];
         for (final feed in feeds) {
-          if (folderIds.contains(feed.folderId)) {
-            byFolder.putIfAbsent(feed.folderId, () => []).add(feed);
-          } else {
-            orphans.add(feed);
-          }
+          byFolder.putIfAbsent(feed.folderId, () => []).add(feed);
         }
         _feedsByFolder = byFolder;
-        _orphanFeeds = orphans;
         _loading = false;
       });
     }
@@ -112,10 +112,29 @@ class _FeedsScreenState extends State<FeedsScreen> {
       _feedsByFolder[targetFolderId] = destList;
     });
 
-    LoadingController.instance.run(
-      () => _feedRepo.moveToFolder(moved, targetFolderId, destList),
-      label: 'Moving feed',
-    );
+    // The UI has already committed the move optimistically. If the write
+    // fails, reload from the DB so the list can't keep showing an
+    // arrangement that was never persisted.
+    unawaited(_persistMove(moved, targetFolderId, destList));
+  }
+
+  Future<void> _persistMove(
+    Feed feed,
+    int targetFolderId,
+    List<Feed> destList,
+  ) async {
+    try {
+      await LoadingController.instance.run(
+        () => _feedRepo.moveToFolder(feed, targetFolderId, destList),
+        label: 'Moving feed',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.moveFeedFailed)),
+      );
+      await _load();
+    }
   }
 
   void _onFeedDragStarted() => HapticFeedback.mediumImpact();
@@ -182,9 +201,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _feedsByFolder.values.every((f) => f.isEmpty) &&
-                  _orphanFeeds.isEmpty &&
-                  _folders.isEmpty
+          : _feedsByFolder.values.every((f) => f.isEmpty) && _folders.isEmpty
               ? _emptyFeedsState()
               : RefreshIndicator(onRefresh: _load, child: _buildList()),
     );
@@ -197,23 +214,6 @@ class _FeedsScreenState extends State<FeedsScreen> {
       padding: const EdgeInsets.only(bottom: 80),
       buildDefaultDragHandles: false,
       onReorder: _onReorderFolders,
-      footer: _orphanFeeds.isNotEmpty
-          ? _FolderSection(
-              key: const ValueKey('orphan'),
-              folder: null,
-              feeds: _orphanFeeds,
-              unreadCounts: _unreadCounts,
-              onRenameFolder: null,
-              onDeleteFolder: null,
-              onEditFeed: (feed) => _showEditFeedSheet(feed),
-              onDeleteFeed: (feed) => _confirmDeleteFeed(feed),
-              dragIndex: null,
-              onFeedDragStarted: _onFeedDragStarted,
-              onFeedDragUpdate: _onFeedDragUpdate,
-              onFeedDragEnd: _onFeedDragEnd,
-              onFeedDropped: null,
-            )
-          : null,
       children: [
         for (int i = 0; i < _folders.length; i++)
           _FolderSection(
@@ -242,7 +242,20 @@ class _FeedsScreenState extends State<FeedsScreen> {
       final folder = _folders.removeAt(oldIndex);
       _folders.insert(newIndex, folder);
     });
-    LoadingController.instance.run(() => _folderRepo.reorder(_folders), label: 'Reordering');
+    unawaited(_persistFolderOrder());
+  }
+
+  Future<void> _persistFolderOrder() async {
+    try {
+      await LoadingController.instance
+          .run(() => _folderRepo.reorder(_folders), label: 'Reordering');
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.moveFeedFailed)),
+      );
+      await _load();
+    }
   }
 
   Widget _emptyFeedsState() {
@@ -395,14 +408,14 @@ class _FeedsScreenState extends State<FeedsScreen> {
 // ── Folder section ──
 
 class _FolderSection extends StatefulWidget {
-  final Folder? folder;
+  final Folder folder;
   final List<Feed> feeds;
   final Map<int, int> unreadCounts;
-  final VoidCallback? onRenameFolder;
-  final VoidCallback? onDeleteFolder;
+  final VoidCallback onRenameFolder;
+  final VoidCallback onDeleteFolder;
   final ValueChanged<Feed> onEditFeed;
   final ValueChanged<Feed> onDeleteFeed;
-  final int? dragIndex;
+  final int dragIndex;
 
   // Cross-category feed drag plumbing, lifted to FeedsScreen so a drag
   // started in one section's row is accepted by a DragTarget in any other
@@ -411,11 +424,9 @@ class _FolderSection extends StatefulWidget {
   final VoidCallback onFeedDragStarted;
   final ValueChanged<DragUpdateDetails> onFeedDragUpdate;
   final VoidCallback onFeedDragEnd;
-  /// Called with (droppedFeed, targetIndex) when a feed is dropped into
-  /// this folder. Null for the uncategorised section — feeds always belong
-  /// to a real folder in the DB (folder_id is NOT NULL), so it isn't a
-  /// valid move target.
-  final void Function(Feed feed, int targetIndex)? onFeedDropped;
+
+  /// Called with (droppedFeed, targetIndex) when a feed is dropped here.
+  final void Function(Feed feed, int targetIndex) onFeedDropped;
 
   const _FolderSection({
     super.key,
@@ -469,11 +480,8 @@ class _FolderSectionState extends State<_FolderSection>
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final name = widget.folder?.name ?? l10n.uncategorised;
-    final canReorderFolders = widget.dragIndex != null;
-    final canAcceptDrops = widget.onFeedDropped != null;
+    final name = widget.folder.name;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -483,23 +491,21 @@ class _FolderSectionState extends State<_FolderSection>
         // header (e.g. while this category is collapsed, so no row/slot is
         // visible) appends it to the end of this folder's list.
         DragTarget<Feed>(
-          onWillAcceptWithDetails: (_) => canAcceptDrops,
+          onWillAcceptWithDetails: (_) => true,
           onAcceptWithDetails: (details) =>
-              widget.onFeedDropped!(details.data, widget.feeds.length),
+              widget.onFeedDropped(details.data, widget.feeds.length),
           builder: (context, candidateData, rejectedData) {
             final isHovering = candidateData.isNotEmpty;
             return InkWell(
               onTap: _toggle,
-              onLongPress: widget.folder != null
-                  ? () => showModalBottomSheet(
-                        context: context,
-                        builder: (ctx) => _FolderActionsSheet(
-                          folder: widget.folder!,
-                          onRename: widget.onRenameFolder,
-                          onDelete: widget.onDeleteFolder,
-                        ),
-                      )
-                  : null,
+              onLongPress: () => showModalBottomSheet(
+                context: context,
+                builder: (ctx) => _FolderActionsSheet(
+                  folder: widget.folder,
+                  onRename: widget.onRenameFolder,
+                  onDelete: widget.onDeleteFolder,
+                ),
+              ),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 color: isHovering
@@ -528,16 +534,14 @@ class _FolderSectionState extends State<_FolderSection>
                           color: theme.colorScheme.primary
                               .withValues(alpha: 0.7)),
                     ),
-                    if (canReorderFolders) ...[
-                      const SizedBox(width: 4),
-                      ReorderableDragStartListener(
-                        index: widget.dragIndex!,
-                        child: Icon(Icons.drag_handle_rounded,
-                            size: 20,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.35)),
-                      ),
-                    ],
+                    const SizedBox(width: 4),
+                    ReorderableDragStartListener(
+                      index: widget.dragIndex,
+                      child: Icon(Icons.drag_handle_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.35)),
+                    ),
                   ],
                 ),
               ),
@@ -552,9 +556,8 @@ class _FolderSectionState extends State<_FolderSection>
               ? Column(
                   children: [
                     _FeedDropSlot(
-                      key: ValueKey('slot_${widget.folder?.id}_0'),
+                      key: ValueKey('slot_${widget.folder.id}_0'),
                       index: 0,
-                      enabled: canAcceptDrops,
                       onFeedDropped: widget.onFeedDropped,
                     ),
                     for (int i = 0; i < widget.feeds.length; i++) ...[
@@ -569,9 +572,8 @@ class _FolderSectionState extends State<_FolderSection>
                         onDragEnd: widget.onFeedDragEnd,
                       ),
                       _FeedDropSlot(
-                        key: ValueKey('slot_${widget.folder?.id}_${i + 1}'),
+                        key: ValueKey('slot_${widget.folder.id}_${i + 1}'),
                         index: i + 1,
-                        enabled: canAcceptDrops,
                         onFeedDropped: widget.onFeedDropped,
                       ),
                     ],
@@ -604,22 +606,19 @@ class _FolderSectionState extends State<_FolderSection>
 // that a plain reorder-on-drop wouldn't show.
 class _FeedDropSlot extends StatelessWidget {
   final int index;
-  final bool enabled;
-  final void Function(Feed feed, int index)? onFeedDropped;
+  final void Function(Feed feed, int index) onFeedDropped;
 
   const _FeedDropSlot({
     super.key,
     required this.index,
-    required this.enabled,
     required this.onFeedDropped,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled) return const SizedBox(height: 4);
     return DragTarget<Feed>(
       onWillAcceptWithDetails: (_) => true,
-      onAcceptWithDetails: (details) => onFeedDropped!(details.data, index),
+      onAcceptWithDetails: (details) => onFeedDropped(details.data, index),
       builder: (context, candidateData, rejectedData) {
         final isHovering = candidateData.isNotEmpty;
         final accent = Theme.of(context).colorScheme.primary;
@@ -724,13 +723,9 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   bool _searching = false;
   bool _adding = false;
   String _error = '';
-  Folder? _selectedFolder;
 
-  @override
-  void initState() {
-    super.initState();
-    // _selectedFolder intentionally starts null — user must pick a category
-  }
+  /// Intentionally starts null — the user must pick a category.
+  Folder? _selectedFolder;
 
   @override
   void dispose() {
@@ -779,6 +774,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       // Check duplicate
       final existing = await widget.feedRepo.getByUrl(url);
       if (existing != null) {
+        if (!mounted) return;
         setState(() {
           _error = l10n.feedAlreadyAdded;
           _searching = false;
@@ -791,6 +787,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           RssService(widget.articleRepo, widget.feedRepo);
       final info = await rssService.validateFeedUrl(url);
       if (info == null) {
+        if (!mounted) return;
         setState(() {
           _error = l10n.couldNotParseFeed;
           _searching = false;
