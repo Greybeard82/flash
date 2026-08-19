@@ -1,46 +1,40 @@
-/// Scope key for the All tab. Negative so it can never collide with a
-/// folder_id, which is a positive autoincrement value.
-const int kAllScope = -1;
-
-/// In-memory, scope-keyed sets of article IDs read during the current app
-/// session. Empty at process start; never persisted to disk.
+/// In-memory set of article IDs read during the current app session. Empty at
+/// process start; never persisted to disk.
 ///
-/// An article read in one scope (tab) is visible only in that scope for the
-/// rest of the session — not in any other.
+/// An article read anywhere — in any tab — stays visible, dimmed in place, in
+/// every tab for the rest of the session. This matches Palabre, the app Flash
+/// exists to replace.
+///
+/// This used to be keyed by scope (`kAllScope` for the All tab, the folder id
+/// for a category tab), so an article read in one tab was dimmed there and
+/// absent entirely from every other. That made articles silently vanish from
+/// lists the user hadn't touched. With visibility global there is no scoping
+/// concept left, hence a flat set.
 class SessionReadTracker {
   SessionReadTracker._();
   static final SessionReadTracker instance = SessionReadTracker._();
 
-  final Map<int, Set<int>> _byScope = {};
+  final Set<int> _ids = {};
 
-  Set<int> idsForScope(int scope) =>
-      Set.unmodifiable(_byScope[scope] ?? const <int>{});
+  /// Every article read this session, in any tab.
+  Set<int> get ids => Set.unmodifiable(_ids);
 
-  bool isReadInScope(int id, int scope) =>
-      _byScope[scope]?.contains(id) ?? false;
+  bool contains(int id) => _ids.contains(id);
 
-  Set<int> get allIds => _byScope.values.expand((s) => s).toSet();
+  void add(int id) => _ids.add(id);
 
-  void add(int id, {required int scope}) {
-    _byScope.putIfAbsent(scope, () => {}).add(id);
-  }
+  void addAll(Iterable<int> ids) => _ids.addAll(ids);
 
-  void addAll(Iterable<int> ids, {required int scope}) {
-    if (ids.isEmpty) return;
-    _byScope.putIfAbsent(scope, () => {}).addAll(ids);
-  }
+  /// Marked unread again — drops out of the list on the next query.
+  void remove(int id) => _ids.remove(id);
 
-  void removeEverywhere(int id) {
-    for (final scopeSet in _byScope.values) {
-      scopeSet.remove(id);
-    }
-  }
+  /// Used by mark-all-read on a category tab, which must forget exactly the
+  /// articles that were showing in that tab and leave anything read elsewhere
+  /// this session untouched. Clearing the whole set there would wrongly
+  /// un-dim — and then hide — articles read in other tabs.
+  void removeAll(Iterable<int> ids) => _ids.removeAll(ids);
 
-  void clearScope(int scope) {
-    _byScope[scope]?.clear();
-  }
-
-  void clear() {
-    _byScope.clear();
-  }
+  /// Used by mark-all-read on the All tab, which already means "start fresh
+  /// everywhere".
+  void clear() => _ids.clear();
 }

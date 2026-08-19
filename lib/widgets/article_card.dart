@@ -21,12 +21,83 @@ import 'radial_menu.dart';
 /// invisible against white, which is why it went unnoticed. A matrix filter
 /// has no backdrop term: an undecoded image stays transparent, and a decoded
 /// one becomes true greyscale.
-const ColorFilter kGreyscaleFilter = ColorFilter.matrix(<double>[
+const ColorFilter kGreyscaleFilter = ColorFilter.matrix(kGreyscaleMatrix);
+
+const List<double> kGreyscaleMatrix = <double>[
   0.2126, 0.7152, 0.0722, 0, 0,
   0.2126, 0.7152, 0.0722, 0, 0,
   0.2126, 0.7152, 0.0722, 0, 0,
   0,      0,      0,      1, 0,
-]);
+];
+
+const List<double> _kIdentityMatrix = <double>[
+  1, 0, 0, 0, 0,
+  0, 1, 0, 0, 0,
+  0, 0, 1, 0, 0,
+  0, 0, 0, 1, 0,
+];
+
+/// How long a card takes to grey out once it's marked read.
+const Duration kReadDimDuration = Duration(milliseconds: 180);
+
+/// Opacity a read article's imagery settles at.
+const double _kDimOpacity = 0.4;
+
+/// Element-wise interpolation between full colour and [kGreyscaleMatrix].
+///
+/// Interpolating the matrix is what lets the transition animate without ever
+/// swapping the image widget for a differently-filtered copy — see
+/// [_DimTransition] for why that matters.
+List<double> _lerpGreyscaleMatrix(double t) {
+  if (t <= 0) return _kIdentityMatrix;
+  if (t >= 1) return kGreyscaleMatrix;
+  return <double>[
+    for (var i = 0; i < kGreyscaleMatrix.length; i++)
+      _kIdentityMatrix[i] + (kGreyscaleMatrix[i] - _kIdentityMatrix[i]) * t,
+  ];
+}
+
+/// Fades imagery to greyscale-and-dimmed when an article becomes read.
+///
+/// The image is handed to [TweenAnimationBuilder] through `child:` and is
+/// *never* rebuilt inside `builder:`. Flutter reuses that exact instance on
+/// every animation frame, so the underlying `Image` element is never
+/// unmounted and nothing redecodes mid-transition.
+///
+/// This matters more than it looks: commit 39bb6a6 fixed a bug where
+/// thumbnails flashed a bright block while scrolling in dark mode, and the
+/// fix depends on the image sitting on a stable, solid themed base with a
+/// backdrop-independent `ColorFilter.matrix`. Animating by crossfading two
+/// separately-filtered subtrees — a keyed AnimatedSwitcher, say — would force
+/// exactly the redecode that produced that flash. The wrapper layers are also
+/// kept in the tree at every value of `t`, including 0, so the image's
+/// position in the element tree never changes as the animation starts or ends.
+class _DimTransition extends StatelessWidget {
+  final bool dimmed;
+  final Widget child;
+
+  const _DimTransition({required this.dimmed, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final target = dimmed ? 1.0 : 0.0;
+    return TweenAnimationBuilder<double>(
+      // begin == end so a card that is already read when it scrolls into view
+      // renders dimmed on its first frame instead of animating into it.
+      tween: Tween<double>(begin: target, end: target),
+      duration: kReadDimDuration,
+      curve: Curves.easeOut,
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: 1.0 - (1.0 - _kDimOpacity) * t,
+        child: ColorFiltered(
+          colorFilter: ColorFilter.matrix(_lerpGreyscaleMatrix(t)),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
 
 class ArticleCard extends StatelessWidget {
   final Article article;
@@ -71,23 +142,36 @@ class ArticleCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        article.feedTitle ?? '',
-                        style: theme.textTheme.labelSmall?.copyWith(
+                      // Each Text below deliberately sets no style of its own:
+                      // Text merges its style *over* the inherited default, so
+                      // specifying one here would override the animated colour
+                      // and the fade would never be visible.
+                      child: AnimatedDefaultTextStyle(
+                        duration: kReadDimDuration,
+                        curve: Curves.easeOut,
+                        style: (theme.textTheme.labelSmall ?? const TextStyle())
+                            .copyWith(
                           color: theme.colorScheme.onSurface
                               .withValues(alpha: isRead ? 0.33 : 0.6),
                           fontWeight: FontWeight.w500,
                         ),
-                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        child: Text(article.feedTitle ?? ''),
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      formatRelativeTimestamp(article.publishedAt, AppLocalizations.of(context)!),
-                      style: theme.textTheme.labelSmall?.copyWith(
+                    AnimatedDefaultTextStyle(
+                      duration: kReadDimDuration,
+                      curve: Curves.easeOut,
+                      style: (theme.textTheme.labelSmall ?? const TextStyle())
+                          .copyWith(
                         color: theme.colorScheme.onSurface
                             .withValues(alpha: isRead ? 0.25 : 0.45),
+                      ),
+                      child: Text(
+                        formatRelativeTimestamp(
+                            article.publishedAt, AppLocalizations.of(context)!),
                       ),
                     ),
                     Builder(builder: (context) {
@@ -95,27 +179,36 @@ class ArticleCard extends StatelessWidget {
                       if (rt.isEmpty) return const SizedBox.shrink();
                       return Row(children: [
                         const SizedBox(width: 6),
-                        Text('· $rt',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: isRead ? 0.2 : 0.38),
-                            )),
+                        AnimatedDefaultTextStyle(
+                          duration: kReadDimDuration,
+                          curve: Curves.easeOut,
+                          style:
+                              (theme.textTheme.labelSmall ?? const TextStyle())
+                                  .copyWith(
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: isRead ? 0.2 : 0.38),
+                          ),
+                          child: Text('· $rt'),
+                        ),
                       ]);
                     }),
                   ],
                 ),
                 const SizedBox(height: 6),
                 // Title
-                Text(
-                  article.title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
+                AnimatedDefaultTextStyle(
+                  duration: kReadDimDuration,
+                  curve: Curves.easeOut,
+                  style: (theme.textTheme.bodyMedium ?? const TextStyle())
+                      .copyWith(
                     fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
                     color: theme.colorScheme.onSurface
                         .withValues(alpha: isRead ? 0.45 : 1.0),
                     height: 1.35,
                   ),
-                  maxLines: 3,
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 3,
+                  child: Text(article.title),
                 ),
               ],
             ),
@@ -148,6 +241,10 @@ class ArticleCard extends StatelessWidget {
       key: ValueKey('article_${article.id}'),
       background: swipeBg,
       secondaryBackground: swipeBg,
+      // confirmDismiss always returns false — the card never leaves the list,
+      // it just marks read and springs back. The stock 200ms snap-back is
+      // longer than it needs to be for a gesture with no dismissal to wait on.
+      movementDuration: const Duration(milliseconds: 150),
       confirmDismiss: (_) async {
         onMarkRead();
         return false;
@@ -218,11 +315,7 @@ class _FaviconWidget extends StatelessWidget {
             ),
           );
 
-    if (!dimmed) return widget;
-    return Opacity(
-      opacity: 0.4,
-      child: ColorFiltered(colorFilter: kGreyscaleFilter, child: widget),
-    );
+    return _DimTransition(dimmed: dimmed, child: widget);
   }
 }
 
@@ -281,13 +374,10 @@ class _ThumbnailWidget extends StatelessWidget {
         ),
       ),
     );
-    if (!dimmed) return clipped;
-    // Opacity alone now does the dimming, and it dims *toward the page*:
-    // darker on the dark theme, lighter on the light one.
-    return Opacity(
-      opacity: 0.4,
-      child: ColorFiltered(colorFilter: kGreyscaleFilter, child: clipped),
-    );
+    // Opacity dims *toward the page*: darker on the dark theme, lighter on
+    // the light one. Animated rather than cut, but the image inside `clipped`
+    // is the same instance throughout — see _DimTransition.
+    return _DimTransition(dimmed: dimmed, child: clipped);
   }
 
   Widget _placeholder(ThemeData theme) {

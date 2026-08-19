@@ -115,8 +115,8 @@ Specific mandates:
 - Folders appear as **scrollable tabs at the bottom** of the feed view (above the nav bar) — not at the top
 - Tab order is user-reorderable
 - Each folder tab shows an unread count badge
-- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause. Badge counts come from `is_read` in the DB and are scope-independent, so this was already correct before session-read scoping existed and is unaffected by it.
-- A read article, however, leaves every *other* tab's visible list immediately (session-read visibility is per-tab — see §4.3) even though its badge count updates everywhere at once — the count and the visibility are tracked independently.
+- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause. Badge counts come from `is_read` in the DB, independent of session-read visibility.
+- A read article **stays visible, dimmed in place, in every tab** for the rest of the session (see §4.3) — its badge count drops everywhere at once, but the row itself never disappears out from under the reader.
 - A special **"All"** tab aggregates articles across all folders
 - All category tabs behave identically to "All" — same session-read model, scroll, and mark-all-read rules apply (category mark-all-read also refreshes that folder's feeds)
 
@@ -133,14 +133,14 @@ Specific mandates:
 - Unread articles have full visual weight; read articles are dimmed (reduced opacity, lighter font weight)
 
 **Auto-Refresh on Open**
-- On every cold open, Flash silently fetches all feeds in the background immediately after loading the cached article list from the database
-- A full-screen lightning bolt (⚡) pulse animation replaces the content area during the cold-start fetch; the FABs are hidden until the fetch completes
-- Before fetching, stale articles (read, unsaved, older than the configured cleanup window) are purged from the database
-- This ensures the list is always up to date within seconds of opening the app
+- Cold open order is: purge stale articles (read, unsaved, older than the configured cleanup window) → **show the cached list immediately** → fetch all feeds in the background. The network is never in the way of reading what's already on disk
+- While that background fetch runs, a small animated lightning-bolt glyph appears in the app bar. It does **not** cover the content and the FABs stay available. (Previously a full-screen bolt pulse replaced the whole content area until the fetch finished, so a slow connection meant staring at an animation with a perfectly good cached list sitting unread underneath.)
+- The brief moment before the cached list arrives — a local DB read — shows the standard shimmer skeleton, not a takeover
+- This ensures the list is always up to date within seconds of opening the app, and readable instantly
 
 **Auto-Refresh on Resume**
 - Returning to Flash from the background after being away **≥30 seconds**, with no fetch in the last 5 minutes, triggers a silent network fetch (`ResumeRefreshPolicy`, both thresholds configurable)
-- Unlike cold open, this fetch runs with **no cleanup** — purging read articles mid-session would break the session-read list-persistence guarantee above — and shows no boot animation, since the user is already looking at their list
+- Unlike cold open, this fetch runs with **no cleanup** — purging read articles mid-session would break the session-read list-persistence guarantee above — and shows the same small app-bar bolt as cold start, since the user is already looking at their list
 - Scroll position is captured before the fetch and restored after; because new articles insert above the current position, the list can still visually shift when there's fresh content — a known limitation, not yet anchor-corrected
 - A brief excursion (e.g. popping out to the browser and back) never triggers a fetch; only DB state is reloaded
 
@@ -150,11 +150,11 @@ The feed displays: **all non-blocked articles in scope that are either unread, o
 
 - **Session read set:** an in-memory set of article IDs read since the app launched. It is empty on every cold open and is never persisted to disk.
 - **Cold open:** session set is empty → only unread articles appear. Previously-read articles remain in the DB (for deduplication) but do not show.
-- **Scoped per tab:** the session read set is keyed by scope — `kAllScope` for the All tab, the folder's id for a category tab (`SessionReadTracker`). An article marked read is added to the *current* tab's scope only, and stays in the list, dimmed in place, for the rest of the session — **but only in that tab**. It is absent entirely from every other tab, not dimmed, not present. The rule is symmetric: an article read in a category tab is equally gone from All.
-- **Why it stays visible in its own tab:** scrolling past the top of the viewport marks an article read; if it then vanished from the list being actively scrolled, everything below it would jump up under the user's thumb. The list-stability and exact-scroll-restoration guarantees above are unchanged — this only narrows their scope from "every tab" to "the tab it was read in".
-- **Tab switching:** the query re-runs for the new tab's scope, passing that scope's own session set — not a shared global one.
-- **Mark as unread:** clears the article from every scope, so it reappears everywhere immediately.
-- **App restart / cold open:** every scope is cleared → fresh unread-only view everywhere.
+- **Global, not per-tab:** the session read set is one flat set of article IDs (`SessionReadTracker`), shared by every tab. An article marked read anywhere stays in the list, dimmed in place, in **every** tab for the rest of the session. This matches Palabre, the app Flash exists to replace.
+- **Why it stays visible:** scrolling past the top of the viewport marks an article read; if it then vanished from the list being actively scrolled, everything below it would jump up under the user's thumb. The same argument applies to a list the user *isn't* looking at — coming back to a category to find rows silently missing is the same loss of place, deferred. An earlier pass scoped this per tab so a read article disappeared from every other tab; that was reversed because the disappearance was more disorienting than the grey clutter it avoided.
+- **Tab switching:** the query re-runs for the new tab, passing the same shared session set.
+- **Mark as unread:** drops the article from the set, so it hides again everywhere on the next query.
+- **App restart / cold open:** the set is empty → fresh unread-only view everywhere.
 
 **Mark as Read — On Scroll**
 - Articles are automatically marked as read as they scroll past the midpoint of the viewport
@@ -173,8 +173,8 @@ The feed displays: **all non-blocked articles in scope that are either unread, o
 
 Behaviour differs by tab:
 
-- **All tab:** marks every article read in DB → **clears the entire session set** → runs age-based cleanup → plays cold-start (⚡) animation → refreshes all feeds → reloads. Result: only newly fetched unread articles are shown.
-- **Category tab:** marks every article in that folder read in DB → **removes that folder's article IDs from the session set** → runs cleanup for that folder only → **refreshes that folder's feeds** → reloads → shows a `NotificationBanner` confirmation. Result: only newly fetched unread articles for that folder are shown.
+- **All tab:** marks every article read in DB → **clears the entire session set** → runs age-based cleanup → refreshes all feeds behind the app-bar bolt → reloads. Result: only newly fetched unread articles are shown.
+- **Category tab:** marks every article in that folder read in DB → **removes exactly the article IDs that tab was showing** from the session set (not the whole set — that would also forget articles read in other tabs and make them vanish there) → runs cleanup for that folder only → **refreshes that folder's feeds** → reloads → shows a `NotificationBanner` confirmation. Result: only newly fetched unread articles for that folder are shown.
 
 No confirmation dialog is ever shown. Scroll position for the affected tab resets to top after reload.
 
@@ -266,7 +266,8 @@ Flagship feature — fixes Palabre's broken implementation.
 - Unread articles are never deleted, regardless of age
 - Bookmarked (saved) articles are never deleted, regardless of read state or age
 - Cleanup runs on every cold open and every background refresh, **before** new articles are fetched
-- Pull-to-refresh does **not** trigger cleanup — previously read articles remain visible for the session
+- Pull-to-refresh does **not** trigger cleanup, and does not clear the session-read set — previously read articles remain visible, dimmed, for the session. A list that collapsed under the finger that just pulled it would be the jump the session-read model exists to prevent
+- The **refresh FAB** does drop read articles from the list, leaving only unread ones. It is a deliberate "tidy up and show me what's new" action rather than a passive check, so the collapse is asked for. Only rows currently on screen are forgotten; articles read in another tab keep their place there. Neither refresh path runs DB cleanup — nothing is deleted, the articles simply stop matching the session-read query
 - Per-folder cleanup is also supported (used by "Mark all as read" on a category tab)
 
 ---
