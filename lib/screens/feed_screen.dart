@@ -19,6 +19,7 @@ import '../services/session_read_tracker.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
 import '../utils/bottom_dwell_timer.dart';
+import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
@@ -96,10 +97,6 @@ class _FeedScreenState extends State<FeedScreen>
   late final BottomDwellTimer _bottomDwellTimer =
       BottomDwellTimer(onComplete: _onBottomDwellComplete);
 
-  /// Applies the end-of-feed settings to the dwell timer. Called at boot and
-  /// again whenever Settings reports a change — this screen is never rebuilt
-  /// on a plain tab switch, so without the listener a toggle wouldn't take
-  /// effect until the app restarted.
   /// Feed ordering. Applied to the loaded list rather than in SQL, so the
   /// repository queries — which several other screens share — stay untouched.
   String _sortOrder = kSortNewestFirst;
@@ -110,9 +107,53 @@ class _FeedScreenState extends State<FeedScreen>
   List<Article> _applySortOrder(List<Article> articles) =>
       _sortOrder == kSortOldestFirst ? articles.reversed.toList() : articles;
 
+  /// Filter-bubble values, applied to what the feed *shows*.
+  ///
+  /// These are the same two settings the Settings screen edits, but that
+  /// screen frames them as storage rules — `article_limit` caps what a fetch
+  /// accepts, `cleanup_age_days` drives the purge of old read articles. Both
+  /// are invisible from the feed: the fetch cap changes nothing already
+  /// stored, and cleanup only ever removes articles you have already read,
+  /// on a cold start. Moving either slider therefore appeared to do nothing.
+  ///
+  /// The Filter bubble means what it says, so the same values now also filter
+  /// the visible list, immediately.
+  int _displayLimit = kFetchArticleLimit;
+  int _displayAgeDays = 7;
+
+  /// Applies the Filter bubble's two limits to a newest-first list.
+  ///
+  /// Age first, then the count cap **per feed** — matching the setting's own
+  /// name and keeping the All tab the union of every feed's allowance rather
+  /// than a single pool that one busy feed could fill on its own.
+  List<Article> _applyDisplayFilters(List<Article> newestFirst) {
+    final cutoffMs = DateTime.now()
+        .subtract(Duration(days: _displayAgeDays))
+        .millisecondsSinceEpoch;
+
+    final perFeed = <int, int>{};
+    final kept = <Article>[];
+    for (final a in newestFirst) {
+      // A null published date shouldn't reach the DB (applyFetchThresholds
+      // drops those), but if one does, show it rather than silently hiding it.
+      if (a.publishedAt != null && a.publishedAt! < cutoffMs) continue;
+      final seen = perFeed[a.feedId] ?? 0;
+      if (seen >= _displayLimit) continue;
+      perFeed[a.feedId] = seen + 1;
+      kept.add(a);
+    }
+    return kept;
+  }
+
+  /// Applies every setting the feed reacts to. Called at boot and again
+  /// whenever Settings or a bubble reports a change — this screen is never
+  /// rebuilt on a plain tab switch, so without the listener a change wouldn't
+  /// take effect until the app restarted.
   void _applyReadingSettings(AppSettings settings) {
     _markReadOnScroll = settings.markReadOnScroll;
     _sortOrder = settings.articleSortOrder;
+    _displayLimit = settings.articleLimit;
+    _displayAgeDays = settings.cleanupAgeDays;
     _bottomDwellTimer.configure(
       enabled: settings.autoMarkReadAtBottom,
       duration: Duration(seconds: settings.autoMarkReadAtBottomSeconds),
@@ -122,13 +163,29 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _onSettingsChanged() async {
     final settings = await _settingsRepo.getAll();
     if (!mounted) return;
+
     final orderChanged = settings.articleSortOrder != _sortOrder;
+    // A widened filter needs rows the current list no longer holds, so it
+    // can't be satisfied in memory — re-query instead.
+    final filtersChanged = settings.articleLimit != _displayLimit ||
+        settings.cleanupAgeDays != _displayAgeDays;
+
     setState(() {
       _applyReadingSettings(settings);
       _newspaperMode = settings.newspaperMode;
       // Flip the list already on screen rather than waiting for the next
       // reload — the user changed the order to see it change.
-      if (orderChanged) _articles = _articles.reversed.toList();
+      if (orderChanged && !filtersChanged) {
+        _articles = _articles.reversed.toList();
+      }
+    });
+
+    if (!filtersChanged) return;
+    final refreshed = await _articlesForTab(_selectedTabIndex, _folders);
+    if (!mounted) return;
+    setState(() {
+      _articles = refreshed;
+      _syncCardKeys(refreshed);
     });
   }
 
@@ -346,7 +403,9 @@ class _FeedScreenState extends State<FeedScreen>
             folders[tab - 1].id!,
             sessionReadIds: sessionIds,
           );
-    return _applySortOrder(articles);
+    // Filters run on the newest-first result, so the cap keeps the newest N
+    // per feed; ordering is applied last.
+    return _applySortOrder(_applyDisplayFilters(articles));
   }
 
   void _syncCardKeys(List<Article> articles) {
