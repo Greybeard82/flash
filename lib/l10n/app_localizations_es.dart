@@ -525,4 +525,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get refreshFailed => 'No se pudo actualizar — comprueba tu conexión';
+
+  @override
+  String get autoMarkReadAtBottom => 'Marcar todo como leído al final del feed';
+
+  @override
+  String get autoMarkReadAtBottomSubtitle =>
+      'Llegar al final marca como leídos todos los artículos de este feed';
+
+  @override
+  String get autoMarkReadDelay => 'Esperar antes de marcar';
+
+  @override
+  String get autoMarkReadImmediately => 'Inmediatamente';
+
+  @override
+  String autoMarkReadAfterSeconds(int n) {
+    return 'Tras $n s';
+  }
 }

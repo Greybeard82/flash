@@ -521,4 +521,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refreshFailed => 'Couldn\'t refresh — check your connection';
+
+  @override
+  String get autoMarkReadAtBottom => 'Mark all read at end of feed';
+
+  @override
+  String get autoMarkReadAtBottomSubtitle =>
+      'Reaching the bottom marks every article in this feed as read';
+
+  @override
+  String get autoMarkReadDelay => 'Wait before marking';
+
+  @override
+  String get autoMarkReadImmediately => 'Immediately';
+
+  @override
+  String autoMarkReadAfterSeconds(int n) {
+    return 'After ${n}s';
+  }
 }

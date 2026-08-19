@@ -167,5 +167,10 @@
   "newspaperModeSubtitle": "Feed als gedruckte Zeitung lesen",
   "newspaperModeOverridesTheme": "Erscheinungsbild wird vom Zeitungsmodus bestimmt",
   "moveFeedFailed": "Änderung konnte nicht gespeichert werden",
-  "refreshFailed": "Aktualisierung fehlgeschlagen — bitte Verbindung prüfen"
+  "refreshFailed": "Aktualisierung fehlgeschlagen — bitte Verbindung prüfen",
+  "autoMarkReadAtBottom": "Am Feed-Ende alles als gelesen markieren",
+  "autoMarkReadAtBottomSubtitle": "Das Ende zu erreichen markiert alle Artikel dieses Feeds als gelesen",
+  "autoMarkReadDelay": "Wartezeit",
+  "autoMarkReadImmediately": "Sofort",
+  "autoMarkReadAfterSeconds": "Nach {n} s"
 }

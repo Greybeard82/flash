@@ -1027,6 +1027,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t refresh — check your connection'**
   String get refreshFailed;
+
+  /// No description provided for @autoMarkReadAtBottom.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all read at end of feed'**
+  String get autoMarkReadAtBottom;
+
+  /// No description provided for @autoMarkReadAtBottomSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reaching the bottom marks every article in this feed as read'**
+  String get autoMarkReadAtBottomSubtitle;
+
+  /// No description provided for @autoMarkReadDelay.
+  ///
+  /// In en, this message translates to:
+  /// **'Wait before marking'**
+  String get autoMarkReadDelay;
+
+  /// No description provided for @autoMarkReadImmediately.
+  ///
+  /// In en, this message translates to:
+  /// **'Immediately'**
+  String get autoMarkReadImmediately;
+
+  /// No description provided for @autoMarkReadAfterSeconds.
+  ///
+  /// In en, this message translates to:
+  /// **'After {n}s'**
+  String autoMarkReadAfterSeconds(int n);
 }
 
 class _AppLocalizationsDelegate

@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 9,
+      version: 10,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -133,6 +133,19 @@ class AppDatabase {
       // PRAGMA user_version is now the only source of truth.
       await db.execute("DELETE FROM settings WHERE key = 'schema_version'");
     }
+    if (oldVersion < 10) {
+      // End-of-feed auto mark-as-read became configurable. Seed the previous
+      // hardcoded behaviour (on, 5s) so upgrading users see no change.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) "
+        "VALUES ('auto_mark_read_at_bottom', 'true', $now)",
+      );
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) "
+        "VALUES ('auto_mark_read_at_bottom_seconds', '5', $now)",
+      );
+    }
   }
 
   /// Runs the real [_onUpgrade] path against the open database as though it
@@ -143,7 +156,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 9);
+    await _onUpgrade(db, fromVersion, 10);
   }
 
   Future<void> close() async {

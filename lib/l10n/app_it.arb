@@ -167,5 +167,10 @@
   "newspaperModeSubtitle": "Leggi il feed come un giornale stampato",
   "newspaperModeOverridesTheme": "L'aspetto è impostato dalla modalità giornale",
   "moveFeedFailed": "Impossibile salvare la modifica",
-  "refreshFailed": "Aggiornamento non riuscito — controlla la connessione"
+  "refreshFailed": "Aggiornamento non riuscito — controlla la connessione",
+  "autoMarkReadAtBottom": "Segna tutto come letto a fine feed",
+  "autoMarkReadAtBottomSubtitle": "Arrivare in fondo segna come letti tutti gli articoli di questo feed",
+  "autoMarkReadDelay": "Attesa prima di segnare",
+  "autoMarkReadImmediately": "Immediatamente",
+  "autoMarkReadAfterSeconds": "Dopo {n} s"
 }

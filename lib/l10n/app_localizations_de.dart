@@ -526,4 +526,22 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get refreshFailed =>
       'Aktualisierung fehlgeschlagen — bitte Verbindung prüfen';
+
+  @override
+  String get autoMarkReadAtBottom => 'Am Feed-Ende alles als gelesen markieren';
+
+  @override
+  String get autoMarkReadAtBottomSubtitle =>
+      'Das Ende zu erreichen markiert alle Artikel dieses Feeds als gelesen';
+
+  @override
+  String get autoMarkReadDelay => 'Wartezeit';
+
+  @override
+  String get autoMarkReadImmediately => 'Sofort';
+
+  @override
+  String autoMarkReadAfterSeconds(int n) {
+    return 'Nach $n s';
+  }
 }

@@ -526,4 +526,22 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get refreshFailed =>
       'Aggiornamento non riuscito — controlla la connessione';
+
+  @override
+  String get autoMarkReadAtBottom => 'Segna tutto come letto a fine feed';
+
+  @override
+  String get autoMarkReadAtBottomSubtitle =>
+      'Arrivare in fondo segna come letti tutti gli articoli di questo feed';
+
+  @override
+  String get autoMarkReadDelay => 'Attesa prima di segnare';
+
+  @override
+  String get autoMarkReadImmediately => 'Immediatamente';
+
+  @override
+  String autoMarkReadAfterSeconds(int n) {
+    return 'Dopo $n s';
+  }
 }

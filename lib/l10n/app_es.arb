@@ -167,5 +167,10 @@
   "newspaperModeSubtitle": "Lee tu feed como un periódico impreso",
   "newspaperModeOverridesTheme": "La apariencia está definida por el modo periódico",
   "moveFeedFailed": "No se pudo guardar ese cambio",
-  "refreshFailed": "No se pudo actualizar — comprueba tu conexión"
+  "refreshFailed": "No se pudo actualizar — comprueba tu conexión",
+  "autoMarkReadAtBottom": "Marcar todo como leído al final del feed",
+  "autoMarkReadAtBottomSubtitle": "Llegar al final marca como leídos todos los artículos de este feed",
+  "autoMarkReadDelay": "Esperar antes de marcar",
+  "autoMarkReadImmediately": "Inmediatamente",
+  "autoMarkReadAfterSeconds": "Tras {n} s"
 }

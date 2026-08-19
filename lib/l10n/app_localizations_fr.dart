@@ -527,4 +527,22 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get refreshFailed =>
       'Échec de l\'actualisation — vérifiez votre connexion';
+
+  @override
+  String get autoMarkReadAtBottom => 'Tout marquer comme lu en fin de flux';
+
+  @override
+  String get autoMarkReadAtBottomSubtitle =>
+      'Arriver en bas marque tous les articles de ce flux comme lus';
+
+  @override
+  String get autoMarkReadDelay => 'Délai avant de marquer';
+
+  @override
+  String get autoMarkReadImmediately => 'Immédiatement';
+
+  @override
+  String autoMarkReadAfterSeconds(int n) {
+    return 'Après $n s';
+  }
 }

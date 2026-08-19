@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../models/folder.dart';
+import '../models/settings.dart';
 import '../models/unread_counts.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
@@ -15,6 +16,7 @@ import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
 import '../services/refresh_service.dart';
 import '../services/session_read_tracker.dart';
+import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
 import '../utils/bottom_dwell_timer.dart';
 import '../utils/resume_refresh_policy.dart';
@@ -80,6 +82,27 @@ class _FeedScreenState extends State<FeedScreen>
   late final BottomDwellTimer _bottomDwellTimer =
       BottomDwellTimer(onComplete: _onBottomDwellComplete);
 
+  /// Applies the end-of-feed settings to the dwell timer. Called at boot and
+  /// again whenever Settings reports a change — this screen is never rebuilt
+  /// on a plain tab switch, so without the listener a toggle wouldn't take
+  /// effect until the app restarted.
+  void _applyReadingSettings(AppSettings settings) {
+    _markReadOnScroll = settings.markReadOnScroll;
+    _bottomDwellTimer.configure(
+      enabled: settings.autoMarkReadAtBottom,
+      duration: Duration(seconds: settings.autoMarkReadAtBottomSeconds),
+    );
+  }
+
+  Future<void> _onSettingsChanged() async {
+    final settings = await _settingsRepo.getAll();
+    if (!mounted) return;
+    setState(() {
+      _applyReadingSettings(settings);
+      _newspaperMode = settings.newspaperMode;
+    });
+  }
+
   static const _resumePolicy = ResumeRefreshPolicy();
   DateTime? _pausedAt;
   DateTime? _lastFetchAt;
@@ -100,6 +123,7 @@ class _FeedScreenState extends State<FeedScreen>
     // launcher badge, updated inside _refreshCountsFromDb) stays truthful
     // without this screen being rebuilt or reloaded.
     ReadStateNotifier.instance.addListener(_onExternalReadStateChanged);
+    SettingsNotifier.instance.addListener(_onSettingsChanged);
     _pulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -120,6 +144,7 @@ class _FeedScreenState extends State<FeedScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
+    SettingsNotifier.instance.removeListener(_onSettingsChanged);
     _scrollDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _scrollController.dispose();
@@ -181,7 +206,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _boot() async {
     await LoadingController.instance.run(() async {
       final settings = await _settingsRepo.getAll();
-      _markReadOnScroll = settings.markReadOnScroll;
+      _applyReadingSettings(settings);
       if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
 
       if (mounted) setState(() => _booting = true);
@@ -259,9 +284,14 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _reloadArticles() async {
     await LoadingController.instance.run(() async {
       final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-      // Refresh newspaper mode in case it was toggled in Settings.
+      // Pick up anything changed in Settings while we were away.
       final settings = await _settingsRepo.getAll();
-      if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
+      if (mounted) {
+        setState(() {
+          _applyReadingSettings(settings);
+          _newspaperMode = settings.newspaperMode;
+        });
+      }
       await _loadArticles();
       _restoreScrollOffset(offset);
     }, label: 'Loading');

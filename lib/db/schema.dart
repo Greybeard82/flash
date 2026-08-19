@@ -128,6 +128,8 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'refresh_interval_minutes', 'value': '30'},
   {'key': 'article_limit', 'value': '100'},
   {'key': 'mark_read_on_scroll', 'value': 'true'},
+  {'key': 'auto_mark_read_at_bottom', 'value': 'true'},
+  {'key': 'auto_mark_read_at_bottom_seconds', 'value': '5'},
   {'key': 'drive_backup_enabled', 'value': 'false'},
   {'key': 'drive_last_backup_at', 'value': 'null'},
   {'key': 'feedly_api_key', 'value': 'null'},

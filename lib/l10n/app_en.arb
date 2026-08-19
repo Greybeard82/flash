@@ -208,5 +208,11 @@
   "newspaperModeSubtitle": "Read your feed as a printed paper",
   "newspaperModeOverridesTheme": "Appearance is set by Newspaper mode",
   "moveFeedFailed": "Couldn't save that change",
-  "refreshFailed": "Couldn't refresh — check your connection"
+  "refreshFailed": "Couldn't refresh — check your connection",
+  "autoMarkReadAtBottom": "Mark all read at end of feed",
+  "autoMarkReadAtBottomSubtitle": "Reaching the bottom marks every article in this feed as read",
+  "autoMarkReadDelay": "Wait before marking",
+  "autoMarkReadImmediately": "Immediately",
+  "autoMarkReadAfterSeconds": "After {n}s",
+  "@autoMarkReadAfterSeconds": { "placeholders": { "n": { "type": "int" } } }
 }

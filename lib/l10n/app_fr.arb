@@ -167,5 +167,10 @@
   "newspaperModeSubtitle": "Lisez votre fil comme un journal imprimé",
   "newspaperModeOverridesTheme": "L'apparence est définie par le mode journal",
   "moveFeedFailed": "Impossible d'enregistrer cette modification",
-  "refreshFailed": "Échec de l'actualisation — vérifiez votre connexion"
+  "refreshFailed": "Échec de l'actualisation — vérifiez votre connexion",
+  "autoMarkReadAtBottom": "Tout marquer comme lu en fin de flux",
+  "autoMarkReadAtBottomSubtitle": "Arriver en bas marque tous les articles de ce flux comme lus",
+  "autoMarkReadDelay": "Délai avant de marquer",
+  "autoMarkReadImmediately": "Immédiatement",
+  "autoMarkReadAfterSeconds": "Après {n} s"
 }

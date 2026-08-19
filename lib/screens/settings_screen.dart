@@ -13,6 +13,7 @@ import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
 import '../services/opml_service.dart';
 import '../services/refresh_service.dart';
+import '../services/settings_notifier.dart';
 import 'keyword_alerts_screen.dart';
 import 'keyword_blocklist_screen.dart';
 
@@ -71,6 +72,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _settingsRepo.set(key, value);
       await _load();
     }, label: 'Saving');
+    // FeedScreen is kept alive in an IndexedStack and never rebuilds on a tab
+    // switch, so it has to be told rather than left to notice.
+    SettingsNotifier.instance.settingsChanged();
   }
 
   /// Applies [apply] to the in-memory settings immediately (so the UI reacts
@@ -322,6 +326,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
             value: s.markReadOnScroll,
             onChanged: (v) => _save('mark_read_on_scroll', v.toString()),
           ),
+          _toggle(
+            title: l10n.autoMarkReadAtBottom,
+            subtitle: l10n.autoMarkReadAtBottomSubtitle,
+            value: s.autoMarkReadAtBottom,
+            onChanged: (v) => _save('auto_mark_read_at_bottom', v.toString()),
+          ),
+          // Only meaningful while the behaviour is on; hidden rather than
+          // disabled so the Reading section doesn't carry a dead control.
+          if (s.autoMarkReadAtBottom)
+            _dropdown<int>(
+              title: l10n.autoMarkReadDelay,
+              value: s.autoMarkReadAtBottomSeconds,
+              items: [
+                for (final seconds in AppSettings.autoMarkReadDelayOptions)
+                  DropdownMenuItem(
+                    value: seconds,
+                    child: Text(seconds == 0
+                        ? l10n.autoMarkReadImmediately
+                        : l10n.autoMarkReadAfterSeconds(seconds)),
+                  ),
+              ],
+              onChanged: (v) {
+                if (v == null) return;
+                _save('auto_mark_read_at_bottom_seconds', v.toString());
+              },
+            ),
 
           // ── Refresh ──
           _sectionHeader(l10n.refresh),
