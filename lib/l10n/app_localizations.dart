@@ -1123,6 +1123,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Oldest'**
   String get oldestFirst;
+
+  /// No description provided for @apply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get apply;
 }
 
 class _AppLocalizationsDelegate

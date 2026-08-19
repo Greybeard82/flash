@@ -582,4 +582,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get oldestFirst => 'Älteste';
+
+  @override
+  String get apply => 'Übernehmen';
 }

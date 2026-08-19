@@ -583,4 +583,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get oldestFirst => 'Anciens';
+
+  @override
+  String get apply => 'Appliquer';
 }

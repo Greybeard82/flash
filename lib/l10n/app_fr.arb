@@ -183,5 +183,6 @@
   "quickSettingsTooltip": "Réglages rapides",
   "articleOrder": "Ordre des articles",
   "newestFirst": "Récents",
-  "oldestFirst": "Anciens"
+  "oldestFirst": "Anciens",
+  "apply": "Appliquer"
 }

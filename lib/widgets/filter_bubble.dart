@@ -58,18 +58,23 @@ class _FilterBubbleState extends State<FilterBubble> {
     _sortOrder = widget.initial.articleSortOrder;
   }
 
-  Future<void> _setSortOrder(String value) async {
-    setState(() => _sortOrder = value);
-    await _repo.set('article_sort_order', value);
-    SettingsNotifier.instance.settingsChanged();
-  }
+  void _setSortOrder(String value) => setState(() => _sortOrder = value);
 
-  /// Persist on release rather than on every drag frame — a drag emits dozens
-  /// of values and each one would otherwise be a DB write plus an app-wide
-  /// notify.
-  Future<void> _persist(String key, int value) async {
-    await _repo.set(key, value.toString());
+  /// Nothing here is written until Apply. Dragging a slider is exploratory —
+  /// persisting on release meant a drag past 20 could re-query the feed
+  /// several times on the way to the value the user actually wanted.
+  bool get _hasPendingChanges =>
+      _articles.round() != widget.initial.articleLimit ||
+      _days.round() != widget.initial.cleanupAgeDays ||
+      _sortOrder != widget.initial.articleSortOrder;
+
+  Future<void> _apply() async {
+    await _repo.set('article_limit', _articles.round().toString());
+    await _repo.set('cleanup_age_days', _days.round().toString());
+    await _repo.set('article_sort_order', _sortOrder);
+    // One notify for the whole set, so the feed re-queries once.
     SettingsNotifier.instance.settingsChanged();
+    if (mounted) await BubblePanelScope.maybeOf(context)?.dismiss();
   }
 
   @override
@@ -94,7 +99,6 @@ class _FilterBubbleState extends State<FilterBubble> {
           max: FilterBubble.maxArticles,
           divisions: FilterBubble.articleDivisions,
           onChanged: (v) => setState(() => _articles = v),
-          onChangeEnd: (v) => _persist('article_limit', v.round()),
         ),
         const SizedBox(height: 12),
         _SliderRow(
@@ -105,7 +109,6 @@ class _FilterBubbleState extends State<FilterBubble> {
           max: FilterBubble.maxDays,
           divisions: FilterBubble.dayDivisions,
           onChanged: (v) => setState(() => _days = v),
-          onChangeEnd: (v) => _persist('cleanup_age_days', v.round()),
         ),
         const SizedBox(height: 14),
         Text(l10n.articleOrder, style: theme.textTheme.bodyMedium),
@@ -134,6 +137,16 @@ class _FilterBubbleState extends State<FilterBubble> {
             color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
+        const SizedBox(height: 14),
+        // Disabled until something actually differs, so the button doubles as
+        // an indicator of whether there is anything pending.
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: _hasPendingChanges ? _apply : null,
+            child: Text(l10n.apply),
+          ),
+        ),
       ],
     );
   }
@@ -147,7 +160,7 @@ class _SliderRow extends StatelessWidget {
   final double max;
   final int divisions;
   final ValueChanged<double> onChanged;
-  final ValueChanged<double> onChangeEnd;
+
 
   const _SliderRow({
     required this.label,
@@ -157,7 +170,7 @@ class _SliderRow extends StatelessWidget {
     required this.max,
     required this.divisions,
     required this.onChanged,
-    required this.onChangeEnd,
+
   });
 
   @override
@@ -189,7 +202,7 @@ class _SliderRow extends StatelessWidget {
           divisions: divisions,
           label: valueLabel,
           onChanged: onChanged,
-          onChangeEnd: onChangeEnd,
+
         ),
       ],
     );

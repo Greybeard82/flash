@@ -581,4 +581,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get oldestFirst => 'Antiguos';
+
+  @override
+  String get apply => 'Aplicar';
 }

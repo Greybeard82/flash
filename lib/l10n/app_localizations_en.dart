@@ -577,4 +577,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get oldestFirst => 'Oldest';
+
+  @override
+  String get apply => 'Apply';
 }

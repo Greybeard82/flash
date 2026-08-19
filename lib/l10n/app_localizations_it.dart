@@ -582,4 +582,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get oldestFirst => 'Meno recenti';
+
+  @override
+  String get apply => 'Applica';
 }

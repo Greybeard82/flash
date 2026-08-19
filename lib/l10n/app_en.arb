@@ -227,5 +227,6 @@
   "@daysCount": { "placeholders": { "n": { "type": "int" } } },
   "articleOrder": "Article order",
   "newestFirst": "Newest",
-  "oldestFirst": "Oldest"
+  "oldestFirst": "Oldest",
+  "apply": "Apply"
 }
