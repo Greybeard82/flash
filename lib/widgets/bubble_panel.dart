@@ -103,35 +103,44 @@ class _BubblePanelState extends State<_BubblePanel>
     widget.onDismissed();
   }
 
-  /// Where the panel sits: the top section of the screen, inset from the edges
-  /// and below the status bar. "Maximised" is relative to the button it came
-  /// from, not the whole screen.
-  Rect _panelRect(BuildContext context) {
+  /// Where the panel sits: pinned below the status bar and inset from the side
+  /// edges. Height is deliberately *not* fixed — the panel hugs its content,
+  /// with [_maxHeight] only as an upper bound before the content scrolls, so a
+  /// short panel doesn't leave dead space under its last control.
+  ({double left, double top, double width}) _panelBox(BuildContext context) {
     final media = MediaQuery.of(context);
     const horizontalInset = 16.0;
-    final top = media.padding.top + 12;
-    final width = media.size.width - horizontalInset * 2;
-    final maxHeight = media.size.height * 0.52;
-    return Rect.fromLTWH(horizontalInset, top, width, maxHeight);
+    return (
+      left: horizontalInset,
+      top: media.padding.top + 12,
+      width: media.size.width - horizontalInset * 2,
+    );
   }
 
-  /// Scale origin, expressed as an [Alignment] inside the panel, so the growth
-  /// appears to come out of the button rather than the panel's centre.
-  Alignment _originWithin(Rect panel) {
-    if (widget.anchorRect == Rect.zero || panel.isEmpty) {
+  double _maxHeight(BuildContext context) =>
+      MediaQuery.of(context).size.height * 0.7;
+
+  /// Scale origin, so the growth appears to come out of the button rather than
+  /// the panel's centre.
+  ///
+  /// Horizontal is exact — the panel's width and position are known. Vertical
+  /// is pinned to the top edge rather than computed, because the panel's
+  /// height now depends on its content and isn't known when this is built.
+  /// The buttons that open these panels sit at the top of the screen, so the
+  /// top edge is where the growth should originate anyway.
+  Alignment _originWithin(double left, double width) {
+    if (widget.anchorRect == Rect.zero || width <= 0) {
       return Alignment.topRight;
     }
-    final dx = (widget.anchorRect.center.dx - panel.center.dx) /
-        (panel.width / 2);
-    final dy = (widget.anchorRect.center.dy - panel.center.dy) /
-        (panel.height / 2);
-    return Alignment(dx.clamp(-1.5, 1.5), dy.clamp(-1.5, 1.5));
+    final centreX = left + width / 2;
+    final dx = (widget.anchorRect.center.dx - centreX) / (width / 2);
+    return Alignment(dx.clamp(-1.0, 1.0), -1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final panel = _panelRect(context);
+    final box = _panelBox(context);
 
     return AnimatedBuilder(
       animation: _controller,
@@ -153,24 +162,29 @@ class _BubblePanelState extends State<_BubblePanel>
                 ),
               ),
             ),
-            Positioned.fromRect(
-              rect: panel,
+            Positioned(
+              left: box.left,
+              top: box.top,
+              width: box.width,
               child: FadeTransition(
                 opacity: _opacity,
                 child: ScaleTransition(
                   scale: _scale,
-                  alignment: _originWithin(panel),
+                  alignment: _originWithin(box.left, box.width),
                   // Taps inside must not fall through to the scrim.
                   child: GestureDetector(
                     onTap: () {},
-                    child: Material(
-                      color: theme.colorScheme.surface,
-                      elevation: 6,
-                      borderRadius: BorderRadius.circular(20),
-                      clipBehavior: Clip.antiAlias,
-                      child: SafeArea(
-                        top: false,
-                        bottom: false,
+                    child: ConstrainedBox(
+                      constraints:
+                          BoxConstraints(maxHeight: _maxHeight(context)),
+                      child: Material(
+                        color: theme.colorScheme.surface,
+                        elevation: 6,
+                        borderRadius: BorderRadius.circular(20),
+                        clipBehavior: Clip.antiAlias,
+                        // SingleChildScrollView sizes to its child when the
+                        // incoming constraint is loose, so the sheet is exactly
+                        // as tall as its controls and only scrolls past the cap.
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
                           child: BubblePanelScope(

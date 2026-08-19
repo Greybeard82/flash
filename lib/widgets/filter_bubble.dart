@@ -41,6 +41,7 @@ class _FilterBubbleState extends State<FilterBubble> {
 
   late double _articles;
   late double _days;
+  late String _sortOrder;
 
   @override
   void initState() {
@@ -54,6 +55,13 @@ class _FilterBubbleState extends State<FilterBubble> {
     _days = widget.initial.cleanupAgeDays
         .toDouble()
         .clamp(FilterBubble.minDays, FilterBubble.maxDays);
+    _sortOrder = widget.initial.articleSortOrder;
+  }
+
+  Future<void> _setSortOrder(String value) async {
+    setState(() => _sortOrder = value);
+    await _repo.set('article_sort_order', value);
+    SettingsNotifier.instance.settingsChanged();
   }
 
   /// Persist on release rather than on every drag frame — a drag emits dozens
@@ -99,7 +107,27 @@ class _FilterBubbleState extends State<FilterBubble> {
           onChanged: (v) => setState(() => _days = v),
           onChangeEnd: (v) => _persist('cleanup_age_days', v.round()),
         ),
+        const SizedBox(height: 14),
+        Text(l10n.articleOrder, style: theme.textTheme.bodyMedium),
         const SizedBox(height: 8),
+        SegmentedButton<String>(
+          segments: [
+            ButtonSegment(
+              value: kSortNewestFirst,
+              icon: const Icon(Icons.arrow_downward_rounded, size: 16),
+              label: Text(l10n.newestFirst),
+            ),
+            ButtonSegment(
+              value: kSortOldestFirst,
+              icon: const Icon(Icons.arrow_upward_rounded, size: 16),
+              label: Text(l10n.oldestFirst),
+            ),
+          ],
+          selected: {_sortOrder},
+          showSelectedIcon: false,
+          onSelectionChanged: (s) => _setSortOrder(s.first),
+        ),
+        const SizedBox(height: 10),
         Text(
           l10n.filterBubbleFootnote,
           style: theme.textTheme.labelSmall?.copyWith(

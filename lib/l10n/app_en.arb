@@ -224,5 +224,8 @@
   "filterTooltip": "Filter articles",
   "quickSettingsTooltip": "Quick settings",
   "@articlesCount": { "placeholders": { "n": { "type": "int" } } },
-  "@daysCount": { "placeholders": { "n": { "type": "int" } } }
+  "@daysCount": { "placeholders": { "n": { "type": "int" } } },
+  "articleOrder": "Article order",
+  "newestFirst": "Newest",
+  "oldestFirst": "Oldest"
 }

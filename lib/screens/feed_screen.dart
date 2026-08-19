@@ -100,8 +100,19 @@ class _FeedScreenState extends State<FeedScreen>
   /// again whenever Settings reports a change — this screen is never rebuilt
   /// on a plain tab switch, so without the listener a toggle wouldn't take
   /// effect until the app restarted.
+  /// Feed ordering. Applied to the loaded list rather than in SQL, so the
+  /// repository queries — which several other screens share — stay untouched.
+  String _sortOrder = kSortNewestFirst;
+
+  /// The repository always returns newest-first; reverse when the user has
+  /// asked for oldest-first. List order is also visual order, which is what
+  /// the scroll-to-mark-read pass walks, so it stays consistent either way.
+  List<Article> _applySortOrder(List<Article> articles) =>
+      _sortOrder == kSortOldestFirst ? articles.reversed.toList() : articles;
+
   void _applyReadingSettings(AppSettings settings) {
     _markReadOnScroll = settings.markReadOnScroll;
+    _sortOrder = settings.articleSortOrder;
     _bottomDwellTimer.configure(
       enabled: settings.autoMarkReadAtBottom,
       duration: Duration(seconds: settings.autoMarkReadAtBottomSeconds),
@@ -111,9 +122,13 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _onSettingsChanged() async {
     final settings = await _settingsRepo.getAll();
     if (!mounted) return;
+    final orderChanged = settings.articleSortOrder != _sortOrder;
     setState(() {
       _applyReadingSettings(settings);
       _newspaperMode = settings.newspaperMode;
+      // Flip the list already on screen rather than waiting for the next
+      // reload — the user changed the order to see it change.
+      if (orderChanged) _articles = _articles.reversed.toList();
     });
   }
 
@@ -319,15 +334,19 @@ class _FeedScreenState extends State<FeedScreen>
     }, label: 'Loading');
   }
 
-  Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
+  /// The one place articles enter this screen, so ordering is applied here and
+  /// every path — boot, reload, tab switch, refresh — gets it for free.
+  Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) async {
     // Every tab passes the whole session set: an article read anywhere stays
     // visible, dimmed in place, in every tab for the rest of the session.
     final sessionIds = SessionReadTracker.instance.ids;
-    if (tab == 0) return _articleRepo.getAllArticles(sessionReadIds: sessionIds);
-    return _articleRepo.getArticlesByFolder(
-      folders[tab - 1].id!,
-      sessionReadIds: sessionIds,
-    );
+    final articles = tab == 0
+        ? await _articleRepo.getAllArticles(sessionReadIds: sessionIds)
+        : await _articleRepo.getArticlesByFolder(
+            folders[tab - 1].id!,
+            sessionReadIds: sessionIds,
+          );
+    return _applySortOrder(articles);
   }
 
   void _syncCardKeys(List<Article> articles) {

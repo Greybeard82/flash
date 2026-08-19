@@ -180,5 +180,8 @@
   "daysCount": "{n} Tage",
   "filterBubbleFootnote": "Auch in den Einstellungen. Gilt für alle Feeds.",
   "filterTooltip": "Artikel filtern",
-  "quickSettingsTooltip": "Schnelleinstellungen"
+  "quickSettingsTooltip": "Schnelleinstellungen",
+  "articleOrder": "Reihenfolge",
+  "newestFirst": "Neueste",
+  "oldestFirst": "Älteste"
 }

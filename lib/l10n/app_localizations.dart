@@ -1105,6 +1105,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Quick settings'**
   String get quickSettingsTooltip;
+
+  /// No description provided for @articleOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Article order'**
+  String get articleOrder;
+
+  /// No description provided for @newestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get newestFirst;
+
+  /// No description provided for @oldestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest'**
+  String get oldestFirst;
 }
 
 class _AppLocalizationsDelegate

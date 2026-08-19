@@ -573,4 +573,13 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get quickSettingsTooltip => 'Impostazioni rapide';
+
+  @override
+  String get articleOrder => 'Ordine articoli';
+
+  @override
+  String get newestFirst => 'Recenti';
+
+  @override
+  String get oldestFirst => 'Meno recenti';
 }

@@ -12,6 +12,8 @@ import 'package:flash/widgets/filter_bubble.dart';
 import 'package:flash/widgets/scroll_fade.dart';
 
 void main() {
+  _sortOrderTests();
+
   group('ScrollFadeController', () {
     test('starts settled', () {
       final c = ScrollFadeController();
@@ -184,6 +186,53 @@ void main() {
         final s = AppSettings.fromMap({'article_limit': '${a.round()}'});
         expect(s.articleLimit, a.round());
       }
+    });
+  });
+}
+
+// Appended: article sort order. Applied to the loaded list rather than in SQL
+// (feed_screen._applySortOrder), so it's a pure list reversal on top of the
+// repository's newest-first result.
+void _sortOrderTests() {
+  List<int> applyOrder(List<int> newestFirst, String order) =>
+      order == kSortOldestFirst ? newestFirst.reversed.toList() : newestFirst;
+
+  group('article sort order', () {
+    test('defaults to newest first — the app\'s existing behaviour', () {
+      expect(const AppSettings().articleSortOrder, kSortNewestFirst);
+      expect(AppSettings.fromMap({}).articleSortOrder, kSortNewestFirst);
+    });
+
+    test('an unrecognised stored value falls back to newest', () {
+      expect(AppSettings.fromMap({'article_sort_order': 'sideways'})
+          .articleSortOrder, kSortNewestFirst);
+    });
+
+    test('oldest round-trips', () {
+      expect(
+        AppSettings.fromMap({'article_sort_order': kSortOldestFirst})
+            .articleSortOrder,
+        kSortOldestFirst,
+      );
+    });
+
+    test('newest keeps the repository order untouched', () {
+      expect(applyOrder([5, 4, 3, 2, 1], kSortNewestFirst), [5, 4, 3, 2, 1]);
+    });
+
+    test('oldest puts the oldest article at the top', () {
+      expect(applyOrder([5, 4, 3, 2, 1], kSortOldestFirst), [1, 2, 3, 4, 5]);
+    });
+
+    test('flipping twice returns the original order', () {
+      const original = [5, 4, 3, 2, 1];
+      final flipped = applyOrder(original, kSortOldestFirst);
+      expect(applyOrder(flipped, kSortOldestFirst), original);
+    });
+
+    test('an empty or single-item list is safe', () {
+      expect(applyOrder([], kSortOldestFirst), isEmpty);
+      expect(applyOrder([7], kSortOldestFirst), [7]);
     });
   });
 }

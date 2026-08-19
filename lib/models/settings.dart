@@ -1,5 +1,9 @@
 import '../utils/constants.dart';
 
+/// Feed ordering values stored under the `article_sort_order` settings key.
+const String kSortNewestFirst = 'newest';
+const String kSortOldestFirst = 'oldest';
+
 class AppSettings {
   /// Delay options offered for [autoMarkReadAtBottomSeconds], in seconds.
   /// 0 means "immediately on reaching the bottom"; the rest step by 5.
@@ -12,6 +16,13 @@ class AppSettings {
   /// fetch time. Not a cap on the All tab, which is the uncapped union of
   /// every feed's retained articles.
   final int articleLimit;
+
+  /// Feed ordering: `'newest'` (newest article at the top) or `'oldest'`.
+  ///
+  /// Defaults to `'newest'`, which is what the app has always done. Applied
+  /// when the list is loaded rather than in SQL, so the repository queries are
+  /// untouched.
+  final String articleSortOrder;
 
   final bool markReadOnScroll;
 
@@ -43,6 +54,7 @@ class AppSettings {
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
     this.articleLimit = kFetchArticleLimit,
+    this.articleSortOrder = kSortNewestFirst,
     this.markReadOnScroll = true,
     this.autoMarkReadAtBottom = true,
     this.autoMarkReadAtBottomSeconds = 5,
@@ -75,6 +87,9 @@ class AppSettings {
       refreshIntervalMinutes: int.tryParse(map['refresh_interval_minutes'] ?? '30') ?? 30,
       articleLimit:
           int.tryParse(map['article_limit'] ?? '') ?? kFetchArticleLimit,
+      articleSortOrder: map['article_sort_order'] == kSortOldestFirst
+          ? kSortOldestFirst
+          : kSortNewestFirst,
       markReadOnScroll: (map['mark_read_on_scroll'] ?? 'true') == 'true',
       autoMarkReadAtBottom:
           (map['auto_mark_read_at_bottom'] ?? 'true') == 'true',
@@ -98,6 +113,7 @@ class AppSettings {
     String? theme,
     int? refreshIntervalMinutes,
     int? articleLimit,
+    String? articleSortOrder,
     bool? markReadOnScroll,
     bool? autoMarkReadAtBottom,
     int? autoMarkReadAtBottomSeconds,
@@ -113,6 +129,7 @@ class AppSettings {
       theme: theme ?? this.theme,
       refreshIntervalMinutes: refreshIntervalMinutes ?? this.refreshIntervalMinutes,
       articleLimit: articleLimit ?? this.articleLimit,
+      articleSortOrder: articleSortOrder ?? this.articleSortOrder,
       markReadOnScroll: markReadOnScroll ?? this.markReadOnScroll,
       autoMarkReadAtBottom: autoMarkReadAtBottom ?? this.autoMarkReadAtBottom,
       autoMarkReadAtBottomSeconds:

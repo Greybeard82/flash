@@ -180,5 +180,8 @@
   "daysCount": "{n} jours",
   "filterBubbleFootnote": "Modifiable aussi dans Réglages. S'applique à tous les flux.",
   "filterTooltip": "Filtrer les articles",
-  "quickSettingsTooltip": "Réglages rapides"
+  "quickSettingsTooltip": "Réglages rapides",
+  "articleOrder": "Ordre des articles",
+  "newestFirst": "Récents",
+  "oldestFirst": "Anciens"
 }
