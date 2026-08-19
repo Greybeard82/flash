@@ -762,24 +762,24 @@ class _FeedScreenState extends State<FeedScreen>
             ScrollFade(
               controller: _fabFade,
               child: FloatingActionButton(
-                key: _filterFabKey,
-                heroTag: 'filter',
-                onPressed: _openFilterBubble,
-                tooltip: l10n.filterTooltip,
-                mini: true,
-                child: const Icon(Icons.filter_alt_outlined),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ScrollFade(
-              controller: _fabFade,
-              child: FloatingActionButton(
                 key: _quickSettingsFabKey,
                 heroTag: 'quick_settings',
                 onPressed: _openQuickSettingsBubble,
                 tooltip: l10n.quickSettingsTooltip,
                 mini: true,
                 child: const Icon(Icons.tune_rounded),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ScrollFade(
+              controller: _fabFade,
+              child: FloatingActionButton(
+                key: _filterFabKey,
+                heroTag: 'filter',
+                onPressed: _openFilterBubble,
+                tooltip: l10n.filterTooltip,
+                mini: true,
+                child: const Icon(Icons.filter_alt_outlined),
               ),
             ),
           ],
