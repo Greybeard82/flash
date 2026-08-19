@@ -351,10 +351,27 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   // Pull-to-refresh: fetch without cleanup.
-  Future<void> _refreshCurrentTab() async {
+  /// [dropReadArticles] clears the rows the user has already read out of the
+  /// list, leaving only unread ones — the refresh *button*'s behaviour, so it
+  /// reads as "tidy up and show me what's new".
+  ///
+  /// Pull-to-refresh deliberately does not do this: it is a "check for new
+  /// content" gesture, and having the list collapse under the finger that
+  /// just pulled it would be the same disorienting jump the session-read
+  /// model exists to avoid.
+  Future<void> _refreshCurrentTab({bool dropReadArticles = false}) async {
     if (_refreshing) return;
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
+
+    if (dropReadArticles) {
+      // Forgetting them in the session set is all it takes — the union query
+      // only keeps a read article visible because its id is in there.
+      SessionReadTracker.instance.removeAll(
+        [for (final a in _articles) if (a.isRead && a.id != null) a.id!],
+      );
+    }
+
     await LoadingController.instance.run(() async {
       try {
         final svc = RefreshService(_settingsRepo);
@@ -695,7 +712,9 @@ class _FeedScreenState extends State<FeedScreen>
                 children: [
                   FloatingActionButton(
                     heroTag: 'refresh',
-                    onPressed: _refreshing ? null : _refreshCurrentTab,
+                    onPressed: _refreshing
+                        ? null
+                        : () => _refreshCurrentTab(dropReadArticles: true),
                     tooltip: l10n.refresh,
                     mini: true,
                     child: _refreshing

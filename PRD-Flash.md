@@ -266,7 +266,8 @@ Flagship feature — fixes Palabre's broken implementation.
 - Unread articles are never deleted, regardless of age
 - Bookmarked (saved) articles are never deleted, regardless of read state or age
 - Cleanup runs on every cold open and every background refresh, **before** new articles are fetched
-- Pull-to-refresh does **not** trigger cleanup — previously read articles remain visible for the session
+- Pull-to-refresh does **not** trigger cleanup, and does not clear the session-read set — previously read articles remain visible, dimmed, for the session. A list that collapsed under the finger that just pulled it would be the jump the session-read model exists to prevent
+- The **refresh FAB** does drop read articles from the list, leaving only unread ones. It is a deliberate "tidy up and show me what's new" action rather than a passive check, so the collapse is asked for. Only rows currently on screen are forgotten; articles read in another tab keep their place there. Neither refresh path runs DB cleanup — nothing is deleted, the articles simply stop matching the session-read query
 - Per-folder cleanup is also supported (used by "Mark all as read" on a category tab)
 
 ---
