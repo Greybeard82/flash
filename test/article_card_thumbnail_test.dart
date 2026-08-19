@@ -20,6 +20,7 @@
 //
 // No DB involvement; ArticleCard is a plain StatelessWidget.
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +28,14 @@ import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/theme/app_theme.dart';
 import 'package:flash/widgets/article_card.dart';
+
+/// No-op colour matrix — what the animated dim rests at for an unread card.
+const List<double> _identityMatrix = <double>[
+  1, 0, 0, 0, 0,
+  0, 1, 0, 0, 0,
+  0, 0, 1, 0, 0,
+  0, 0, 0, 1, 0,
+];
 
 Article _article({required bool isRead}) => Article(
       id: 1,
@@ -134,9 +143,63 @@ void main() {
     });
   }
 
-  testWidgets('an unread thumbnail is not desaturated at all', (tester) async {
+  // NB: this assertion used to be `find.byType(ColorFiltered), findsNothing`
+  // — absence of the widget standing in for "not desaturated". The read-state
+  // dim is now animated, and the filter/opacity layers are deliberately kept
+  // in the tree at every point of the animation including its resting state,
+  // so that starting or finishing the fade never re-parents the image element
+  // and forces a redecode (see _DimTransition). Presence of the widget is
+  // therefore no longer a proxy for anything; what a user actually sees is
+  // asserted directly instead, which is the stronger claim.
+  testWidgets('an unread thumbnail is not desaturated and not dimmed',
+      (tester) async {
     await _pump(tester, isRead: false, theme: flashDarkTheme());
-    expect(find.byType(ColorFiltered), findsNothing,
-        reason: 'only read articles get the greyscale treatment');
+
+    for (final f in tester.widgetList<ColorFiltered>(
+        find.byType(ColorFiltered))) {
+      expect(f.colorFilter, const ColorFilter.matrix(_identityMatrix),
+          reason: 'an unread article must render in full colour');
+    }
+    for (final o in tester.widgetList<Opacity>(find.byType(Opacity))) {
+      expect(o.opacity, 1.0,
+          reason: 'an unread article must render at full strength');
+    }
+  });
+
+  testWidgets('the image element survives the read-state transition',
+      (tester) async {
+    // The constraint the animation exists under: commit 39bb6a6 fixed
+    // thumbnails flashing a bright block mid-scroll, and that fix depends on
+    // the image never being torn down and re-resolved. Animating by swapping
+    // between two separately-filtered subtrees would reintroduce exactly
+    // that. Element identity is the direct test of it.
+    await _pump(tester, isRead: false, theme: flashDarkTheme());
+    final before = tester.element(find.byType(CachedNetworkImage));
+
+    await _pump(tester, isRead: true, theme: flashDarkTheme());
+    await tester.pump(const Duration(milliseconds: 90)); // mid-fade
+    final midway = tester.element(find.byType(CachedNetworkImage));
+    await tester.pumpAndSettle();
+    final after = tester.element(find.byType(CachedNetworkImage));
+
+    expect(identical(before, midway), isTrue,
+        reason: 'the image must not be remounted when the fade starts');
+    expect(identical(midway, after), isTrue,
+        reason: 'nor when it finishes');
+  });
+
+  testWidgets('legacy guard: the greyscale filter is still a matrix, never a '
+      'backdrop-mixing blend mode', (tester) async {
+    await _pump(tester, isRead: true, theme: flashDarkTheme());
+    await tester.pumpAndSettle();
+
+    final filters = tester.widgetList<ColorFiltered>(find.byType(ColorFiltered));
+    expect(filters, isNotEmpty);
+    for (final f in filters) {
+      expect(f.colorFilter.toString(), contains('matrix'),
+          reason: 'a matrix filter has no backdrop term');
+      expect(f.colorFilter.toString(), isNot(contains('saturation')),
+          reason: 'the non-separable blend mode must not come back');
+    }
   });
 }

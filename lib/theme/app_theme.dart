@@ -8,6 +8,44 @@ const Color darkAccentPressed = Color(0xFFFFF176);
 const Color lightAccent = Color(0xFFB8960A);
 const Color lightAccentPressed = Color(0xFFCC5500);
 
+/// Android page transitions, at a snappier tempo than stock.
+///
+/// [MaterialPageRoute.transitionDuration] delegates to whichever
+/// [PageTransitionsBuilder] the theme supplies for the current platform
+/// (`page.dart`'s `_getPageTransitionBuilder`), so overriding the getter here
+/// really does shorten navigation rather than just the visual curve.
+///
+/// Deliberately subclasses [PredictiveBackPageTransitionsBuilder] rather than
+/// [FadeForwardsPageTransitionsBuilder]: predictive back is already Flutter's
+/// Android default, and it *already* falls back to FadeForwards for anything
+/// that isn't a back gesture. Swapping to plain FadeForwards would look
+/// identical for ordinary navigation while quietly dropping predictive-back
+/// support on Android 14+.
+class _SnappyAndroidPageTransitions
+    extends PredictiveBackPageTransitionsBuilder {
+  const _SnappyAndroidPageTransitions();
+
+  // Stock is 450ms, which reads as sluggish on a device this fast.
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 220);
+
+  // Defaults to transitionDuration on the base class, but stated explicitly
+  // so a future edit can't leave back navigation at a different tempo.
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 220);
+}
+
+const PageTransitionsTheme kFlashPageTransitions = PageTransitionsTheme(
+  builders: <TargetPlatform, PageTransitionsBuilder>{
+    TargetPlatform.android: _SnappyAndroidPageTransitions(),
+    // Left at Flutter's defaults; Flash ships on Android.
+    TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+    TargetPlatform.windows: ZoomPageTransitionsBuilder(),
+    TargetPlatform.linux: ZoomPageTransitionsBuilder(),
+  },
+);
+
 // Dark mode backgrounds
 // NB: darkBg is mirrored in android/.../MainActivity.kt (DARK_BG) to paint the
 // native window before the first Flutter frame. Keep the two in sync.
@@ -36,6 +74,7 @@ ThemeData flashLightTheme() {
 
   return ThemeData(
     useMaterial3: true,
+    pageTransitionsTheme: kFlashPageTransitions,
     colorScheme: base,
     scaffoldBackgroundColor: lightBg,
     appBarTheme: const AppBarTheme(
@@ -146,6 +185,7 @@ ThemeData flashNewspaperTheme() {
 
   return ThemeData(
     useMaterial3: true,
+    pageTransitionsTheme: kFlashPageTransitions,
     colorScheme: base,
     scaffoldBackgroundColor: _npPaper,
     textTheme: baseText,
@@ -229,6 +269,7 @@ ThemeData flashDarkTheme() {
 
   return ThemeData(
     useMaterial3: true,
+    pageTransitionsTheme: kFlashPageTransitions,
     colorScheme: base,
     scaffoldBackgroundColor: darkBg,
     appBarTheme: const AppBarTheme(

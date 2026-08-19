@@ -14,8 +14,12 @@
 //
 // Deliberately NOT asserted here: that an article read in Bookmarks stays
 // visible in the feed list. It doesn't, and that's the intended design —
-// an article read outside the current tab is simply absent from it rather
-// than dimmed in place, matching the existing per-tab rule in PRD §4.3.
+// an article read from Bookmarks or Search is absent from the feed rather
+// than dimmed in place. That is not a scoping rule — session-read visibility
+// is global — it is simply that those two screens write is_read straight to
+// the DB and never touch SessionReadTracker at all, so nothing records the
+// article as read *this session* and the union query has no reason to keep
+// showing it.
 // Only the counts are required to stay truthful.
 //
 // Plain test(), not testWidgets() — this codebase never combines testWidgets()
@@ -83,15 +87,15 @@ void main() {
 
     // Exactly what FeedScreen._markRead does.
     await _repo.markAsRead(id);
-    SessionReadTracker.instance.add(id, scope: _folderId);
+    SessionReadTracker.instance.add(id);
 
     final visible = await _repo.getArticlesByFolder(
       _folderId,
-      sessionReadIds: SessionReadTracker.instance.idsForScope(_folderId),
+      sessionReadIds: SessionReadTracker.instance.ids,
     );
     expect(visible.map((a) => a.id), contains(id),
         reason: 'PRD §4.3: a read article stays in the list, dimmed in '
-            'place, for the rest of the session in the tab it was read in');
+            'place, for the rest of the session — in every tab');
   });
 
   test('the alias methods that bypassed the side effects are gone', () {
@@ -128,15 +132,15 @@ void main() {
 
     // Article was read in the Feed tab this session...
     await _repo.markAsRead(id);
-    SessionReadTracker.instance.add(id, scope: _folderId);
+    SessionReadTracker.instance.add(id);
 
     // ...then marked unread from Bookmarks, which now also clears the
     // tracker entry.
     await _repo.markAsUnread(id);
-    SessionReadTracker.instance.removeEverywhere(id);
+    SessionReadTracker.instance.remove(id);
 
     expect(
-      SessionReadTracker.instance.allIds,
+      SessionReadTracker.instance.ids,
       isNot(contains(id)),
       reason: 'leaving the id in the session set while the row is unread in '
           'the DB makes the article simultaneously counted unread by the '
@@ -145,21 +149,26 @@ void main() {
     expect(await _repo.getTotalUnreadCount(), 1);
   });
 
-  test('an article read outside the feed is absent from it, not dimmed — '
-      'the chosen behaviour, asserted so it stays deliberate', () async {
+  test('an article read from Bookmarks/Search is absent from the feed, not '
+      'dimmed — the chosen behaviour, asserted so it stays deliberate',
+      () async {
     final id = await _onlyArticleId();
 
-    await _repo.markAsRead(id); // Bookmarks path: no session scope recorded
+    // The Bookmarks/Search path: is_read goes to the DB, the session tracker
+    // is never told.
+    await _repo.markAsRead(id);
 
     final visible = await _repo.getArticlesByFolder(
       _folderId,
-      sessionReadIds: SessionReadTracker.instance.idsForScope(_folderId),
+      sessionReadIds: SessionReadTracker.instance.ids,
     );
 
     expect(visible, isEmpty,
-        reason: 'consistent with the per-tab session-read rule (PRD §4.3): '
-            'an article read somewhere else is gone from this tab rather '
-            'than dimmed in place. The badge counts still update — see the '
-            'unread-count test above.');
+        reason: 'this is not a scoping effect — session-read visibility is '
+            'global, and every tab passes the same set. It is that Bookmarks '
+            'and Search never record into that set at all, so nothing marks '
+            'the article as read *this session* and the union query drops '
+            'it. The badge counts still update — see the unread-count test '
+            'above.');
   });
 }

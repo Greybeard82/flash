@@ -91,7 +91,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     // Clear any session-read entry so the article isn't simultaneously
     // counted unread by the badge and treated as session-read by the list
     // query — the same thing FeedScreen._markUnread does.
-    SessionReadTracker.instance.removeEverywhere(article.id!);
+    SessionReadTracker.instance.remove(article.id!);
     ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();
     if (mounted) {

@@ -11,7 +11,7 @@
 //  4. Swipe (either direction) marks article as read and dims in-place
 //  5. Articles with isRead=true are rendered at reduced opacity but stay in list
 //  6. Tab switch restores that tab's saved scroll offset (or top if none)
-//  7. Read state is scoped: reading in one tab hides it from other tabs, keeps it dimmed in its own
+//  7. Read state is global: an article read in any tab stays dimmed in place in every tab
 //  8. Mark-unread removes from session tracker and restores full weight
 
 import 'package:flutter_test/flutter_test.dart';
@@ -209,31 +209,49 @@ void main() {
     });
   });
 
-  group('Read state is scoped per tab (session tracker)', () {
-    test('article read in All tab is absent from folder tab', () {
-      // Simulate: All tab loaded, user reads article 5. Recorded under All's
-      // own scope — a folder tab's union query never sees it.
+  group('Read state is global across tabs (session tracker)', () {
+    test('article read in the All tab stays visible, dimmed, in a folder tab',
+        () {
+      // Simulate: All tab loaded, user reads article 5. The session set is
+      // shared, so every tab's union query sees it.
       final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
-      final allScopeTracker = <int>{};
+      final tracker = <int>{};
 
       final updatedAll = _dimArticle(allTabArticles, 5);
-      allScopeTracker.add(5);
+      tracker.add(5);
 
-      // Folder tab re-runs its union query with its own (empty) scope tracker.
+      // Folder tab re-runs its union query with the same shared set.
       final folderTabArticles = [
         _article(id: 5, feedId: 2, isRead: true),
         _article(id: 7, feedId: 2),
       ];
-      final folderScopeTracker = <int>{};
-      final folderResult = _unionQuery(folderTabArticles, folderScopeTracker);
+      final folderResult = _unionQuery(folderTabArticles, tracker);
 
-      // Article 5 was read elsewhere (All scope) — absent entirely, not dimmed.
-      expect(folderResult.any((a) => a.id == 5), isFalse);
-      expect(folderResult.length, 1);
+      // Article 5 was read in the All tab — still present here, dimmed, not
+      // vanished out from under the user. This is the Palabre model, and
+      // reverses the earlier per-tab-absence design.
+      expect(folderResult.any((a) => a.id == 5), isTrue);
+      expect(folderResult.firstWhere((a) => a.id == 5).isRead, isTrue);
+      expect(folderResult.length, 2);
 
-      // All tab still shows it, dimmed, in its own scope.
+      // And the All tab still shows it dimmed too.
       expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
-      expect(allScopeTracker, contains(5));
+      expect(tracker, contains(5));
+    });
+
+    test('reading in a folder tab equally keeps it visible in All', () {
+      final tracker = <int>{};
+      tracker.add(7); // read while viewing a category
+
+      final allTabArticles = [
+        _article(id: 7, feedId: 2, isRead: true),
+        _article(id: 8, feedId: 1),
+      ];
+      final result = _unionQuery(allTabArticles, tracker);
+
+      expect(result.any((a) => a.id == 7), isTrue,
+          reason: 'the rule is symmetric — neither direction hides anything');
+      expect(result.length, 2);
     });
 
     test('mark-all-read (All) + clear tracker → reload shows unread-only', () {
@@ -255,14 +273,19 @@ void main() {
       expect(_unionQuery(reloaded, tracker), isEmpty);
     });
 
-    test('mark-all-read (Category) removes folder IDs, other tab IDs remain', () {
-      final tracker = <int>{10, 20}; // 10 = folder1, 20 = folder2
-      final folder1Ids = {10};
+    test('mark-all-read (Category) forgets only the IDs that tab was showing',
+        () {
+      // With one shared set, a category mark-all-read must remove exactly the
+      // articles visible in that tab — clearing wholesale would also forget
+      // articles read in other tabs and hide them there on the next query.
+      final tracker = <int>{10, 20}; // 10 shown in this tab, 20 read elsewhere
+      final visibleInThisTab = [10];
 
-      tracker.removeWhere(folder1Ids.contains);
+      tracker.removeAll(visibleInThisTab);
 
       expect(tracker, isNot(contains(10)));
-      expect(tracker, contains(20));
+      expect(tracker, contains(20),
+          reason: 'an article read in another tab must survive this action');
     });
   });
 

@@ -22,6 +22,7 @@ import '../utils/bottom_dwell_timer.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/fetching_indicator.dart';
 import '../widgets/folder_tab_bar.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
@@ -42,7 +43,7 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   // ── Repos & services ───────────────────────────────────────────────────────
   final _articleRepo = ArticleRepository();
   final _feedRepo = FeedRepository();
@@ -57,10 +58,6 @@ class _FeedScreenState extends State<FeedScreen>
   // ── Banner ─────────────────────────────────────────────────────────────────
   final _bannerKey = GlobalKey<NotificationBannerState>();
 
-  // ── Cold-start animation ───────────────────────────────────────────────────
-  late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulseAnim;
-
   // ── UI state ───────────────────────────────────────────────────────────────
   List<Folder> _folders = [];
   List<Article> _articles = [];
@@ -68,6 +65,9 @@ class _FeedScreenState extends State<FeedScreen>
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
   bool _booting = true;
+
+  /// A background feed fetch is in flight — drives the small app-bar bolt.
+  bool _backgroundFetching = false;
   bool _loading = false;
   bool _refreshing = false;
   bool _hasFeeds = false;
@@ -109,9 +109,6 @@ class _FeedScreenState extends State<FeedScreen>
 
   int? _folderOf(Article a) => _feedFolderId[a.feedId];
 
-  int _scopeForTab(int tab) =>
-      tab == 0 ? kAllScope : _folders[tab - 1].id!;
-
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
@@ -124,13 +121,6 @@ class _FeedScreenState extends State<FeedScreen>
     // without this screen being rebuilt or reloaded.
     ReadStateNotifier.instance.addListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.addListener(_onSettingsChanged);
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
     _boot();
   }
 
@@ -148,7 +138,6 @@ class _FeedScreenState extends State<FeedScreen>
     _scrollDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _scrollController.dispose();
-    _pulseCtrl.dispose();
     super.dispose();
   }
 
@@ -178,19 +167,9 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
-  Future<void> _fetchOnResume() async {
-    await LoadingController.instance.run(() async {
-      final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
-      try {
-        await RefreshService(_settingsRepo).refreshAll(coldStart: false);
-        _lastFetchAt = DateTime.now();
-      } catch (_) {
-        _reportRefreshFailure();
-      }
-      await _loadArticles();
-      _restoreScrollOffset(offset);
-    }, label: 'Refreshing');
-  }
+  /// Resume from background. Same indicator as cold start, so the two read as
+  /// one behaviour rather than two — and the user keeps their scroll position.
+  Future<void> _fetchOnResume() => _backgroundRefresh(preserveScroll: true);
 
   /// A refresh threw. These were previously swallowed silently, so on a
   /// captive-portal wifi or an expired certificate the spinner simply
@@ -203,26 +182,53 @@ class _FeedScreenState extends State<FeedScreen>
 
   // ── Boot ───────────────────────────────────────────────────────────────────
 
+  /// Cold start, in the order that gets readable content on screen soonest.
+  ///
+  /// This used to run cleanup *and* a full network fetch behind a full-screen
+  /// pulse, so opening the app on a slow connection meant staring at an
+  /// animation while a perfectly good cached list sat on disk. Now: clean,
+  /// show what's already there, then fetch in the background behind a small
+  /// app-bar indicator.
   Future<void> _boot() async {
-    await LoadingController.instance.run(() async {
-      final settings = await _settingsRepo.getAll();
-      _applyReadingSettings(settings);
-      if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
+    final settings = await _settingsRepo.getAll();
+    _applyReadingSettings(settings);
+    if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
 
-      if (mounted) setState(() => _booting = true);
+    // 1. Cleanup first, so the list we're about to show is already purged of
+    //    stale read articles rather than shedding rows a moment later.
+    try {
+      await _articleRepo.runCleanup(days: settings.cleanupAgeDays);
+    } catch (_) {
+      // Cleanup is housekeeping; a failure must not hold up the feed.
+    }
 
-      // Cold start: cleanup first, then fetch.
-      try {
-        await RefreshService(_settingsRepo).refreshAll(coldStart: true);
-        _lastFetchAt = DateTime.now();
-      } catch (_) {
-        _reportRefreshFailure();
-      }
+    // 2. Show the cached list immediately. No network in the way.
+    await _loadArticles();
+    if (mounted) setState(() => _booting = false);
+    _scrollController.addListener(_onScroll);
 
-      await _loadArticles();
-      if (mounted) setState(() => _booting = false);
-      _scrollController.addListener(_onScroll);
-    }, label: 'Loading');
+    // 3. Fetch in the background.
+    unawaited(_backgroundRefresh());
+  }
+
+  /// Network fetch that never covers the content. Shared by cold start and
+  /// resume so the two look the same.
+  Future<void> _backgroundRefresh({bool preserveScroll = false}) async {
+    if (!mounted || _backgroundFetching) return;
+    setState(() => _backgroundFetching = true);
+
+    final offset = preserveScroll && _scrollController.hasClients
+        ? _scrollController.offset
+        : 0.0;
+    try {
+      await RefreshService(_settingsRepo).refreshAll();
+      _lastFetchAt = DateTime.now();
+    } catch (_) {
+      _reportRefreshFailure();
+    }
+    await _loadArticles();
+    if (preserveScroll) _restoreScrollOffset(offset);
+    if (mounted) setState(() => _backgroundFetching = false);
   }
 
   // ── Core data operations ───────────────────────────────────────────────────
@@ -298,8 +304,9 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) {
-    final scope = tab == 0 ? kAllScope : folders[tab - 1].id!;
-    final sessionIds = SessionReadTracker.instance.idsForScope(scope);
+    // Every tab passes the whole session set: an article read anywhere stays
+    // visible, dimmed in place, in every tab for the rest of the session.
+    final sessionIds = SessionReadTracker.instance.ids;
     if (tab == 0) return _articleRepo.getAllArticles(sessionReadIds: sessionIds);
     return _articleRepo.getArticlesByFolder(
       folders[tab - 1].id!,
@@ -439,8 +446,7 @@ class _FeedScreenState extends State<FeedScreen>
     // DB write is immediate.
     if (toWrite.isNotEmpty) {
       _articleRepo.markManyRead(toWrite);
-      SessionReadTracker.instance
-          .addAll(toWrite, scope: _scopeForTab(_selectedTabIndex));
+      SessionReadTracker.instance.addAll(toWrite);
       _counts = _counts.applyManyRead(readFolderIds);
       AppBadgePlus.updateBadge(_counts.all);
     }
@@ -476,7 +482,6 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _onBottomDwellComplete() async {
     if (!mounted || _articles.isEmpty) return;
-    final scope = _scopeForTab(_selectedTabIndex);
 
     // Reuse the exact same per-article read path used elsewhere (tap/swipe
     // to read) so unread-count propagation to every tab an article appears
@@ -485,12 +490,10 @@ class _FeedScreenState extends State<FeedScreen>
     if (_selectedTabIndex == 0) {
       await _articleRepo.markAllAsRead();
     } else {
-      await _articleRepo.markAllAsReadByFolder(scope);
+      await _articleRepo.markAllAsReadByFolder(_folders[_selectedTabIndex - 1].id!);
     }
-    SessionReadTracker.instance.addAll(
-      [for (final a in _articles) if (a.id != null) a.id!],
-      scope: scope,
-    );
+    SessionReadTracker.instance
+        .addAll([for (final a in _articles) if (a.id != null) a.id!]);
 
     if (!mounted) return;
     setState(() {
@@ -510,8 +513,8 @@ class _FeedScreenState extends State<FeedScreen>
     // Mark read immediately and dim in-place.
     if (wasUnread) {
       await _articleRepo.markAsRead(article.id!);
-      SessionReadTracker.instance
-          .add(article.id!, scope: _scopeForTab(_selectedTabIndex));
+      SessionReadTracker.instance.add(article.id!);
+
       if (mounted) {
         setState(() {
           _articles = [
@@ -537,8 +540,8 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
     await _articleRepo.markAsRead(article.id!);
-    SessionReadTracker.instance
-        .add(article.id!, scope: _scopeForTab(_selectedTabIndex));
+    SessionReadTracker.instance.add(article.id!);
+
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -554,7 +557,7 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markAsUnread(article.id!);
-    SessionReadTracker.instance.removeEverywhere(article.id!);
+    SessionReadTracker.instance.remove(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -613,13 +616,21 @@ class _FeedScreenState extends State<FeedScreen>
       await _loadArticles();
       if (mounted) setState(() => _booting = false);
     } else {
-      // Category tab: mark read, remove folder's IDs from tracker, cleanup, refresh folder.
+      // Category tab: mark read, forget this tab's IDs, cleanup, refresh folder.
       final folderId = _folders[_selectedTabIndex - 1].id!;
+
+      // Exactly the articles this tab was showing when the action ran. The
+      // session set is global now, so clearing it wholesale would also forget
+      // articles read in other tabs — un-dimming them and then hiding them on
+      // the next query, in lists the user never touched.
+      final dismissedIds = [
+        for (final a in _articles) if (a.id != null) a.id!,
+      ];
 
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
       await _articleRepo.markAllAsReadByFolder(folderId);
-      SessionReadTracker.instance.clearScope(folderId);
+      SessionReadTracker.instance.removeAll(dismissedIds);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       // Refresh feeds in this folder — one pass, not one call per feed.
@@ -662,7 +673,17 @@ class _FeedScreenState extends State<FeedScreen>
       appBar: AppBar(
         title: _newspaperMode ? _NewspaperMasthead() : Text(l10n.appTitle),
         centerTitle: false,
-        actions: const [],
+        actions: [
+          // Background fetch lives here rather than over the content.
+          AnimatedOpacity(
+            opacity: _backgroundFetching ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 200),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(child: FetchingIndicator()),
+            ),
+          ),
+        ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _hasFeeds && !_booting
@@ -733,9 +754,9 @@ class _FeedScreenState extends State<FeedScreen>
       return EmptyState(onAddFeed: widget.onNavigateToFeeds);
     }
 
-    if (_booting) return _BootingAnimation(animation: _pulseAnim);
-
-    if (_loading) {
+    // Boot is now just the local DB read, which is quick — a skeleton covers
+    // it without hiding the app the way the old full-screen pulse did.
+    if (_booting || _loading) {
       return ListView.builder(
         itemCount: 8,
         itemBuilder: (_, __) => const ShimmerCard(),
@@ -831,34 +852,6 @@ class _NewspaperMasthead extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _BootingAnimation extends StatelessWidget {
-  final Animation<double> animation;
-  const _BootingAnimation({required this.animation});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ScaleTransition(
-            scale: animation,
-            child: Image.asset('assets/images/bolt_logo.png', width: 72, height: 72),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            AppLocalizations.of(context)!.refresh,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
