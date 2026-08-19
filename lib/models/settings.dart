@@ -1,3 +1,5 @@
+import '../utils/constants.dart';
+
 class AppSettings {
   /// Delay options offered for [autoMarkReadAtBottomSeconds], in seconds.
   /// 0 means "immediately on reaching the bottom"; the rest step by 5.
@@ -5,7 +7,12 @@ class AppSettings {
 
   final String theme; // 'system' | 'light' | 'dark'
   final int refreshIntervalMinutes;
+
+  /// "Max articles per feed" — the cap applied to each feed independently at
+  /// fetch time. Not a cap on the All tab, which is the uncapped union of
+  /// every feed's retained articles.
   final int articleLimit;
+
   final bool markReadOnScroll;
 
   /// Whether reaching the end of a feed marks everything in it as read.
@@ -25,7 +32,7 @@ class AppSettings {
   const AppSettings({
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
-    this.articleLimit = 100,
+    this.articleLimit = kFetchArticleLimit,
     this.markReadOnScroll = true,
     this.autoMarkReadAtBottom = true,
     this.autoMarkReadAtBottomSeconds = 5,
@@ -56,7 +63,8 @@ class AppSettings {
     return AppSettings(
       theme: map['theme'] ?? 'system',
       refreshIntervalMinutes: int.tryParse(map['refresh_interval_minutes'] ?? '30') ?? 30,
-      articleLimit: int.tryParse(map['article_limit'] ?? '100') ?? 100,
+      articleLimit:
+          int.tryParse(map['article_limit'] ?? '') ?? kFetchArticleLimit,
       markReadOnScroll: (map['mark_read_on_scroll'] ?? 'true') == 'true',
       autoMarkReadAtBottom:
           (map['auto_mark_read_at_bottom'] ?? 'true') == 'true',

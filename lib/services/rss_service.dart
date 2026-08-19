@@ -26,7 +26,20 @@ class RssService {
 
   // ── Fetch threshold filter ─────────────────────────────────────────────────
 
-  List<Article> applyFetchThresholds(List<Article> articles) {
+  /// Filters one feed's freshly-parsed articles down to what gets written to
+  /// the database.
+  ///
+  /// [articleLimit] is the caller's *effective* cap for this feed — see
+  /// [effectiveArticleLimit]. It used to be the hardcoded [kFetchArticleLimit],
+  /// which is why the "Max articles per feed" setting appeared to do nothing:
+  /// it was stored and displayed, but every feed kept 100 regardless.
+  ///
+  /// The age cutoff is still the hardcoded [kFetchDayLimit] and is deliberately
+  /// left alone here — see the note on that constant.
+  List<Article> applyFetchThresholds(
+    List<Article> articles, {
+    required int articleLimit,
+  }) {
     final cutoffMs = DateTime.now()
         .subtract(const Duration(days: kFetchDayLimit))
         .millisecondsSinceEpoch;
@@ -37,11 +50,21 @@ class RssService {
     for (final article in articles) {
       if (article.publishedAt == null) continue;
       if (article.publishedAt! < cutoffMs) break;
-      if (accepted.length >= kFetchArticleLimit) break;
+      if (accepted.length >= articleLimit) break;
       accepted.add(article);
     }
     return accepted;
   }
+
+  /// The cap that actually applies to [feed]: its own override when set,
+  /// otherwise the global "Max articles per feed" setting.
+  ///
+  /// `Feed.articleLimit` is currently never written by any screen, so in
+  /// practice this always resolves to [globalLimit]. It is honoured anyway
+  /// because the column exists and a value in it should mean something rather
+  /// than being silently ignored.
+  static int effectiveArticleLimit(Feed feed, int globalLimit) =>
+      feed.articleLimit ?? globalLimit;
 
   // ── Fetch and store ────────────────────────────────────────────────────────
 
@@ -49,6 +72,7 @@ class RssService {
       fetchAndStore(
     Feed feed, {
     List<KeywordBlock> keywords = const [],
+    required int articleLimit,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     try {
@@ -60,7 +84,10 @@ class RssService {
       }
 
       final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-      var articles = applyFetchThresholds(_parse(body, feed));
+      var articles = applyFetchThresholds(
+        _parse(body, feed),
+        articleLimit: effectiveArticleLimit(feed, articleLimit),
+      );
 
       if (keywords.isNotEmpty) {
         articles = articles.map((a) {

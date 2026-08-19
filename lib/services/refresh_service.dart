@@ -66,9 +66,12 @@ Future<int> _doRefresh({bool runCleanup = false, List<Feed>? feeds}) async {
   final alertRepo = KeywordAlertRepository();
   final settingsRepo = SettingsRepository();
 
+  // Read once for the whole pass: every feed shares the same global cap, and
+  // cleanup (when it runs) needs the age window from the same snapshot.
+  final settings = await settingsRepo.getAll();
+
   // Cleanup must complete before any inserts (cold start and background only).
   if (runCleanup) {
-    final settings = await settingsRepo.getAll();
     await articleRepo.runCleanup(days: settings.cleanupAgeDays);
   }
 
@@ -81,7 +84,11 @@ Future<int> _doRefresh({bool runCleanup = false, List<Feed>? feeds}) async {
   final allUnblocked = <({String title, String? description})>[];
 
   await Future.wait(feedList.map((feed) async {
-    final result = await rssService.fetchAndStore(feed, keywords: keywords);
+    final result = await rssService.fetchAndStore(
+      feed,
+      keywords: keywords,
+      articleLimit: settings.articleLimit,
+    );
     totalNew += result.newCount;
     allUnblocked.addAll(result.unblocked);
   }));

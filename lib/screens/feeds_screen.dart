@@ -819,8 +819,10 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
         }
       }
 
-      // Initial fetch
-      await rssService.fetchAndStore(feed);
+      // Initial fetch — respects the same cap as every later refresh, so a
+      // newly added feed doesn't arrive holding more than the setting allows.
+      final settings = await widget.settingsRepo.getAll();
+      await rssService.fetchAndStore(feed, articleLimit: settings.articleLimit);
 
       if (mounted) {
         Navigator.pop(context);

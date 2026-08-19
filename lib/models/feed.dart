@@ -6,6 +6,12 @@ class Feed {
   final String? siteUrl;
   final String? faviconPath;
   final String? description;
+  /// Per-feed override for "Max articles per feed". Null means "use the
+  /// global setting", which is every feed today — no screen writes this, so
+  /// the column is always null in practice. It is honoured at fetch time
+  /// (`RssService.effectiveArticleLimit`) rather than ignored, so that a value
+  /// arriving here — from a future editor, an import, or a hand-edited DB —
+  /// means what it says.
   final int? articleLimit;
   final int? lastFetchedAt;
   final String? lastFetchError;
