@@ -26,7 +26,17 @@ class AppSettings {
   final bool anthropicApiKeySet;
   final String? googleAccountEmail;
   final bool onboardingComplete;
-  final int cleanupAgeDays; // [5, 20]
+  /// Age window for cleanup, in days. Meaning is unchanged — read articles
+  /// older than this are purged — only the accepted range widened, from
+  /// [5, 20] down to [2, 20], so the Filter bubble's 2–15 slider can't set a
+  /// value the model would silently clamp back up. The Settings screen's
+  /// stepper still moves within its own 5–20 bounds.
+  ///
+  /// NB: `ArticleRepository.runCleanup` applies its own independent
+  /// `clamp(5, 20)`, so a stored 2–4 is preserved here but cleanup still
+  /// behaves as if it were 5. Left alone deliberately — that clamp is in the
+  /// retention path.
+  final int cleanupAgeDays; // [2, 20]
   final bool newspaperMode;
 
   const AppSettings({
@@ -78,7 +88,8 @@ class AppSettings {
       anthropicApiKeySet: (map['anthropic_api_key_set'] ?? 'false') == 'true',
       googleAccountEmail: map['google_account_email'] == 'null' ? null : map['google_account_email'],
       onboardingComplete: (map['onboarding_complete'] ?? 'false') == 'true',
-      cleanupAgeDays: (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(5, 20),
+      cleanupAgeDays:
+          (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(2, 20),
       newspaperMode: (map['newspaper_mode'] ?? 'false') == 'true',
     );
   }

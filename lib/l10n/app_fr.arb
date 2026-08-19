@@ -172,5 +172,13 @@
   "autoMarkReadAtBottomSubtitle": "Arriver en bas marque tous les articles de ce flux comme lus",
   "autoMarkReadDelay": "Délai avant de marquer",
   "autoMarkReadImmediately": "Immédiatement",
-  "autoMarkReadAfterSeconds": "Après {n} s"
+  "autoMarkReadAfterSeconds": "Après {n} s",
+  "filterBubbleTitle": "Filtre",
+  "quickSettingsTitle": "Réglages rapides",
+  "articleAgeFilter": "Âge des articles",
+  "articlesCount": "{n} articles",
+  "daysCount": "{n} jours",
+  "filterBubbleFootnote": "Modifiable aussi dans Réglages. S'applique à tous les flux.",
+  "filterTooltip": "Filtrer les articles",
+  "quickSettingsTooltip": "Réglages rapides"
 }

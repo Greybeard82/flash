@@ -172,5 +172,13 @@
   "autoMarkReadAtBottomSubtitle": "Das Ende zu erreichen markiert alle Artikel dieses Feeds als gelesen",
   "autoMarkReadDelay": "Wartezeit",
   "autoMarkReadImmediately": "Sofort",
-  "autoMarkReadAfterSeconds": "Nach {n} s"
+  "autoMarkReadAfterSeconds": "Nach {n} s",
+  "filterBubbleTitle": "Filter",
+  "quickSettingsTitle": "Schnelleinstellungen",
+  "articleAgeFilter": "Artikelalter",
+  "articlesCount": "{n} Artikel",
+  "daysCount": "{n} Tage",
+  "filterBubbleFootnote": "Auch in den Einstellungen. Gilt für alle Feeds.",
+  "filterTooltip": "Artikel filtern",
+  "quickSettingsTooltip": "Schnelleinstellungen"
 }

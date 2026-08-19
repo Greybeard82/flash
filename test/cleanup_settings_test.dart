@@ -179,9 +179,20 @@ void main() {
       expect(s.cleanupAgeDays, 14);
     });
 
-    test('clamps below minimum to 5', () {
+    // The parse clamp's lower bound was widened from 5 to 2 so the Filter
+    // bubble's 2–15 day slider can't set a value the model silently raises
+    // back. The *meaning* of the setting is unchanged, and
+    // ArticleRepository.runCleanup keeps its own independent clamp(5, 20) —
+    // asserted separately below — so a stored 2 is preserved here but cleanup
+    // still behaves as if it were 5.
+    test('clamps below minimum to 2', () {
+      final s = AppSettings.fromMap({'cleanup_age_days': '1'});
+      expect(s.cleanupAgeDays, 2);
+    });
+
+    test('a value of 3 is now preserved rather than raised to 5', () {
       final s = AppSettings.fromMap({'cleanup_age_days': '3'});
-      expect(s.cleanupAgeDays, 5);
+      expect(s.cleanupAgeDays, 3);
     });
 
     test('clamps above maximum to 20', () {

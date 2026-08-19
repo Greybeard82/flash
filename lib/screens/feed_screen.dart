@@ -21,7 +21,11 @@ import '../services/share_service.dart';
 import '../utils/bottom_dwell_timer.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
+import '../widgets/bubble_panel.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/filter_bubble.dart';
+import '../widgets/quick_settings_bubble.dart';
+import '../widgets/scroll_fade.dart';
 import '../widgets/fetching_indicator.dart';
 import '../widgets/folder_tab_bar.dart';
 import '../widgets/notification_banner.dart';
@@ -79,6 +83,16 @@ class _FeedScreenState extends State<FeedScreen>
 
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkReadUI = {};
+
+  /// Drives the fade on every floating button while the list is moving. One
+  /// controller for the whole cluster — a sixth button is a `ScrollFade`
+  /// wrapper, not another copy of this.
+  final _fabFade = ScrollFadeController();
+
+  /// Anchors for the two top buttons, so their bubbles can grow out of them.
+  final _filterFabKey = GlobalKey();
+  final _quickSettingsFabKey = GlobalKey();
+  OverlayEntry? _openBubble;
   late final BottomDwellTimer _bottomDwellTimer =
       BottomDwellTimer(onComplete: _onBottomDwellComplete);
 
@@ -137,6 +151,8 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     _scrollDebounce?.cancel();
     _bottomDwellTimer.cancel();
+    _fabFade.dispose();
+    if (_openBubble?.mounted ?? false) _openBubble!.remove();
     _scrollController.dispose();
     super.dispose();
   }
@@ -435,6 +451,9 @@ class _FeedScreenState extends State<FeedScreen>
   // ── Mark as read on scroll ─────────────────────────────────────────────────
 
   void _onScroll() {
+    // Before the early return below: the fade has to work whether or not
+    // mark-read-on-scroll is switched on.
+    _fabFade.onScroll();
     _updateBottomDwellTimer();
     if (!_markReadOnScroll || _articles.isEmpty) return;
     final offset = _scrollController.offset;
@@ -681,6 +700,75 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
+  // ── Top bubbles ────────────────────────────────────────────────────────────
+
+  /// Opens one bubble at a time, growing out of [anchorKey]'s button.
+  Future<void> _openBubblePanel(
+    GlobalKey anchorKey,
+    Widget Function(AppSettings settings) contentBuilder,
+  ) async {
+    if (_openBubble?.mounted ?? false) return;
+    // The panels edit live settings, so they open against a fresh read rather
+    // than whatever this screen happened to cache at boot.
+    final settings = await _settingsRepo.getAll();
+    if (!mounted) return;
+
+    _fabFade.settleNow();
+    _openBubble = showBubblePanel(
+      context: context,
+      anchorKey: anchorKey,
+      child: contentBuilder(settings),
+    );
+  }
+
+  void _openFilterBubble() => _openBubblePanel(
+        _filterFabKey,
+        (settings) => FilterBubble(initial: settings),
+      );
+
+  void _openQuickSettingsBubble() => _openBubblePanel(
+        _quickSettingsFabKey,
+        (settings) => QuickSettingsBubble(initial: settings),
+      );
+
+  /// The two top buttons. Same mini-FAB styling and horizontal position as the
+  /// bottom cluster, anchored to the top instead.
+  Widget _topFabCluster(AppLocalizations l10n) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, right: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScrollFade(
+              controller: _fabFade,
+              child: FloatingActionButton(
+                key: _filterFabKey,
+                heroTag: 'filter',
+                onPressed: _openFilterBubble,
+                tooltip: l10n.filterTooltip,
+                mini: true,
+                child: const Icon(Icons.filter_alt_outlined),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ScrollFade(
+              controller: _fabFade,
+              child: FloatingActionButton(
+                key: _quickSettingsFabKey,
+                heroTag: 'quick_settings',
+                onPressed: _openQuickSettingsBubble,
+                tooltip: l10n.quickSettingsTooltip,
+                mini: true,
+                child: const Icon(Icons.tune_rounded),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -710,56 +798,77 @@ class _FeedScreenState extends State<FeedScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  FloatingActionButton(
-                    heroTag: 'refresh',
-                    onPressed: _refreshing
-                        ? null
-                        : () => _refreshCurrentTab(dropReadArticles: true),
-                    tooltip: l10n.refresh,
-                    mini: true,
-                    child: _refreshing
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh_rounded),
-                  ),
-                  const SizedBox(height: 8),
-                  FloatingActionButton(
-                    heroTag: 'search',
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const SearchScreen()),
+                  ScrollFade(
+                    controller: _fabFade,
+                    child: FloatingActionButton(
+                      heroTag: 'refresh',
+                      onPressed: _refreshing
+                          ? null
+                          : () => _refreshCurrentTab(dropReadArticles: true),
+                      tooltip: l10n.refresh,
+                      mini: true,
+                      child: _refreshing
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.refresh_rounded),
                     ),
-                    tooltip: l10n.searchArticles,
-                    mini: true,
-                    child: const Icon(Icons.search_rounded),
                   ),
                   const SizedBox(height: 8),
-                  FloatingActionButton(
-                    heroTag: 'mark_all_read',
-                    onPressed: _markAllRead,
-                    tooltip: l10n.markAllRead,
-                    mini: true,
-                    child: const Icon(Icons.done_all_rounded),
+                  ScrollFade(
+                    controller: _fabFade,
+                    child: FloatingActionButton(
+                      heroTag: 'search',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      ),
+                      tooltip: l10n.searchArticles,
+                      mini: true,
+                      child: const Icon(Icons.search_rounded),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ScrollFade(
+                    controller: _fabFade,
+                    child: FloatingActionButton(
+                      heroTag: 'mark_all_read',
+                      onPressed: _markAllRead,
+                      tooltip: l10n.markAllRead,
+                      mini: true,
+                      child: const Icon(Icons.done_all_rounded),
+                    ),
                   ),
                 ],
               ),
             )
           : null,
-      body: Column(
+      body: Stack(
         children: [
-          NotificationBanner(key: _bannerKey),
-          Expanded(child: _buildContent()),
-          if (_hasFeeds && _folders.length > 1)
-            FolderTabBar(
-              folders: _folders,
-              selectedIndex: _selectedTabIndex,
-              folderUnreadCounts: _counts.byFolder,
-              allUnreadCount: _counts.all,
-              onTabSelected: _onTabSelected,
-              onMarkAllRead: _markAllRead,
+          Column(
+            children: [
+              NotificationBanner(key: _bannerKey),
+              Expanded(child: _buildContent()),
+              if (_hasFeeds && _folders.length > 1)
+                FolderTabBar(
+                  folders: _folders,
+                  selectedIndex: _selectedTabIndex,
+                  folderUnreadCounts: _counts.byFolder,
+                  allUnreadCount: _counts.all,
+                  onTabSelected: _onTabSelected,
+                  onMarkAllRead: _markAllRead,
+                ),
+            ],
+          ),
+          // Top button cluster, aligned with the bottom one. In the body's
+          // Stack rather than `floatingActionButton:`, which only supports a
+          // single positioned child.
+          if (_hasFeeds && !_booting)
+            Align(
+              alignment: Alignment.topRight,
+              child: _topFabCluster(l10n),
             ),
         ],
       ),

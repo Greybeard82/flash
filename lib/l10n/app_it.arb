@@ -172,5 +172,13 @@
   "autoMarkReadAtBottomSubtitle": "Arrivare in fondo segna come letti tutti gli articoli di questo feed",
   "autoMarkReadDelay": "Attesa prima di segnare",
   "autoMarkReadImmediately": "Immediatamente",
-  "autoMarkReadAfterSeconds": "Dopo {n} s"
+  "autoMarkReadAfterSeconds": "Dopo {n} s",
+  "filterBubbleTitle": "Filtro",
+  "quickSettingsTitle": "Impostazioni rapide",
+  "articleAgeFilter": "Età degli articoli",
+  "articlesCount": "{n} articoli",
+  "daysCount": "{n} giorni",
+  "filterBubbleFootnote": "Modificabile anche in Impostazioni. Vale per tutti i feed.",
+  "filterTooltip": "Filtra articoli",
+  "quickSettingsTooltip": "Impostazioni rapide"
 }

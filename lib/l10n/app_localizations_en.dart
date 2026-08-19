@@ -539,4 +539,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String autoMarkReadAfterSeconds(int n) {
     return 'After ${n}s';
   }
+
+  @override
+  String get filterBubbleTitle => 'Filter';
+
+  @override
+  String get quickSettingsTitle => 'Quick settings';
+
+  @override
+  String get articleAgeFilter => 'Article age';
+
+  @override
+  String articlesCount(int n) {
+    return '$n articles';
+  }
+
+  @override
+  String daysCount(int n) {
+    return '$n days';
+  }
+
+  @override
+  String get filterBubbleFootnote =>
+      'Also editable in Settings. Applies to every feed.';
+
+  @override
+  String get filterTooltip => 'Filter articles';
+
+  @override
+  String get quickSettingsTooltip => 'Quick settings';
 }

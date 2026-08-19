@@ -214,5 +214,15 @@
   "autoMarkReadDelay": "Wait before marking",
   "autoMarkReadImmediately": "Immediately",
   "autoMarkReadAfterSeconds": "After {n}s",
-  "@autoMarkReadAfterSeconds": { "placeholders": { "n": { "type": "int" } } }
+  "@autoMarkReadAfterSeconds": { "placeholders": { "n": { "type": "int" } } },
+  "filterBubbleTitle": "Filter",
+  "quickSettingsTitle": "Quick settings",
+  "articleAgeFilter": "Article age",
+  "articlesCount": "{n} articles",
+  "daysCount": "{n} days",
+  "filterBubbleFootnote": "Also editable in Settings. Applies to every feed.",
+  "filterTooltip": "Filter articles",
+  "quickSettingsTooltip": "Quick settings",
+  "@articlesCount": { "placeholders": { "n": { "type": "int" } } },
+  "@daysCount": { "placeholders": { "n": { "type": "int" } } }
 }
