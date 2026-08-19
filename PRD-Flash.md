@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.4
+**Version:** 2.5
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** August 2026
+**Last Updated:** 19 August 2026
 
 ---
 
@@ -28,7 +28,7 @@ All data lives on-device. Google Drive backup and local file backup are both ava
 ## 3. Platform & Technical Stack
 
 ### 3.1 Target Platform
-- **Primary:** Android — minimum SDK 26 (Android 8.0 Oreo), target SDK 35
+- **Primary:** Android — minimum SDK 26 (Android 8.0 Oreo), target SDK 36 — inherited from `flutter.targetSdkVersion`, not pinned in `build.gradle.kts`
 - **Package:** `io.getflash.app`
 - No iOS support in v1.0
 
@@ -78,7 +78,7 @@ Specific mandates:
 ### 3.10 Localisation
 - Supported languages: **English, German, Spanish, French, Italian**
 - Uses Flutter's `flutter_localizations` with ARB files
-- System locale is detected automatically; user can override in Settings
+- System locale is detected automatically. There is **no in-app language picker** — the app follows the device locale and falls back to English for anything unsupported
 
 ---
 
@@ -96,6 +96,14 @@ Specific mandates:
 **Edit / Remove Feed**
 - Swipe to delete, tap to edit
 - Deletion confirmed via dialog
+
+**Reorder / Move Feeds — Long-Press Drag**
+- Long-press a feed row on the Categories screen to pick it up, then drag to reorder it within its category **or** drop it into a different one
+- Drop targets highlight as the drag hovers; dragging near the top or bottom edge auto-scrolls the list
+- A category header is itself a drop target, so a collapsed category can still receive a feed
+- Haptic feedback on pick-up, matching the app's other long-press gestures
+- Order and category assignment persist immediately; a failed write reports and reloads rather than leaving the list showing an arrangement that was never saved
+- Categories themselves are reordered by their own drag handle in the header
 
 **Feed Health**
 - Feeds that fail to fetch show a warning indicator
@@ -156,10 +164,21 @@ The feed displays: **all non-blocked articles in scope that are either unread, o
 - **Mark as unread:** drops the article from the set, so it hides again everywhere on the next query.
 - **App restart / cold open:** the set is empty → fresh unread-only view everywhere.
 
+**How a read article looks**
+- Reduced opacity and lighter font weight on the text; the thumbnail and favicon are desaturated to greyscale and dimmed
+- The change **animates over ~180ms** rather than cutting hard, so a card visibly greys out instead of snapping
+- Desaturation uses a `ColorFilter.matrix` interpolated between identity and greyscale, with the image instance reused across every animation frame. This is load-bearing: a `BlendMode.saturation` filter mixes with the backdrop and was the cause of a dark-mode scroll flicker (bright grey blocks flashing on unloaded thumbnails), and swapping the image widget to animate would force a redecode and reintroduce it
+
 **Mark as Read — On Scroll**
 - Articles are automatically marked as read as they scroll past the midpoint of the viewport
-- DB write is immediate; the visual dim is debounced 150ms to avoid flicker during fast scrolling
+- DB write is immediate; the visual dim is debounced 150ms so a fast scroll doesn't thrash `setState`
 - Can be disabled in Settings
+
+**Mark as Read — End of Feed**
+- Reaching the bottom of a feed marks every article in the current tab as read, propagating to that folder's badge and to All
+- Configurable in Settings: a toggle, plus a delay of **Immediately, or 5–30 seconds in 5-second steps**. Default is on at 5 seconds
+- The wait is cancelled by scrolling back up, switching tabs, navigating away, or backgrounding the app — a bulk mark-read the user didn't witness never lands
+- It fires at most once per visit to the bottom; returning to the bottom later arms it again
 
 **Mark as Read — Swipe**
 - Swipe in either direction (left or right): mark as read, add to session set
@@ -185,12 +204,13 @@ No confirmation dialog is ever shown. Scroll position for the affected tab reset
 
 **Long-Press Radial Menu**
 - Long-press any article card to open a radial context menu centred on the card
-- Two action buttons:
+- Three action buttons, arranged in a row above a close button:
+  - **Bookmark** — toggles saved state; label and icon reflect whether the article is already saved
   - **Share** — triggers Android native share sheet
   - **✦ Summary** — opens AI article summary sheet
 - Central × button and tapping outside both dismiss the menu
 - Background dims while the menu is open
-- Menu animates in with radial expand (scale + fade, ~150ms)
+- Menu animates in with radial expand: the buttons travel outward from the × anchor on an `easeOutBack` overshoot while scaling and fading in (~220ms), and pull cleanly back to the anchor on reverse
 
 **Pull-to-Refresh**
 - Swipe down from the top of the feed list triggers an immediate refresh of all feeds in the current tab
@@ -198,7 +218,7 @@ No confirmation dialog is ever shown. Scroll position for the affected tab reset
 
 **FAB Cluster (bottom-right)**
 Three mini FABs, visible only when at least one feed exists:
-- **Refresh** — refreshes current tab's feeds; shows spinner while active
+- **Refresh** — refreshes the current tab's feeds and **drops already-read articles from the list**, leaving only unread ones; shows a spinner while active. This is the deliberate "tidy up and show me what's new" action, and is the one place read rows are cleared on demand
 - **Search** — opens the Search screen
 - **Mark all read** — executes the mark-all-read sequence above
 
@@ -253,9 +273,10 @@ Flagship feature — fixes Palabre's broken implementation.
 
 ### 4.7 Keyword Alerts
 
-- User can add keywords to an alert list
-- When a new article matches an alert keyword, it is highlighted or surfaced separately
-- Managed via Settings > Keyword Alerts screen
+- User can add keywords to an alert list, each optionally whole-word
+- When a **newly fetched, unblocked** article matches an alert keyword, the app posts a system notification naming the matched term(s) — "New articles matching …". This fires from the background refresh path as well as foreground fetches, and is the only notification Flash produces
+- Matching runs against the article title and description, after keyword *blocking* has been applied, so a blocked article never triggers an alert
+- Managed via Settings → Keyword Alerts screen
 
 ---
 
@@ -279,7 +300,8 @@ Applied to every feed fetch before articles are written to the database:
 - Articles are sorted newest-to-oldest by `published_at`
 - Articles with `published_at` older than 7 days are discarded — they would be cleaned up immediately anyway
 - Articles with no `published_at` are always discarded
-- At most 100 articles per feed per fetch are accepted (the 100 newest within the 7-day window)
+- At most 100 articles per feed per fetch are accepted (the 100 newest within the 7-day window). This is the hardcoded `kFetchArticleLimit`
+- ⚠️ **The "Max articles per feed" setting does not currently do anything.** It is rendered, persisted to the `article_limit` key, and read back into `AppSettings`, but no code path consults it — the fetch always uses the constant above. The per-feed `Feed.articleLimit` column is likewise stored and never read. Either wire it up or remove the control; leaving a setting that silently does nothing is worse than not offering it
 - GUID resolution: feed-level guid is preferred; if absent, the article URL is used as the GUID; if neither exists, the article is skipped (no random or timestamp-based GUIDs)
 - Duplicate (feed\_id + guid) articles are silently ignored on insert — re-fetching never resets the read state of existing articles
 
@@ -289,7 +311,8 @@ Applied to every feed fetch before articles are written to the database:
 - Default: 30 minutes
 - Respects Android battery optimisation (Doze mode)
 - On refresh: articles fetched, parsed, keyword-filtered, and written to the database
-- No notifications on background refresh — entirely silent
+- Silent by default — no "you have new articles" notification is ever posted
+- **Exception:** keyword *alerts* (§4.7) do post a notification from this path when a newly fetched, unblocked article matches an alert term. That is the entire point of the feature, and it is the only notification the app produces
 
 ---
 
@@ -401,30 +424,44 @@ Folder Tab Bar (above nav bar, scrollable horizontal):
 ├── [User folders...]
 └── (scrollable, no add button in tab bar itself)
 
-Top Bar (display only):
-└── App name "Flash"
+Top Bar:
+├── App name "Flash" (or the Newspaper masthead when that mode is on)
+└── Background-fetch indicator (small animated bolt, right-aligned, only while fetching)
 
 Content area:
 └── Article cards (scrollable)
 ```
 
+**Wide layouts.** At ≥600dp width, or on Android TV, the bottom navigation bar is
+replaced by a Material `NavigationRail` down the left edge and the content fills
+the remainder. On TV the rail is extended (icon + label always visible) and all
+text is scaled up 1.4× for couch legibility; the article card also drops its
+swipe and long-press gestures there, since there is no touchscreen — D-pad OK
+opens the article, and share/bookmark remain reachable inside the summary sheet.
+
 ---
 
 ## 7. Settings
 
+Grouped as **Reading**, **Refresh**, **Storage**, **Filters**, **Backup**, **About**.
+
 | Setting | Default | Options |
 |---|---|---|
 | Theme | System | Light, Dark, System |
-| Background refresh interval | 30 min | 15m, 30m, 1h, 3h, 6h, Manual |
+| Newspaper mode | Off | On/Off — overrides the theme choice and disables the selector while on |
 | Mark as read on scroll | On | On, Off |
+| Mark all read at end of feed | On | On/Off |
+| └ Wait before marking | 5 seconds | Immediately, 5s, 10s, 15s, 20s, 25s, 30s (shown only while the toggle is on) |
+| Background refresh interval | 30 min | 15m, 30m, 1h, 3h, 6h, Manual only |
+| Article cleanup window | 7 days | 5–20 days (stepper) |
+| Max articles per feed | 100 | 50, 100, 200, 500, Unlimited |
+| Keyword blocklist | — | Manage list |
+| Keyword alerts | — | Manage list |
 | Google Drive backup | — | Sign in / Sign out, Backup now, Restore |
 | Local backup | — | Export, Import |
 | OPML | — | Import, Export |
-| Keyword blocklist | — | Manage list |
-| Keyword alerts | — | Manage list |
-| Article cleanup window | 7 days | 5–20 days (stepper) |
-| Newspaper mode | Off | On/Off |
-| Language | System | EN, DE, ES, FR, IT |
+
+There is **no language setting** — the app follows the device locale (§3.10).
 
 ---
 
@@ -432,14 +469,14 @@ Content area:
 
 | Requirement | Target |
 |---|---|
-| Cold start to feed visible | < 1.5 seconds |
+| Cold start to feed visible | < 1 second — the cached list is shown before any network call; measured at ~0.9s on a Pixel 9 Pro |
 | Feed refresh (20 feeds, Wi-Fi) | < 8 seconds |
 | Scroll performance | 60 fps minimum, 120 fps on capable devices |
 | Offline readability | All cached headlines available with no network |
 | Database size (typical use) | < 50 MB for 20 feeds × 100 articles |
 | Crash-free sessions | > 99.5% |
 | Min Android version | Android 8.0 (SDK 26) |
-| Target Android version | Android 15 (SDK 35) |
+| Target Android version | SDK 36 (follows the Flutter SDK default) |
 
 ---
 
@@ -448,7 +485,8 @@ Content area:
 - **Framework:** Flutter + Android SDK
 - **Package ID:** `io.getflash.app`
 - **Dev environment:** VS Code + Claude Code
-- **Builds:** `flutter run --release` installed directly to device via USB
+- **Builds:** `flutter build apk --release`, then `flutter install --release -d <device>` over USB to a physical Pixel 9 Pro. Note that `flutter install` uninstalls first; Android Auto Backup (`backup_rules.xml`) has so far restored the database afterwards, but that is the platform's behaviour rather than a guarantee
+- **Signing:** release builds are still signed with the **debug key** (the Flutter template default in `android/app/build.gradle.kts`). Fine for sideloading, but the debug keystore is machine-local — an update signed with a different key cannot install over an existing copy, so testers would have to uninstall and lose their data. A real release keystore is needed before wider distribution
 - **Source control:** GitHub (`Greybeard82/flash`)
 - **CI:** None in v1.0
 - **Distribution:** Sideloaded APK for personal use; Play Store not required for v1.0
@@ -462,8 +500,8 @@ Content area:
 - RSS 2.0 + Atom 1.0 parsing, favicon fetching, thumbnail fetching and caching
 - Card list UI with shimmer loading state
 - Mark as read on scroll, swipe gestures (read/unread)
-- Pull-to-refresh, manual refresh FAB
-- Auto-refresh on cold open with lightning bolt animation
+- Pull-to-refresh (preserves read articles) and a manual refresh FAB (clears them)
+- Non-blocking cold open: cleanup → cached list shown immediately → background fetch behind a small animated app-bar bolt. Resume uses the same indicator
 - Age-based article cleanup (configurable 5–20 day window, default 7 days, runs on cold start + background refresh)
 - Fetch thresholds: 7-day age filter + 100-article cap per feed; deterministic GUID resolution
 - INSERT OR IGNORE deduplication — re-fetch never resets read state
@@ -485,20 +523,32 @@ Content area:
 - Unread badges on folder tabs and app icon, updating live from any tab
 - Empty state screens
 - Settings screen with all options
-- Session-read model: mark-all-read on a category tab now also refreshes that folder's feeds
+- Session-read model: global across tabs, mark-all-read on a category tab also refreshes that folder's feeds
 - Newspaper mode: opt-in serif theme (bundled PT Serif / Playfair Display OFL fonts), masthead nameplate on the feed screen, DB-persisted toggle in Settings
-- Folder tab bar: 60dp height, 48×48dp minimum tap targets, ripple feedback, auto-scroll to selected tab
+- Folder tab bar: 60dp height, 48×48dp minimum tap targets, ripple feedback, auto-scroll to selected tab, fixed-width unread badges that never shift the layout as counts change
 - Global loading indicator: a top-edge progress bar backed by a reference-counted `LoadingController`, covering every user-initiated async operation app-wide
 - Resume refresh: returning from background after ≥30s triggers a silent, cleanup-free network fetch (5-minute minimum interval)
+- Long-press drag-and-drop to reorder feeds within a category and move them between categories, with edge auto-scroll and drop-target highlighting
+- Configurable end-of-feed auto mark-as-read (off, immediate, or 5–30s)
+- Animated read-state dim (~180ms) on card text, thumbnail and favicon
+- Wide-layout `NavigationRail` at ≥600dp and full Android TV support (extended rail, 1.4× text, D-pad-only interaction)
+- Theme correctness: System mode tracks the live OS theme across cold start, resume and foreground changes; the native window background follows the *app's* theme rather than the OS, so a dark app on a light system no longer flashes white
+- Faster Material motion: 220ms page transitions on all theme variants (subclassing `PredictiveBackPageTransitionsBuilder`, so predictive back is retained), 150ms swipe snap-back
+
+### Deliberately Removed
+- **In-app reader view.** Articles open in the system browser. A reader mode existed and was removed (schema v8 purges its settings and per-domain compatibility cache); it was never reliable enough across sites to be worth maintaining. This is the most likely gap a reviewer would name if the app were distributed publicly
 
 ### Not Yet Built
 - iOS support
-- Push notifications for keyword alerts
 - Home screen widget
-- Tablet-optimised layout
 - Per-feed custom refresh intervals
 - Multi-account Google Drive
-- Live sync across devices
+- Live sync across devices — the single biggest reason a user would stay on Feedly or Inoreader instead
+- Release signing key (see §9)
+
+### Known Gaps in Test Coverage
+- No widget tests for any screen. `testWidgets()` cannot be combined with real `sqflite_common_ffi` I/O — the FFI future never resolves inside flutter_test's FakeAsync zone and the test hangs. Closing this means extending the seam pattern already used in `app.dart` (`initialSettingsForTesting`, `homeOverrideForTesting`) to the screens worth covering
+- No tests for `ArticleExtractor`, the Drive/local backup services, or the settings/folder/keyword repositories
 
 ---
 
@@ -506,4 +556,6 @@ Content area:
 
 - **Opinion filter:** Planned but not yet implemented — the dedicated Opinions folder and Claude Haiku classification pipeline are not shipped
 - **Restore merge vs replace:** Current behaviour is replace (wipe then re-insert); merge with duplicate-URL detection is a future improvement
-- **Play Store:** No decision yet on public distribution
+- **Max articles per feed:** Wire the existing setting to the fetch path, or remove the control (§4.9)
+- **Play Store:** Under consideration. Blockers if pursued: a real signing key, an AAB build rather than APK, and a decision on free-vs-paid. Gemini Nano only runs on AICore-capable devices (Pixel 8+/Galaxy S24+ class), so the headline AI feature is unavailable to most of the market — which argues for a free download with a one-time unlock rather than a paid-upfront listing
+- **Feedly API terms:** Feed discovery search goes through Feedly's API. Worth reviewing their terms before any paid distribution
