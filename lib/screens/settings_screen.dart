@@ -380,7 +380,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _dropdown<int>(
             title: l10n.maxArticlesPerFeed,
             value: s.articleLimit,
+            // Every preset below is unchanged. The extra entry exists because
+            // the Filter bubble's slider can now set any multiple of 10 from
+            // 20 to 150, and DropdownButton asserts if its value matches no
+            // item — so a slider value of 70 would otherwise crash this
+            // screen on open. Shown only when the stored value isn't already
+            // a preset, so nothing is added in the normal case.
             items: [
+              if (!const [50, 100, 200, 500, 999999].contains(s.articleLimit))
+                DropdownMenuItem(
+                  value: s.articleLimit,
+                  child: Text(l10n.articlesCount(s.articleLimit)),
+                ),
               DropdownMenuItem(value: 50, child: Text(l10n.articles50)),
               DropdownMenuItem(value: 100, child: Text(l10n.articles100)),
               DropdownMenuItem(value: 200, child: Text(l10n.articles200)),

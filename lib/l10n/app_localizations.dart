@@ -1057,6 +1057,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'After {n}s'**
   String autoMarkReadAfterSeconds(int n);
+
+  /// No description provided for @filterBubbleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get filterBubbleTitle;
+
+  /// No description provided for @quickSettingsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick settings'**
+  String get quickSettingsTitle;
+
+  /// No description provided for @articleAgeFilter.
+  ///
+  /// In en, this message translates to:
+  /// **'Article age'**
+  String get articleAgeFilter;
+
+  /// No description provided for @articlesCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} articles'**
+  String articlesCount(int n);
+
+  /// No description provided for @daysCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{n} days'**
+  String daysCount(int n);
+
+  /// No description provided for @filterBubbleFootnote.
+  ///
+  /// In en, this message translates to:
+  /// **'Also editable in Settings. Applies to every feed.'**
+  String get filterBubbleFootnote;
+
+  /// No description provided for @filterTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter articles'**
+  String get filterTooltip;
+
+  /// No description provided for @quickSettingsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick settings'**
+  String get quickSettingsTooltip;
+
+  /// No description provided for @articleOrder.
+  ///
+  /// In en, this message translates to:
+  /// **'Article order'**
+  String get articleOrder;
+
+  /// No description provided for @newestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get newestFirst;
+
+  /// No description provided for @oldestFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest'**
+  String get oldestFirst;
 }
 
 class _AppLocalizationsDelegate

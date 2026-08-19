@@ -172,5 +172,16 @@
   "autoMarkReadAtBottomSubtitle": "Llegar al final marca como leídos todos los artículos de este feed",
   "autoMarkReadDelay": "Esperar antes de marcar",
   "autoMarkReadImmediately": "Inmediatamente",
-  "autoMarkReadAfterSeconds": "Tras {n} s"
+  "autoMarkReadAfterSeconds": "Tras {n} s",
+  "filterBubbleTitle": "Filtro",
+  "quickSettingsTitle": "Ajustes rápidos",
+  "articleAgeFilter": "Antigüedad de artículos",
+  "articlesCount": "{n} artículos",
+  "daysCount": "{n} días",
+  "filterBubbleFootnote": "También en Ajustes. Se aplica a todos los feeds.",
+  "filterTooltip": "Filtrar artículos",
+  "quickSettingsTooltip": "Ajustes rápidos",
+  "articleOrder": "Orden de artículos",
+  "newestFirst": "Recientes",
+  "oldestFirst": "Antiguos"
 }

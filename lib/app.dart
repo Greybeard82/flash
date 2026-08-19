@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'repositories/settings_repository.dart';
+import 'services/settings_notifier.dart';
 import 'screens/feed_screen.dart';
 import 'screens/feeds_screen.dart';
 import 'screens/bookmarks_screen.dart';
@@ -79,11 +80,17 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     }
     themeModeNotifier.addListener(_onThemeChanged);
     newspaperModeNotifier.addListener(_onNewspaperChanged);
+    // Theme and Newspaper mode can now be changed from outside the Settings
+    // screen — the Quick Settings bubble on the feed writes them straight to
+    // the DB. Without this the change would only appear on the next launch.
+    // Same pattern FeedScreen already uses to pick up settings changes.
+    SettingsNotifier.instance.addListener(_onSettingsChangedExternally);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    SettingsNotifier.instance.removeListener(_onSettingsChangedExternally);
     themeModeNotifier.removeListener(_onThemeChanged);
     themeModeNotifier.dispose();
     newspaperModeNotifier.removeListener(_onNewspaperChanged);
@@ -103,6 +110,18 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     newspaperModeNotifier.value = newspaper;
     _applyTheme(theme);
     if (mounted) setState(() => _newspaper = newspaper);
+  }
+
+  /// A setting was written somewhere other than the Settings screen — today,
+  /// the Quick Settings bubble on the feed. Re-read from the DB and push the
+  /// values through the same notifiers the Settings screen drives, so both
+  /// routes converge rather than each having their own path.
+  ///
+  /// Skipped when [FlashApp.initialSettingsForTesting] is in play, since that
+  /// seam exists precisely to keep the DB out of widget tests.
+  Future<void> _onSettingsChangedExternally() async {
+    if (widget.initialSettingsForTesting != null) return;
+    await _loadSettings();
   }
 
   void _onThemeChanged() => _applyTheme(themeModeNotifier.value);
