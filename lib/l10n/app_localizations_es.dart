@@ -164,25 +164,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get manualOnly => 'Solo manual';
 
   @override
-  String get storage => 'Almacenamiento';
-
-  @override
   String get maxArticlesPerFeed => 'Máx. artículos por fuente';
-
-  @override
-  String get articles50 => '50 artículos';
-
-  @override
-  String get articles100 => '100 artículos';
-
-  @override
-  String get articles200 => '200 artículos';
-
-  @override
-  String get articles500 => '500 artículos';
-
-  @override
-  String get unlimited => 'Sin límite';
 
   @override
   String get filters => 'Filtros';
@@ -470,9 +452,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String opmlImportSuccess(int count) {
     return '$count feeds importados';
   }
-
-  @override
-  String get changelog => 'Registro de cambios';
 
   @override
   String get timeJustNow => 'ahora';

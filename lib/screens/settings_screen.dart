@@ -77,17 +77,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SettingsNotifier.instance.settingsChanged();
   }
 
-  /// Applies [apply] to the in-memory settings immediately (so the UI reacts
-  /// on this frame, not after a DB round-trip) and persists in the
-  /// background. Use for toggles/selectors whose visible effect (theme,
-  /// segmented-button highlight) must never lag behind the tap.
-  void _saveInstant(String key, String value, AppSettings Function(AppSettings) apply) {
-    final current = _settings;
-    if (current == null) return;
-    setState(() => _settings = apply(current));
-    unawaited(_settingsRepo.set(key, value));
-  }
-
   Future<void> _connectGoogle() async {
     final account = await LoadingController.instance
         .run(() => _backupService.signIn(), label: 'Connecting');
@@ -318,14 +307,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // ── Reading ──
           _sectionHeader(l10n.reading),
-          _themeSelector(s, l10n),
-          _newspaperToggle(s, l10n),
-          _toggle(
-            title: l10n.markReadOnScroll,
-            subtitle: l10n.markReadOnScrollSubtitle,
-            value: s.markReadOnScroll,
-            onChanged: (v) => _save('mark_read_on_scroll', v.toString()),
-          ),
           _toggle(
             title: l10n.autoMarkReadAtBottom,
             subtitle: l10n.autoMarkReadAtBottomSubtitle,
@@ -371,36 +352,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               await _save('refresh_interval_minutes', v.toString());
               final refreshSvc = RefreshService(_settingsRepo);
               await refreshSvc.schedulePeriodicRefresh(forceReschedule: true);
-            },
-          ),
-
-          // ── Storage ──
-          _sectionHeader(l10n.storage),
-          _cleanupAgeControl(s),
-          _dropdown<int>(
-            title: l10n.maxArticlesPerFeed,
-            value: s.articleLimit,
-            // Every preset below is unchanged. The extra entry exists because
-            // the Filter bubble's slider can now set any multiple of 10 from
-            // 20 to 150, and DropdownButton asserts if its value matches no
-            // item — so a slider value of 70 would otherwise crash this
-            // screen on open. Shown only when the stored value isn't already
-            // a preset, so nothing is added in the normal case.
-            items: [
-              if (!const [50, 100, 200, 500, 999999].contains(s.articleLimit))
-                DropdownMenuItem(
-                  value: s.articleLimit,
-                  child: Text(l10n.articlesCount(s.articleLimit)),
-                ),
-              DropdownMenuItem(value: 50, child: Text(l10n.articles50)),
-              DropdownMenuItem(value: 100, child: Text(l10n.articles100)),
-              DropdownMenuItem(value: 200, child: Text(l10n.articles200)),
-              DropdownMenuItem(value: 500, child: Text(l10n.articles500)),
-              DropdownMenuItem(value: 999999, child: Text(l10n.unlimited)),
-            ],
-            onChanged: (v) {
-              if (v == null) return;
-              _save('article_limit', v.toString());
             },
           ),
 
@@ -475,10 +426,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // ── Google Drive Backup ──
           _sectionHeader(l10n.backup),
           _buildBackupSection(l10n),
-
-          // ── Changelog ──
-          _sectionHeader(l10n.changelog),
-          _buildChangelog(),
 
           const SizedBox(height: 24),
         ],
@@ -620,69 +567,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _themeSelector(AppSettings s, AppLocalizations l10n) {
-    final disabled = s.newspaperMode;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.theme,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: disabled
-                  ? Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: SegmentedButton<String>(
-              showSelectedIcon: false,
-              segments: [
-                ButtonSegment(value: 'system', label: SizedBox(width: 72, child: Text(l10n.themeSystem, textAlign: TextAlign.center))),
-                ButtonSegment(value: 'light',  label: SizedBox(width: 72, child: Text(l10n.themeLight,  textAlign: TextAlign.center))),
-                ButtonSegment(value: 'dark',   label: SizedBox(width: 72, child: Text(l10n.themeDark,   textAlign: TextAlign.center))),
-              ],
-              selected: {s.theme},
-              onSelectionChanged: disabled ? null : (sel) {
-                final value = sel.first;
-                widget.themeModeNotifier.value = value;
-                _saveInstant('theme', value, (s) => s.copyWith(theme: value));
-              },
-              style: SegmentedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-              ),
-            ),
-          ),
-          if (disabled) ...[
-            const SizedBox(height: 4),
-            Text(
-              l10n.newspaperModeOverridesTheme,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _newspaperToggle(AppSettings s, AppLocalizations l10n) {
-    return SwitchListTile(
-      title: Text(l10n.newspaperMode),
-      subtitle: Text(l10n.newspaperModeSubtitle),
-      value: s.newspaperMode,
-      onChanged: (v) {
-        widget.newspaperModeNotifier.value = v;
-        _saveInstant('newspaper_mode', v.toString(), (s) => s.copyWith(newspaperMode: v));
-      },
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    );
-  }
-
   Widget _toggle({
     required String title,
     required String subtitle,
@@ -695,110 +579,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       value: value,
       onChanged: onChanged,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    );
-  }
-
-  Widget _buildChangelog() {
-    final theme = Theme.of(context);
-    final done = theme.colorScheme.primary;
-    final wip = theme.colorScheme.tertiary;
-    final todo = theme.colorScheme.onSurface.withValues(alpha: 0.4);
-
-    Widget entry(String text, {bool isDone = false, bool isWip = false}) {
-      final color = isDone ? done : isWip ? wip : todo;
-      final icon = isDone ? Icons.check_circle_rounded : isWip ? Icons.timelapse_rounded : Icons.radio_button_unchecked;
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(text, style: theme.textTheme.bodySmall?.copyWith(color: color)),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget version(String label) => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-            letterSpacing: 0.8,
-          )),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        version('v0.1 — CORE'),
-        entry('RSS 2.0 + Atom 1.0 feed parsing', isDone: true),
-        entry('Category folders with tab navigation', isDone: true),
-        entry('Background auto-refresh (WorkManager)', isDone: true),
-        entry('Pull-to-refresh', isDone: true),
-        entry('Mark as read on scroll + swipe', isDone: true),
-        entry('Mark as unread (swipe left)', isDone: true),
-        entry('Long-press radial menu (share, bookmark, AI summary)', isDone: true),
-        entry('Article search', isDone: true),
-        entry('Bookmarks / saved articles', isDone: true),
-        entry('Dead feed indicator (⚠)', isDone: true),
-        version('v0.1 — FILTERS & ALERTS'),
-        entry('Keyword blocking (case-sensitive)', isDone: true),
-        entry('Keyword alert notifications', isDone: true),
-        entry('Daily unread digest notification', isDone: true),
-        version('v0.1 — UI & PERSONALISATION'),
-        entry('Dark / light / system theme', isDone: true),
-        entry('Dynamic colour (Android 12+)', isDone: true),
-        entry('5 languages: EN, ES, FR, DE, IT', isDone: true),
-        version('v0.1 — DATA'),
-        entry('OPML import / export', isDone: true),
-        entry('Local file backup & restore', isDone: true),
-        entry('Google Drive backup', isWip: true),
-        version('PLANNED'),
-        entry('AI summaries on more devices (requires Gemini Nano)'),
-        entry('Per-feed article limits'),
-        entry('Search scoped to current category'),
-        entry('iPad / wider screen layout'),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-  Widget _cleanupAgeControl(AppSettings s) {
-    final days = s.cleanupAgeDays;
-    return ListTile(
-      title: const Text('Article cleanup window'),
-      subtitle: const Text('Read articles older than this are removed'),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.remove_rounded),
-            onPressed: days <= 5
-                ? null
-                : () => _save('cleanup_age_days', (days - 1).toString()),
-          ),
-          SizedBox(
-            width: 52,
-            child: Text(
-              '$days days',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_rounded),
-            onPressed: days >= 20
-                ? null
-                : () => _save('cleanup_age_days', (days + 1).toString()),
-          ),
-        ],
-      ),
     );
   }
 

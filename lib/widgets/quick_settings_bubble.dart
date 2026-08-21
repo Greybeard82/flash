@@ -44,12 +44,14 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
 
   late String _theme;
   late bool _newspaper;
+  late bool _markReadOnScroll;
 
   @override
   void initState() {
     super.initState();
     _theme = widget.initial.theme;
     _newspaper = widget.initial.newspaperMode;
+    _markReadOnScroll = widget.initial.markReadOnScroll;
   }
 
   Future<void> _setTheme(String value) async {
@@ -63,6 +65,16 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
     setState(() => _newspaper = value);
     widget.onNewspaperChanged?.call(value);
     await _repo.set('newspaper_mode', value.toString());
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// No `onChanged` callback to the host: FeedScreen already re-applies its
+  /// reading settings whenever [SettingsNotifier] fires, so notifying is
+  /// enough — unlike theme and Newspaper mode, whose live state lives above
+  /// this widget in `app.dart` and needs the extra hand-off.
+  Future<void> _setMarkReadOnScroll(bool value) async {
+    setState(() => _markReadOnScroll = value);
+    await _repo.set('mark_read_on_scroll', value.toString());
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -127,6 +139,16 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
           ),
           value: _newspaper,
           onChanged: _setNewspaper,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.markReadOnScroll, style: theme.textTheme.bodyMedium),
+          subtitle: Text(
+            l10n.markReadOnScrollSubtitle,
+            style: theme.textTheme.labelSmall,
+          ),
+          value: _markReadOnScroll,
+          onChanged: _setMarkReadOnScroll,
         ),
       ],
     );

@@ -80,10 +80,10 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     }
     themeModeNotifier.addListener(_onThemeChanged);
     newspaperModeNotifier.addListener(_onNewspaperChanged);
-    // Theme and Newspaper mode can now be changed from outside the Settings
-    // screen — the Quick Settings bubble on the feed writes them straight to
-    // the DB. Without this the change would only appear on the next launch.
-    // Same pattern FeedScreen already uses to pick up settings changes.
+    // Theme and Newspaper mode are set from the Quick Settings bubble on the
+    // feed — the only place they live now — which writes them straight to the
+    // DB. Without this the change would only appear on the next launch. Same
+    // pattern FeedScreen already uses to pick up settings changes.
     SettingsNotifier.instance.addListener(_onSettingsChangedExternally);
   }
 

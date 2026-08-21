@@ -386,47 +386,11 @@ abstract class AppLocalizations {
   /// **'Manual only'**
   String get manualOnly;
 
-  /// No description provided for @storage.
-  ///
-  /// In en, this message translates to:
-  /// **'Storage'**
-  String get storage;
-
   /// No description provided for @maxArticlesPerFeed.
   ///
   /// In en, this message translates to:
   /// **'Max articles per feed'**
   String get maxArticlesPerFeed;
-
-  /// No description provided for @articles50.
-  ///
-  /// In en, this message translates to:
-  /// **'50 articles'**
-  String get articles50;
-
-  /// No description provided for @articles100.
-  ///
-  /// In en, this message translates to:
-  /// **'100 articles'**
-  String get articles100;
-
-  /// No description provided for @articles200.
-  ///
-  /// In en, this message translates to:
-  /// **'200 articles'**
-  String get articles200;
-
-  /// No description provided for @articles500.
-  ///
-  /// In en, this message translates to:
-  /// **'500 articles'**
-  String get articles500;
-
-  /// No description provided for @unlimited.
-  ///
-  /// In en, this message translates to:
-  /// **'Unlimited'**
-  String get unlimited;
 
   /// No description provided for @filters.
   ///
@@ -943,12 +907,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} feeds imported'**
   String opmlImportSuccess(int count);
-
-  /// No description provided for @changelog.
-  ///
-  /// In en, this message translates to:
-  /// **'Changelog'**
-  String get changelog;
 
   /// No description provided for @timeJustNow.
   ///

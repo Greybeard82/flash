@@ -11,8 +11,10 @@
 // (nothing else in this codebase combines testWidgets() with a real DB;
 // see feed_repository_test.dart for the DB-only pattern used instead).
 // FlashApp.initialSettingsForTesting seeds initial state directly, and
-// widget.themeModeNotifier / newspaperModeNotifier — the exact mechanism
-// SettingsScreen already uses — drive toggle presses.
+// widget.themeModeNotifier / newspaperModeNotifier drive toggle presses.
+// These tests exercise app.dart's theme resolution directly, not any
+// particular screen's UI — the user-facing controls now live only in
+// QuickSettingsBubble.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
