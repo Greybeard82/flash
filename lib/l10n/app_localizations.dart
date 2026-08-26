@@ -1094,10 +1094,10 @@ abstract class AppLocalizations {
   /// **'Show read'**
   String get showRead;
 
-  /// Explains the 48-hour restore window under the Show read switch.
+  /// Explains when a read article is retired, under the Show read switch.
   ///
   /// In en, this message translates to:
-  /// **'Read articles stay visible for 48 hours'**
+  /// **'Keep read articles until the next refresh'**
   String get showReadSubtitle;
 
   /// Day divider heading for articles published today.

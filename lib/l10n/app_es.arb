@@ -180,7 +180,7 @@
 ,
   "apply": "Aplicar",
   "showRead": "Mostrar leídos",
-  "showReadSubtitle": "Los artículos leídos siguen visibles durante 48 horas",
+  "showReadSubtitle": "Mantener los artículos leídos hasta la próxima actualización",
   "dayToday": "Hoy",
   "dayYesterday": "Ayer",
   "dontShowAgain": "No volver a mostrar",

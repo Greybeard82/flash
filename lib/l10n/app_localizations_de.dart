@@ -569,7 +569,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get showRead => 'Gelesene anzeigen';
 
   @override
-  String get showReadSubtitle => 'Gelesene Artikel bleiben 48 Stunden sichtbar';
+  String get showReadSubtitle =>
+      'Gelesene Artikel bis zur nächsten Aktualisierung behalten';
 
   @override
   String get dayToday => 'Heute';

@@ -227,9 +227,9 @@
   "@showRead": {
     "description": "Label for the switch that keeps read articles in the list."
   },
-  "showReadSubtitle": "Read articles stay visible for 48 hours",
+  "showReadSubtitle": "Keep read articles until the next refresh",
   "@showReadSubtitle": {
-    "description": "Explains the 48-hour restore window under the Show read switch."
+    "description": "Explains when a read article is retired, under the Show read switch."
   },
   "dayToday": "Today",
   "@dayToday": {

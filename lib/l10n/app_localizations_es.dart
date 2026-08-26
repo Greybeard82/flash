@@ -569,7 +569,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get showReadSubtitle =>
-      'Los artículos leídos siguen visibles durante 48 horas';
+      'Mantener los artículos leídos hasta la próxima actualización';
 
   @override
   String get dayToday => 'Hoy';

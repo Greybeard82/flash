@@ -564,7 +564,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get showRead => 'Show read';
 
   @override
-  String get showReadSubtitle => 'Read articles stay visible for 48 hours';
+  String get showReadSubtitle => 'Keep read articles until the next refresh';
 
   @override
   String get dayToday => 'Today';
