@@ -91,6 +91,7 @@ CREATE TABLE articles (
   published_at    INTEGER,                  -- Unix timestamp (ms), NULL if not provided
   fetched_at      INTEGER NOT NULL,         -- Unix timestamp (ms) when Flash fetched it
   is_read         INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+  read_at         INTEGER,                  -- Unix timestamp (ms) when read; NULL if unread
   is_blocked      INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),  -- matched keyword blocklist
   is_opinion      INTEGER NOT NULL DEFAULT 0 CHECK(is_opinion IN (0,1)),  -- moved to Opinions folder
   opinion_source  TEXT,                     -- 'heuristic' | 'ai' | NULL
@@ -100,6 +101,7 @@ CREATE TABLE articles (
 CREATE UNIQUE INDEX idx_articles_guid_feed ON articles(feed_id, guid);
 CREATE INDEX idx_articles_feed_id         ON articles(feed_id);
 CREATE INDEX idx_articles_is_read         ON articles(is_read);
+CREATE INDEX idx_articles_read_at         ON articles(read_at);
 CREATE INDEX idx_articles_is_blocked      ON articles(is_blocked);
 CREATE INDEX idx_articles_is_opinion      ON articles(is_opinion);
 CREATE INDEX idx_articles_published_at    ON articles(published_at DESC);
@@ -107,6 +109,8 @@ CREATE INDEX idx_articles_published_at    ON articles(published_at DESC);
 
 **Notes:**
 - `guid` uniqueness is scoped per feed (`feed_id + guid`) -- different feeds can have colliding GUIDs
+- `read_at` (added v11) drives read *visibility*, not deletion. The feed shows an article when `is_read = 0 OR read_at >= cutoff`, where the cutoff is 48 hours ago while the Show read setting is on, and NULL while it is off. Rows read before v11 carry `read_at IS NULL` and so never match the second half -- deliberate, since there is no honest read time to give them
+- `read_at = 0` (the epoch) is a sentinel meaning "dismissed": written by Mark all as read, it is outside every possible window, so those articles never return when Show read is switched back on
 - `is_blocked = 1` articles are hidden from all feed views but retained in DB for the audit view
 - `is_opinion = 1` articles are excluded from normal folder views and shown only in the Opinions tab
 - `thumbnail_path` is populated lazily on first scroll into view -- `thumbnail_url` is stored immediately on fetch
@@ -228,7 +232,7 @@ CREATE TABLE settings (
 | `anthropic_api_key_set` | `false` | Boolean flag -- actual key stored in Android Keystore |
 | `google_account_email` | `null` | Signed-in Google account, NULL if not connected |
 | `onboarding_complete` | `false` | Whether first-launch empty state has been dismissed |
-| `schema_version` | `1` | Current DB schema version |
+| `show_read` | `true` | Keep read articles visible for 48 hours (see `articles.read_at`) |
 
 **Notes:**
 - API keys are never stored in this table in plaintext -- `anthropic_api_key_set` is a boolean flag only
@@ -267,7 +271,9 @@ onUpgrade: (db, oldVersion, newVersion) async {
 
 **Rules:**
 - Never DROP TABLE in a migration -- add columns with defaults instead
-- Always increment `schema_version` in the `settings` table after migration
+- The schema version is `PRAGMA user_version`, set by the `version:` passed to `openDatabase` in `database.dart`. Bump that and nothing else
+- There is **no `schema_version` settings row**. One existed until v9, was never read, drifted permanently to `'3'` while the real version reached 8, and was deleted by the v9 migration. `audit_schema_integrity_test.dart` asserts it never comes back -- a second, always-wrong answer to "what schema is this?" is worse than none
+- `kExpectedSchemaVersion` in `audit_schema_integrity_test.dart` is kept in sync **by hand**. Bump it in the same commit as the `version:` bump, or that test fails
 - Test every migration path (v1→v3 must work, not just v2→v3)
 
 ---

@@ -27,6 +27,49 @@ Future<void> _setUp() async {
   AppDatabase.useForTesting();
 }
 
+/// Reshapes the freshly-created v11 `articles` table back to v10 so the
+/// migration under test has real work to do.
+///
+/// [AppDatabase.migrateForTesting] runs `_onUpgrade` against a database
+/// `_onCreate` has already built at the current version, so without this the
+/// v11 step only ever exercises its own idempotency guards — worth testing,
+/// but not the same thing as testing the upgrade.
+///
+/// `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35 (March 2021) or newer.
+Future<void> _reshapeToV10(Database db) async {
+  await db.execute('DROP INDEX IF EXISTS idx_articles_read_at');
+  await db.execute('ALTER TABLE articles DROP COLUMN read_at');
+  await db.delete('settings', where: "key = 'show_read'");
+}
+
+Future<Set<String>> _articleColumns(Database db) async {
+  final rows = await db.rawQuery('PRAGMA table_info(articles)');
+  return {for (final r in rows) r['name'] as String};
+}
+
+Future<Set<String>> _articleIndexes(Database db) async {
+  final rows = await db.rawQuery(
+    "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'articles'",
+  );
+  return {for (final r in rows) r['name'] as String};
+}
+
+/// Articles carry a foreign key to feeds, and foreign_keys is ON.
+Future<int> _seedFeed(Database db) async {
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final folderId = await db.insert(
+      'folders', {'name': 'Gaming', 'position': 0, 'created_at': now});
+  return db.insert('feeds', {
+    'folder_id': folderId,
+    'title': 'Feed',
+    'url': 'https://example.com/feed',
+    'consecutive_failures': 0,
+    'is_dead': 0,
+    'position': 0,
+    'created_at': now,
+  });
+}
+
 void main() {
   setUp(_setUp);
   tearDown(() => AppDatabase.instance.close());
@@ -97,5 +140,75 @@ void main() {
     }
     expect(await SettingsRepository().get('theme'), before,
         reason: 'unrelated settings must survive the migration');
+  });
+
+  group('v10 → v11 (read_at)', () {
+    test('adds the column, its index, and the show_read default', () async {
+      final db = await AppDatabase.instance.database;
+      await _reshapeToV10(db);
+      expect(await _articleColumns(db), isNot(contains('read_at')),
+          reason: 'the fixture must actually be v10-shaped, or this test '
+              'proves nothing beyond idempotency');
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+
+      expect(await _articleColumns(db), contains('read_at'));
+      expect(await _articleIndexes(db), contains('idx_articles_read_at'));
+      expect(await SettingsRepository().get('show_read'), 'true');
+    });
+
+    test('articles read before the upgrade keep a null read_at', () async {
+      final db = await AppDatabase.instance.database;
+      await _reshapeToV10(db);
+      final feedId = await _seedFeed(db);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.insert('articles', {
+        'feed_id': feedId,
+        'guid': 'g1',
+        'title': 'Read before the upgrade',
+        'url': 'https://example.com/1',
+        'published_at': now,
+        'fetched_at': now,
+        'is_read': 1,
+        'is_blocked': 0,
+        'is_saved': 0,
+      });
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+
+      final rows = await db.query('articles', columns: ['is_read', 'read_at']);
+      expect(rows.first['is_read'], 1);
+      expect(rows.first['read_at'], isNull,
+          reason: 'there is no honest read time for these. Back-filling them '
+              'with "now" would drop the entire backlog into the list the '
+              'first time the user opens the app after upgrading.');
+    });
+
+    test('an existing show_read choice survives the migration', () async {
+      final db = await AppDatabase.instance.database;
+      await _reshapeToV10(db);
+      await SettingsRepository().set('show_read', 'false');
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+
+      expect(await SettingsRepository().get('show_read'), 'false',
+          reason: 'INSERT OR IGNORE seeds a default; it must never overwrite '
+              'a choice the user already made');
+    });
+
+    test('re-running the migration is a no-op', () async {
+      final db = await AppDatabase.instance.database;
+      await _reshapeToV10(db);
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+
+      final readAt =
+          (await _articleColumns(db)).where((c) => c == 'read_at').toList();
+      expect(readAt.length, 1,
+          reason: 'the PRAGMA table_info guard and CREATE INDEX IF NOT '
+              'EXISTS both have to hold, or an interrupted upgrade throws on '
+              'the retry');
+    });
   });
 }

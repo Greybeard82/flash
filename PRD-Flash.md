@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.5
+**Version:** 2.6
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** 19 August 2026
+**Last Updated:** 26 August 2026
 
 ---
 
@@ -52,7 +52,8 @@ Specific mandates:
 
 ### 3.4 Local Storage
 - **SQLite via `sqflite`** — feeds, articles, read state, folders, blocklist, settings, keyword alerts
-- Schema versioned with migration support
+- Schema versioned with migration support. Currently **v11**; `PRAGMA user_version` is the single source of truth (a duplicate `schema_version` settings row existed until v9, drifted permanently to "3", and was deleted)
+- `articles.read_at` (v11) records *when* an article was read, indexed by `idx_articles_read_at`. It is what makes the Show read window in §4.3 possible: a persisted timestamp survives a restart, where the in-memory session set it replaced could not
 
 ### 3.5 Background Processing
 - **`workmanager`** — periodic background feed refresh, respects Android battery optimisation (Doze mode)
@@ -97,6 +98,12 @@ Specific mandates:
 - Swipe to delete, tap to edit
 - Deletion confirmed via dialog
 
+**Feed changes reach the article list**
+- Adding, removing, renaming, re-homing or reordering a feed or category updates the Flash tab the next time it becomes visible
+- All four main screens are kept alive in an `IndexedStack`, so the feed screen is never rebuilt on a plain tab switch. Without a signal, adding six feeds and walking back to Flash showed exactly the list you left, until a manual refresh
+- `FeedsChangedNotifier` is pinged from the **repository writes**, not from the screens, so OPML import, backup restore and onboarding are covered by the same choke point. It *records* rather than broadcasts: the feed list is by definition off-screen when these writes happen, so the change is queued and consumed on the next visibility transition — six feeds added in a row cost one refresh, not six
+- Adding a feed queues a network fetch (a new feed has no articles yet); every other change only re-queries locally
+
 **Reorder / Move Feeds — Long-Press Drag**
 - Long-press a feed row on the Categories screen to pick it up, then drag to reorder it within its category **or** drop it into a different one
 - Drop targets highlight as the drag hovers; dragging near the top or bottom edge auto-scrolls the list
@@ -123,10 +130,11 @@ Specific mandates:
 - Folders appear as **scrollable tabs at the bottom** of the feed view (above the nav bar) — not at the top
 - Tab order is user-reorderable
 - Each folder tab shows an unread count badge
-- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause. Badge counts come from `is_read` in the DB, independent of session-read visibility.
-- A read article **stays visible, dimmed in place, in every tab** for the rest of the session (see §4.3) — its badge count drops everywhere at once, but the row itself never disappears out from under the reader.
+- Badges update **live from any tab** — reading an article in the All tab (via scroll, swipe, tap, or mark-all-read) immediately decrements that article's folder badge too, without switching tabs or reloading. An unawaited authoritative re-query self-heals any drift within a scroll pause. Badge counts come from `is_read` in the DB, independent of whether Show read is keeping the row on screen.
+- With **Show read** on, a read article **stays visible, dimmed in place, in every tab** (see §4.3) — its badge count drops everywhere at once, but the row itself never disappears out from under the reader.
 - A special **"All"** tab aggregates articles across all folders
-- All category tabs behave identically to "All" — same session-read model, scroll, and mark-all-read rules apply (category mark-all-read also refreshes that folder's feeds)
+- All category tabs behave identically to "All" — same read-visibility rule, scroll, and mark-all-read behaviour apply (category mark-all-read also refreshes that folder's feeds)
+- **Categories are collapsed by default.** Entering the Categories screen always shows a tidy list of headers; expanding one is a deliberate act each time. Expansion is per-session state keyed by folder id — it is not persisted. The consequence for drag-and-drop: a collapsed category still *accepts* a dropped feed (its header is its own drop target, appending to the end), but you cannot start a drag *out* of one, and precise positioning within one needs it expanded
 
 ---
 
@@ -137,8 +145,15 @@ Specific mandates:
 - Thumbnail priority: (1) `<media:content>` / `<media:thumbnail>`, (2) Open Graph `og:image`, (3) first `<img>` in body, (4) monogram placeholder
 - Thumbnails fetched and cached locally — no re-fetching on scroll
 - Thumbnail: 72×72dp square, cover crop, 8dp rounded corners, right-aligned
-- Articles sorted newest-to-oldest — no user-configurable sort order
-- Unread articles have full visual weight; read articles are dimmed (reduced opacity, lighter font weight)
+- Articles are grouped under **day dividers** and sorted newest-to-oldest by default; the order is configurable in the Filter bubble
+- Unread articles have full visual weight; read articles are dimmed — by colour and opacity only. **The font weight is constant at `w600` and must stay that way.** It used to drop to `w400` when read, and lighter glyphs are narrower: a title sitting near a wrap boundary reflowed from three lines to two the moment mark-read-on-scroll fired, the card lost a line of height, and every card below it slid up under the reader's eyes mid-scroll with no gesture to explain it. Read state is carried by colour, opacity and the greyscale matrix, none of which can change layout
+
+**Day Dividers**
+- The list is broken up by day headers: **Today**, **Yesterday**, the weekday name within the last seven days, and a day-and-month label beyond that. All localised, and the weekday/date labels come from `DateFormat` in the active locale
+- Grouping is by **calendar day, not elapsed hours** — an article published at 23:50 last night is filed under Yesterday at 14:30 today, even though that is under 24 hours ago
+- Headers are emitted whenever the day changes from the previous article, so the same code is correct for both sort orders without being told which is in use: newest-first yields Today, Yesterday, …; oldest-first yields the reverse
+- A **future publish date is both grouped and labelled as today**. Doing only one of the two is a real bug that shipped briefly: the label was clamped to "Today" while the grouping key kept the raw calendar day, so a feed publishing an hour into tomorrow produced two headers both reading "Today", stacked
+- Header height is a declared constant (`kDayHeaderHeight`) rather than an estimate, because the mark-as-read scroll pass walks the row list summing heights and can measure article cards but not headers. The constant and the rendered `SizedBox` must stay in step or the read cutoff drifts further down the list
 
 **Auto-Refresh on Open**
 - Cold open order is: purge stale articles (read, unsaved, older than the configured cleanup window) → **show the cached list immediately** → fetch all feeds in the background. The network is never in the way of reading what's already on disk
@@ -148,24 +163,25 @@ Specific mandates:
 
 **Auto-Refresh on Resume**
 - Returning to Flash from the background after being away **≥30 seconds**, with no fetch in the last 5 minutes, triggers a silent network fetch (`ResumeRefreshPolicy`, both thresholds configurable)
-- Unlike cold open, this fetch runs with **no cleanup** — purging read articles mid-session would break the session-read list-persistence guarantee above — and shows the same small app-bar bolt as cold start, since the user is already looking at their list
-- Scroll position is captured before the fetch and restored after; because new articles insert above the current position, the list can still visually shift when there's fresh content — a known limitation, not yet anchor-corrected
+- Unlike cold open, this fetch runs with **no cleanup** — deleting read articles mid-session would pull rows out of a list the reader is holding their place in — and shows the same small app-bar bolt as cold start, since the user is already looking at their list
+- **The list resets to the top after any network refresh**, resume included. Preserving the offset was actively harmful rather than merely imperfect: with newest-first ordering new articles insert *above* the viewport, so the same offset then pointed at different content and everything above it — including everything just fetched — counted as "already scrolled past" and was marked read within a second of arriving
+- The jump itself cannot mark anything read. A `ScrollController` listener cannot tell a `jumpTo` from a finger, so a `MarkReadGate` closes before every programmatic scroll and reopens only on a real `UserScrollNotification` with a non-idle direction — which `jumpTo` never produces, because it goes idle first
 - A brief excursion (e.g. popping out to the browser and back) never triggers a fetch; only DB state is reloaded
 
-**What the feed shows — the session-read model**
+**What the feed shows — read visibility**
 
-The feed displays: **all non-blocked articles in scope that are either unread, or were read during the current app session** (the "session read set"). This single rule governs every tab and every action:
+The feed displays: **all non-blocked articles in scope that are either unread, or were read within the last 48 hours while the Show read toggle is on.** This single rule governs every tab and every action.
 
-- **Session read set:** an in-memory set of article IDs read since the app launched. It is empty on every cold open and is never persisted to disk.
-- **Cold open:** session set is empty → only unread articles appear. Previously-read articles remain in the DB (for deduplication) but do not show.
-- **Global, not per-tab:** the session read set is one flat set of article IDs (`SessionReadTracker`), shared by every tab. An article marked read anywhere stays in the list, dimmed in place, in **every** tab for the rest of the session. This matches Palabre, the app Flash exists to replace.
-- **Why it stays visible:** scrolling past the top of the viewport marks an article read; if it then vanished from the list being actively scrolled, everything below it would jump up under the user's thumb. The same argument applies to a list the user *isn't* looking at — coming back to a category to find rows silently missing is the same loss of place, deferred. An earlier pass scoped this per tab so a read article disappeared from every other tab; that was reversed because the disappearance was more disorienting than the grey clutter it avoided.
-- **Tab switching:** the query re-runs for the new tab, passing the same shared session set.
-- **Mark as unread:** drops the article from the set, so it hides again everywhere on the next query.
-- **App restart / cold open:** the set is empty → fresh unread-only view everywhere.
+- **`read_at`, not a session set.** Every write that marks an article read stamps a timestamp on the row. The rule is one comparison — `is_read = 0 OR read_at >= cutoff` — which survives a restart and uses a fixed number of query parameters. It replaced an in-memory `SessionReadTracker` whose union query emitted one bind variable per article read since launch, walking steadily toward SQLite's 999-variable limit on a long reading session.
+- **Show read off:** unread articles only, everywhere. Read articles are **not deleted** — deletion is owned by the cleanup window (§4.8), a separate rule that this one never consults.
+- **Show read on:** anything read in the last `kShowReadBufferHours` (48) comes back, dimmed in place. Switching the toggle back on restores them; the window slides, so it is computed per query rather than frozen at whatever it was when the screen booted.
+- **Global, not per-tab:** read state lives on the row, so an article read in the All tab is equally gone from — or equally present in — its own category. This matches Palabre, the app Flash exists to replace. An earlier pass scoped visibility per tab so a read article vanished from every *other* tab; that was reversed because the disappearance was more disorienting than the grey clutter it avoided.
+- **Why a read article stays put:** scrolling past the midpoint of the viewport marks an article read; if it then vanished from the list being actively scrolled, everything below it would jump up under the reader's thumb. So **with Show read off, an article marked read stays where it is until the list is next rebuilt** — a tab switch, a refresh, a cold start. It does not disappear under a moving finger. This falls out of the structure rather than being special-cased: the mark-read paths mutate the in-memory list without re-querying.
+- **Mark as unread** clears `read_at` outright, returning the article to the unread set under every cutoff.
+- **Articles read before the v11 migration** carry a null `read_at` and stay hidden. `NULL` never satisfies `>=`, and that is deliberate: there is no honest read time to give them, and back-filling "now" would dump the entire backlog into the list the first time the app opened after upgrading.
 
 **How a read article looks**
-- Reduced opacity and lighter font weight on the text; the thumbnail and favicon are desaturated to greyscale and dimmed
+- Reduced opacity on the text at a **constant font weight** (see the Layout note above — a weight change moves the layout and shifts every card below); the thumbnail and favicon are desaturated to greyscale and dimmed
 - The change **animates over ~180ms** rather than cutting hard, so a card visibly greys out instead of snapping
 - Desaturation uses a `ColorFilter.matrix` interpolated between identity and greyscale, with the image instance reused across every animation frame. This is load-bearing: a `BlendMode.saturation` filter mixes with the backdrop and was the cause of a dark-mode scroll flicker (bright grey blocks flashing on unloaded thumbnails), and swapping the image widget to animate would force a redecode and reintroduce it
 
@@ -181,26 +197,34 @@ The feed displays: **all non-blocked articles in scope that are either unread, o
 - It fires at most once per visit to the bottom; returning to the bottom later arms it again
 
 **Mark as Read — Swipe**
-- Swipe in either direction (left or right): mark as read, add to session set
-- Article dims in-place — it is never removed from the list mid-session
+- Swipe in either direction (left or right): marks as read and stamps `read_at`
+- Article dims in-place — it is never removed from the list under the finger that swiped it
 
 **Mark as Unread — Swipe**
-- Long-press → radial menu (see below), or dedicated swipe gesture: mark as unread, remove from session set
-- Article restores full visual weight and is hidden on the next tab reload
+- Long-press → radial menu (see below), or dedicated swipe gesture: marks as unread and clears `read_at`
+- Article restores full opacity and counts as unread again everywhere
 
-**Mark All as Read — No Confirmation, Immediate Execution**
+**Mark All as Read — Confirmed, Then Permanent**
 
-Behaviour differs by tab:
+A confirmation dialog is shown first, from either entry point (the FAB and the folder tab bar both route through the same guard). The action cannot be undone and it runs a cleanup pass that deletes rows, so it asks before doing either.
 
-- **All tab:** marks every article read in DB → **clears the entire session set** → runs age-based cleanup → refreshes all feeds behind the app-bar bolt → reloads. Result: only newly fetched unread articles are shown.
-- **Category tab:** marks every article in that folder read in DB → **removes exactly the article IDs that tab was showing** from the session set (not the whole set — that would also forget articles read in other tabs and make them vanish there) → runs cleanup for that folder only → **refreshes that folder's feeds** → reloads → shows a `NotificationBanner` confirmation. Result: only newly fetched unread articles for that folder are shown.
+Behaviour then differs by tab:
 
-No confirmation dialog is ever shown. Scroll position for the affected tab resets to top after reload.
+- **All tab:** marks every article read in the DB → runs age-based cleanup → refreshes all feeds behind the app-bar bolt → reloads. Result: only newly fetched unread articles are shown.
+- **Category tab:** marks every article in that folder read → runs cleanup for that folder only → **refreshes that folder's feeds** → reloads → shows a `NotificationBanner` confirmation.
+
+Both branches write the **dismissal sentinel** (`kDismissedReadAt`, the epoch) into `read_at` rather than a real time. That is what makes the dismissal permanent: epoch is outside every possible 48-hour window, so these articles do **not** come back when Show read is switched on. Pressing this button means "clear these out".
+
+This is deliberately *not* what the end-of-feed dwell timer does — it writes a real timestamp, because reaching the bottom of a feed is passive reading rather than dismissal, and those articles stay restorable like any other. The `readAt` parameter on the repository is required precisely so the two cannot be confused.
+
+Scroll position for the affected tab resets to top after reload.
 
 **Scroll position**
-- The **scroll position is always restored exactly** when the user returns to the feed — whether from the system browser or switching tabs
+- Returning from the system browser restores the **exact** position — an article read and come back from should land where it was left
 - Switching to a different category tab resets that tab's scroll to the top (correct behaviour); the previous tab's position is saved and restored when switching back
-- These behaviours have no user toggle — they are hardcoded
+- **Every network refresh resets to the top instead** — pull-to-refresh, the refresh FAB, cold start, resume, and the reload after mark-all-read. See Auto-Refresh on Resume above for why preserving the offset there was harmful rather than merely imperfect
+- Every one of these jumps is programmatic, so each closes the `MarkReadGate` first; restoring a saved tab offset must not mark everything above it read in a tab the user has only just arrived at
+- Scroll and restore behaviour has no user toggle. **Read visibility does** — Show read, in the Filter bubble
 
 **Long-Press Radial Menu**
 - Long-press any article card to open a radial context menu centred on the card
@@ -218,12 +242,12 @@ No confirmation dialog is ever shown. Scroll position for the affected tab reset
 
 **FAB Cluster (bottom-right)**
 Three mini FABs, visible only when at least one feed exists:
-- **Refresh** — refreshes the current tab's feeds and **drops already-read articles from the list**, leaving only unread ones; shows a spinner while active. This is the deliberate "tidy up and show me what's new" action, and is the one place read rows are cleared on demand
+- **Refresh** — refreshes the current tab's feeds; shows a spinner while active. It used to additionally drop already-read rows from the list, because there was no way to say *never show me read articles*. There is now, it is persistent, and it is one tap away, so the button and pull-to-refresh are the same operation again with two gestures — which is what a user would assume they already were
 - **Search** — opens the Search screen
 - **Mark all read** — executes the mark-all-read sequence above
 
 **Open Article**
-- Tap a card to open the article; the card dims in-place immediately (marks as read, added to session set); exact scroll position is restored on return — no reload
+- Tap a card to open the article; the card dims in-place immediately (marks as read and stamps `read_at`); exact scroll position is restored on return — no reload
 - Opens directly in the system browser
 
 ---
@@ -283,12 +307,12 @@ Flagship feature — fixes Palabre's broken implementation.
 ### 4.8 Article Auto-Cleanup
 
 - **Age-based:** read, unsaved articles whose `published_at` is older than the configured cleanup window are deleted automatically
-- The cleanup window defaults to **7 days** and is user-configurable from **5 to 20 days** (Settings → Article cleanup window)
+- The cleanup window defaults to **7 days**. It shares the `cleanup_age_days` key with the Filter bubble's **Article age** slider, which offers 2–15 days; `runCleanup` itself clamps to 5–20, so a value below 5 leaves rows in the database a few days longer than the label implies. The user-visible list is unaffected — the display filter honours the real value
 - Unread articles are never deleted, regardless of age
 - Bookmarked (saved) articles are never deleted, regardless of read state or age
 - Cleanup runs on every cold open and every background refresh, **before** new articles are fetched
-- Pull-to-refresh does **not** trigger cleanup, and does not clear the session-read set — previously read articles remain visible, dimmed, for the session. A list that collapsed under the finger that just pulled it would be the jump the session-read model exists to prevent
-- The **refresh FAB** does drop read articles from the list, leaving only unread ones. It is a deliberate "tidy up and show me what's new" action rather than a passive check, so the collapse is asked for. Only rows currently on screen are forgotten; articles read in another tab keep their place there. Neither refresh path runs DB cleanup — nothing is deleted, the articles simply stop matching the session-read query
+- Neither refresh path — pull-to-refresh nor the refresh FAB — runs DB cleanup. Nothing is deleted by refreshing; what a refresh changes is only which rows match the visibility rule
+- The FAB used to additionally drop read rows from the list while pull-to-refresh did not, which made two gestures for the same operation behave differently. Whether read articles show is now the **Show read** toggle's job (§4.3), so both gestures do the same thing and the answer is persistent rather than implied by which control you happened to touch
 - Per-folder cleanup is also supported (used by "Mark all as read" on a category tab)
 
 ---
@@ -300,8 +324,7 @@ Applied to every feed fetch before articles are written to the database:
 - Articles are sorted newest-to-oldest by `published_at`
 - Articles with `published_at` older than 7 days are discarded — they would be cleaned up immediately anyway
 - Articles with no `published_at` are always discarded
-- At most 100 articles per feed per fetch are accepted (the 100 newest within the 7-day window). This is the hardcoded `kFetchArticleLimit`
-- ⚠️ **The "Max articles per feed" setting does not currently do anything.** It is rendered, persisted to the `article_limit` key, and read back into `AppSettings`, but no code path consults it — the fetch always uses the constant above. The per-feed `Feed.articleLimit` column is likewise stored and never read. Either wire it up or remove the control; leaving a setting that silently does nothing is worse than not offering it
+- At most **"Max articles per feed"** articles per feed per fetch are accepted (the newest N within the 7-day window), defaulting to `kFetchArticleLimit` (100). The setting is consulted by the fetch path and, separately, caps what the feed *displays* per feed — the display cap is what makes moving the slider visibly do something, since a fetch cap alone changes nothing already stored
 - GUID resolution: feed-level guid is preferred; if absent, the article URL is used as the GUID; if neither exists, the article is skipped (no random or timestamp-based GUIDs)
 - Duplicate (feed\_id + guid) articles are silently ignored on insert — re-fetching never resets the read state of existing articles
 
@@ -443,23 +466,27 @@ opens the article, and share/bookmark remain reachable inside the summary sheet.
 
 ## 7. Settings
 
-Grouped as **Reading**, **Refresh**, **Storage**, **Filters**, **Backup**, **About**.
+Settings live in three places. The **Settings screen** keeps what is configured once and forgotten, grouped as **Reading**, **Refresh**, **Filters**, **Backup**, **About**. What is adjusted while reading was moved onto the feed screen itself, into two bubble panels opened from the top button cluster — controls duplicated in both places were removed from Settings rather than left to drift apart.
 
-| Setting | Default | Options |
-|---|---|---|
-| Theme | System | Light, Dark, System |
-| Newspaper mode | Off | On/Off — overrides the theme choice and disables the selector while on |
-| Mark as read on scroll | On | On, Off |
-| Mark all read at end of feed | On | On/Off |
-| └ Wait before marking | 5 seconds | Immediately, 5s, 10s, 15s, 20s, 25s, 30s (shown only while the toggle is on) |
-| Background refresh interval | 30 min | 15m, 30m, 1h, 3h, 6h, Manual only |
-| Article cleanup window | 7 days | 5–20 days (stepper) |
-| Max articles per feed | 100 | 50, 100, 200, 500, Unlimited |
-| Keyword blocklist | — | Manage list |
-| Keyword alerts | — | Manage list |
-| Google Drive backup | — | Sign in / Sign out, Backup now, Restore |
-| Local backup | — | Export, Import |
-| OPML | — | Import, Export |
+| Setting | Default | Lives in | Options |
+|---|---|---|---|
+| Theme | System | Quick Settings bubble | Light, Dark, System |
+| Newspaper mode | Off | Quick Settings bubble | On/Off — overrides the theme choice and greys out the selector while on |
+| Mark as read on scroll | On | Quick Settings bubble | On, Off |
+| **Show read** | **On** | **Filter bubble** | **On/Off — read articles stay visible for 48 hours** |
+| Max articles per feed | 100 | Filter bubble | 20–150 in tens (slider) |
+| Article age | 7 days | Filter bubble | 2–15 days (slider) |
+| Article order | Newest first | Filter bubble | Newest, Oldest |
+| Mark all read at end of feed | On | Settings screen | On/Off |
+| └ Wait before marking | 5 seconds | Settings screen | Immediately, 5s, 10s, 15s, 20s, 25s, 30s (shown only while the toggle is on) |
+| Background refresh interval | 30 min | Settings screen | 15m, 30m, 1h, 3h, 6h, Manual only |
+| Keyword blocklist | — | Settings screen | Manage list |
+| Keyword alerts | — | Settings screen | Manage list |
+| Google Drive backup | — | Settings screen | Sign in / Sign out, Backup now, Restore |
+| Local backup | — | Settings screen | Export, Import |
+| OPML | — | Settings screen | Import, Export |
+
+The Filter bubble's four controls are staged behind an **Apply** button rather than written on release: dragging a slider is exploratory, and persisting each intermediate value re-queried the feed several times on the way to the one the user actually wanted. Apply is disabled until something differs, so it doubles as an indicator of whether anything is pending.
 
 There is **no language setting** — the app follows the device locale (§3.10).
 
@@ -500,7 +527,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - RSS 2.0 + Atom 1.0 parsing, favicon fetching, thumbnail fetching and caching
 - Card list UI with shimmer loading state
 - Mark as read on scroll, swipe gestures (read/unread)
-- Pull-to-refresh (preserves read articles) and a manual refresh FAB (clears them)
+- Pull-to-refresh and a manual refresh FAB — the same operation with two gestures; both reset the list to the top
 - Non-blocking cold open: cleanup → cached list shown immediately → background fetch behind a small animated app-bar bolt. Resume uses the same indicator
 - Age-based article cleanup (configurable 5–20 day window, default 7 days, runs on cold start + background refresh)
 - Fetch thresholds: 7-day age filter + 100-article cap per feed; deterministic GUID resolution
@@ -523,7 +550,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Unread badges on folder tabs and app icon, updating live from any tab
 - Empty state screens
 - Settings screen with all options
-- Session-read model: global across tabs, mark-all-read on a category tab also refreshes that folder's feeds
+- Read visibility: a persisted `read_at` with a 48-hour Show read window, global across tabs; mark-all-read on a category tab also refreshes that folder's feeds and dismisses permanently
 - Newspaper mode: opt-in serif theme (bundled PT Serif / Playfair Display OFL fonts), masthead nameplate on the feed screen, DB-persisted toggle in Settings
 - Folder tab bar: 60dp height, 48×48dp minimum tap targets, ripple feedback, auto-scroll to selected tab, fixed-width unread badges that never shift the layout as counts change
 - Global loading indicator: a top-edge progress bar backed by a reference-counted `LoadingController`, covering every user-initiated async operation app-wide
@@ -534,6 +561,13 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Wide-layout `NavigationRail` at ≥600dp and full Android TV support (extended rail, 1.4× text, D-pad-only interaction)
 - Theme correctness: System mode tracks the live OS theme across cold start, resume and foreground changes; the native window background follows the *app's* theme rather than the OS, so a dark app on a light system no longer flashes white
 - Faster Material motion: 220ms page transitions on all theme variants (subclassing `PredictiveBackPageTransitionsBuilder`, so predictive back is retained), 150ms swipe snap-back
+- Scroll-driven FAB fade, plus Filter and Quick Settings bubble panels anchored to the buttons that open them
+- **Show read** toggle with a 48-hour restore window, backed by `articles.read_at` (schema v11)
+- **Day dividers** in the article list — Today / Yesterday / weekday / date, localised, grouped by calendar day
+- List stability: every network refresh resets to the top, a `MarkReadGate` stops programmatic scrolls marking anything read, and the card's title weight no longer changes with read state (a weight change reflowed the title and shifted every card below it mid-scroll)
+- Feed and category changes reach the article list on return to the Flash tab, via `FeedsChangedNotifier` pinged from the repository writes
+- Categories collapsed by default on the Categories screen
+- Mark-all-read confirmation dialog (the strings existed, translated, in all five locales; nothing ever showed them)
 
 ### Deliberately Removed
 - **In-app reader view.** Articles open in the system browser. A reader mode existed and was removed (schema v8 purges its settings and per-domain compatibility cache); it was never reliable enough across sites to be worth maintaining. This is the most likely gap a reviewer would name if the app were distributed publicly
@@ -556,6 +590,5 @@ There is **no language setting** — the app follows the device locale (§3.10).
 
 - **Opinion filter:** Planned but not yet implemented — the dedicated Opinions folder and Claude Haiku classification pipeline are not shipped
 - **Restore merge vs replace:** Current behaviour is replace (wipe then re-insert); merge with duplicate-URL detection is a future improvement
-- **Max articles per feed:** Wire the existing setting to the fetch path, or remove the control (§4.9)
 - **Play Store:** Under consideration. Blockers if pursued: a real signing key, an AAB build rather than APK, and a decision on free-vs-paid. Gemini Nano only runs on AICore-capable devices (Pixel 8+/Galaxy S24+ class), so the headline AI feature is unavailable to most of the market — which argues for a free download with a one-time unlock rather than a paid-upfront listing
 - **Feedly API terms:** Feed discovery search goes through Feedly's API. Worth reviewing their terms before any paid distribution

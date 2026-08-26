@@ -99,6 +99,12 @@ void main() {
     await _pump(tester, isRead: false);
     final unread = _titleStyle(tester);
 
+    expect(unread.fontWeight, FontWeight.w600,
+        reason: 'anchors the finder to the card\'s own style rather than the '
+            'framework w400 one Material wraps the Scaffold in. Without this '
+            'the equality below can pass by matching two wrong values, and '
+            'the test reports green while proving nothing.');
+
     await _pump(tester, isRead: true);
     final read = _titleStyle(tester);
 

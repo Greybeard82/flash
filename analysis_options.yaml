@@ -26,3 +26,13 @@ linter:
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options
+
+# Scratch working copies of the project that live inside the analysis root.
+# .gitignore keeps them out of the repo but not out of `flutter analyze`,
+# which reported dozens of errors from their stale copies of deleted APIs —
+# enough noise to hide a real one and to make a bare `flutter analyze`
+# useless as a gate.
+analyzer:
+  exclude:
+    - files/**
+    - files2/**
