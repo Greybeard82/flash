@@ -343,7 +343,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get markAllReadWarningBody =>
-      'Tutti gli articoli nella vista corrente verranno segnati come letti. Non potrai annullare questa azione.';
+      'Tutti gli articoli nella vista corrente verranno segnati come letti e rimossi dal feed. Non potrai annullare questa azione.';
 
   @override
   String get markAllReadConfirm => 'Segna tutto come letto';
@@ -544,8 +544,7 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get filterBubbleFootnote =>
-      'Modificabile anche in Impostazioni. Vale per tutti i feed.';
+  String get filterBubbleFootnote => 'Vale per tutti i feed.';
 
   @override
   String get filterTooltip => 'Filtra articoli';

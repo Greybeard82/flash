@@ -343,7 +343,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get markAllReadWarningBody =>
-      'Esto marcará todos los artículos de la vista actual como leídos. No podrás deshacer esta acción.';
+      'Esto marcará como leídos todos los artículos de la vista actual y los eliminará del feed. No podrás deshacer esta acción.';
 
   @override
   String get markAllReadConfirm => 'Marcar todo como leído';
@@ -543,8 +543,7 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get filterBubbleFootnote =>
-      'También en Ajustes. Se aplica a todos los feeds.';
+  String get filterBubbleFootnote => 'Se aplica a todos los feeds.';
 
   @override
   String get filterTooltip => 'Filtrar artículos';

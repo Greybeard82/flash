@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.7
+**Version:** 2.8
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** 26 August 2026 (pass 05)
+**Last Updated:** 27 August 2026 (pass 06)
 
 ---
 
@@ -353,6 +353,27 @@ Flagship feature — fixes Palabre's broken implementation.
 - Automatically marked as read in the database
 - Retroactive blocking: newly added keywords are applied to all existing unread articles immediately
 
+**Blocked articles are hidden, not deleted — and this is deliberate**
+
+Making a blocked article *retire* (delete the row, write a tombstone) was
+specified during pass 05, investigated, and not shipped. `is_blocked` already
+excludes the article from every feed view under either show-read setting, so
+deleting would buy nothing, and it would cost three things:
+
+- `unblockByKeyword` becomes a no-op. Today, removing or editing a keyword
+  restores what it hid. With the rows deleted there is nothing to restore, and
+  the tombstone would block a re-fetch for another eight days on top.
+- The **Blocked Articles** audit view — `getBlocked()`, live at
+  `keyword_blocklist_screen.dart:33` — would be permanently empty. The whole
+  point of that screen is showing the user what a keyword swallowed.
+- A broad keyword becomes catastrophic. Adding "the" would irreversibly
+  destroy essentially the entire library, with no confirmation dialog and no
+  recovery path. Retroactive blocking is applied the moment a keyword is
+  saved, so there is no moment at which the user is asked.
+
+The rule: hiding is reversible, deletion is not, and a keyword is far too easy
+to mistype for its blast radius to be permanent.
+
 **Performance**
 - Runs locally at parse time — zero latency, zero API calls
 
@@ -640,6 +661,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Mark-all-read confirmation dialog (the strings existed, translated, in all five locales; nothing ever showed them)
 
 ### Tried and Removed
+- **Retirement on keyword block** was specified into pass 05 and deliberately not shipped. `is_blocked` already hides the article everywhere, so deletion would add nothing except making `unblockByKeyword` a no-op, emptying the Blocked Articles audit view, and turning one mistyped keyword into irreversible library loss with no confirmation. See §4.6.
 - **The 48-hour show-read window** shipped in schema v11 and was removed in v13. It kept a `read_at` timestamp per article so that switching Show read back on restored anything read recently. It worked, but it made "read" a state an article rested in indefinitely, which meant the table only ever grew and the user had no way to actually finish with anything. Retirement replaced it: one verb, two timings, and the row leaves. Do not repropose the window without also solving what it was hiding — that the database had no exit path.
 
 ### Deliberately Removed

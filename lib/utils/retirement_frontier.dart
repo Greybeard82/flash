@@ -106,11 +106,24 @@ RetirementPlan planRetirement({
     if (id != null) ids.add(id);
   }
 
-  // Never leave a trailing header with nothing under it.
-  if (frontier + 1 < rows.length && rows[frontier].isHeader) {
-    // frontier itself is a header whose articles all survive — drop it back.
-    indices.removeLast();
-    height -= rows[frontier].height;
+  // If the block ends mid-day, the surviving articles still need their header.
+  //
+  // The old check only caught a header sitting exactly at the frontier. A
+  // frontier landing *inside* a group removed that group's header while its
+  // later articles survived, leaving the top of the list with no date label.
+  //
+  // Dropping the header out of the block is safe: it simply becomes the new
+  // top row, and removedHeight excludes it, so the offset correction still
+  // lands on the pixel. Indices stop being contiguous, which the caller
+  // already handles — it removes by set membership, not by range.
+  if (frontier + 1 < rows.length && !rows[frontier + 1].isHeader) {
+    for (var i = frontier; i >= 0; i--) {
+      if (rows[i].isHeader) {
+        indices.remove(i);
+        height -= rows[i].height;
+        break;
+      }
+    }
   }
 
   if (ids.isEmpty) return RetirementPlan.empty;

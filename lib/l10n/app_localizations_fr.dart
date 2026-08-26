@@ -343,7 +343,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get markAllReadWarningBody =>
-      'Ceci marquera tous les articles de la vue actuelle comme lus. Cette action est irréversible.';
+      'Ceci marquera tous les articles de la vue actuelle comme lus et les retirera du flux. Cette action est irréversible.';
 
   @override
   String get markAllReadConfirm => 'Tout marquer comme lu';
@@ -545,8 +545,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get filterBubbleFootnote =>
-      'Modifiable aussi dans Réglages. S\'applique à tous les flux.';
+  String get filterBubbleFootnote => 'S\'applique à tous les flux.';
 
   @override
   String get filterTooltip => 'Filtrer les articles';

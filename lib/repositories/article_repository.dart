@@ -260,6 +260,25 @@ class ArticleRepository {
   /// Returns the number of rows deleted.
   Future<int> retireArticles(List<int> articleIds) async {
     if (articleIds.isEmpty) return 0;
+    var deleted = 0;
+    for (var i = 0; i < articleIds.length; i += _retireChunkSize) {
+      final end = (i + _retireChunkSize).clamp(0, articleIds.length);
+      deleted += await _retireChunk(articleIds.sublist(i, end));
+    }
+    return deleted;
+  }
+
+  /// Ids per retirement transaction.
+  ///
+  /// Each chunk binds its id list three times — the saved-exempt update, the
+  /// tombstone select and the delete — plus one timestamp, so the ceiling is
+  /// roughly `3N + 1` variables. At 200 that is ~601, comfortably under
+  /// SQLite's old 999 default as well as the current 32,766. The count is
+  /// invisible at the call site, which is why it is bounded here rather than
+  /// trusted to stay small.
+  static const int _retireChunkSize = 200;
+
+  Future<int> _retireChunk(List<int> articleIds) async {
     final db = await _db;
     final now = DateTime.now().millisecondsSinceEpoch;
     final ph = List.filled(articleIds.length, '?').join(',');

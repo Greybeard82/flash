@@ -120,6 +120,10 @@ void main() {
     });
 
     test('a header whose articles all go, goes with them', () {
+      // This test previously asserted the defect fixed in pass 06: it expected
+      // the *second* header to be removed too, even though a4 and a5 survive
+      // under it. Its own reason text described that as intended. It was not —
+      // it left the list opening on an article with no date above it.
       final rows = [
         _header, _article(1, 100), _article(2, 100),
         _header, _article(3, 100), _article(4, 100), _article(5, 100),
@@ -128,11 +132,104 @@ void main() {
       final plan = planRetirement(rows: rows, scrollOffset: 372, bufferCards: 0);
 
       expect(plan.articleIds, [1, 2, 3]);
-      expect(plan.rowIndices, [0, 1, 2, 3, 4],
-          reason: 'the first header has no articles left beneath it, and the '
-              'second still leads a4 and a5 — but it is inside the block, so '
-              'it goes only because its own article a3 went');
-      expect(plan.removedHeight, 372.0);
+      expect(plan.rowIndices, [0, 1, 2, 4],
+          reason: 'the first header has no articles left beneath it and goes; '
+              'the second still leads a4 and a5, so it stays and index 3 is '
+              'absent from an otherwise contiguous block');
+      expect(plan.removedHeight, 336.0,
+          reason: '372 less the surviving header, so the offset correction '
+              'still lands on the pixel');
+    });
+
+    test('a frontier inside a day group keeps that group header',
+        () {
+      // The bug shipped in fb3fb10: rows [H, A1, A2, A3, A4] with the frontier
+      // at A2 removed the header along with A1 and A2, leaving A3 and A4 at
+      // the top of the list with no date label above them.
+      final rows = [
+        _header,
+        _article(1, 100),
+        _article(2, 110),
+        _article(3, 120),
+        _article(4, 130),
+      ];
+      // Cumulative through index 2 (A2): 36 + 100 + 110 = 246.
+      final plan = planRetirement(rows: rows, scrollOffset: 246, bufferCards: 0);
+
+      expect(plan.articleIds, [1, 2]);
+      expect(plan.rowIndices, isNot(contains(0)),
+          reason: 'A3 and A4 survive and still belong to that day, so the '
+              'header has to survive with them');
+      expect(plan.rowIndices, [1, 2]);
+      expect(plan.removedHeight, 210.0,
+          reason: '100 + 110 only — the header stays, so its 36 must not be '
+              'subtracted from the scroll offset');
+    });
+
+    test('the frontier exactly at a day boundary removes that header', () {
+      // Here the next surviving row IS a header, so the removed group has no
+      // survivors and its own header goes with it.
+      final rows = [
+        _header,
+        _article(1, 100),
+        _article(2, 110),
+        _header,
+        _article(3, 120),
+        _article(4, 130),
+      ];
+      // Cumulative through index 2 (A2): 36 + 100 + 110 = 246.
+      final plan = planRetirement(rows: rows, scrollOffset: 246, bufferCards: 0);
+
+      expect(plan.rowIndices, [0, 1, 2]);
+      expect(plan.removedHeight, 246.0, reason: '36 + 100 + 110');
+      expect(plan.articleIds, [1, 2]);
+    });
+
+    test('first group fully removed, second group partly removed', () {
+      final rows = [
+        _header,
+        _article(1, 100),
+        _article(2, 110),
+        _header,
+        _article(3, 120),
+        _article(4, 130),
+        _article(5, 140),
+      ];
+      // Cumulative through index 4 (A3): 36+100+110+36+120 = 402.
+      final plan = planRetirement(rows: rows, scrollOffset: 402, bufferCards: 0);
+
+      expect(plan.articleIds, [1, 2, 3]);
+      expect(plan.rowIndices, [0, 1, 2, 4],
+          reason: 'the first header goes with its whole group; the second '
+              'stays because A4 and A5 still sit under it');
+      expect(plan.removedHeight, 366.0,
+          reason: '36 + 100 + 110 + 120 — the surviving header excluded');
+    });
+
+    test('whenever an article survives, the surviving rows start with a header',
+        () {
+      final rows = [
+        _header,
+        _article(1, 100),
+        _article(2, 110),
+        _article(3, 120),
+        _header,
+        _article(4, 130),
+      ];
+      for (final offset in [100.0, 210.0, 246.0, 330.0, 366.0, 402.0]) {
+        final plan =
+            planRetirement(rows: rows, scrollOffset: offset, bufferCards: 0);
+        final removed = plan.rowIndices.toSet();
+        final survivors = [
+          for (var i = 0; i < rows.length; i++)
+            if (!removed.contains(i)) rows[i],
+        ];
+        if (survivors.any((r) => !r.isHeader)) {
+          expect(survivors.first.isHeader, isTrue,
+              reason: 'at offset $offset the list would open on an article '
+                  'with no date above it');
+        }
+      }
     });
 
     test('a trailing header with survivors beneath it stays', () {

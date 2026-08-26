@@ -242,6 +242,50 @@ void main() {
     expect(await _rows(_feedA), isEmpty);
   });
 
+  test('1000 ids retire correctly across chunks, and the count is right',
+      () async {
+    // retireArticles chunks at 200, so this spans five transactions. The
+    // return value must be the total across all of them, not the last chunk.
+    final batch = [for (var i = 0; i < 1000; i++) _article('c$i')];
+    await _repo.insertArticles(_feedA, batch);
+
+    final db = await AppDatabase.instance.database;
+    final ids = (await db.query(TableNames.articles, columns: ['id']))
+        .map((r) => r['id'] as int)
+        .toList();
+    expect(ids.length, 1000);
+
+    final deleted = await _repo.retireArticles(ids);
+
+    expect(deleted, 1000, reason: 'summed across every chunk');
+    expect(await _tombstoneCount(), 1000);
+    expect(await _rows(_feedA), isEmpty);
+
+    // And the tombstones actually work across the chunk boundary.
+    await _repo.insertArticles(_feedA, batch);
+    expect(await _rows(_feedA), isEmpty,
+        reason: 'chunking must not leave a gap a re-fetch can slip through');
+  });
+
+  test('a mixed saved/unsaved batch across chunks counts only deletions',
+      () async {
+    final batch = [for (var i = 0; i < 250; i++) _article('m$i')];
+    await _repo.insertArticles(_feedA, batch);
+
+    final db = await AppDatabase.instance.database;
+    final ids = (await db.query(TableNames.articles, columns: ['id']))
+        .map((r) => r['id'] as int)
+        .toList();
+    // Save one in the first chunk and one in the second.
+    await _repo.setSaved(ids[10], saved: true);
+    await _repo.setSaved(ids[210], saved: true);
+
+    final deleted = await _repo.retireArticles(ids);
+
+    expect(deleted, 248, reason: 'the two saved articles are exempt');
+    expect((await _rows(_feedA)).length, 2);
+  });
+
   test('a 500-id batch retires without hitting a variable limit', () async {
     final batch = [for (var i = 0; i < 500; i++) _article('g$i')];
     await _repo.insertArticles(_feedA, batch);

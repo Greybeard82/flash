@@ -344,7 +344,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get markAllReadWarningBody =>
-      'Alle Artikel in der aktuellen Ansicht werden als gelesen markiert. Dies kann nicht rückgängig gemacht werden.';
+      'Alle Artikel in der aktuellen Ansicht werden als gelesen markiert und aus dem Feed entfernt. Dies kann nicht rückgängig gemacht werden.';
 
   @override
   String get markAllReadConfirm => 'Alle als gelesen markieren';
@@ -544,8 +544,7 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get filterBubbleFootnote =>
-      'Auch in den Einstellungen. Gilt für alle Feeds.';
+  String get filterBubbleFootnote => 'Gilt für alle Feeds.';
 
   @override
   String get filterTooltip => 'Artikel filtern';

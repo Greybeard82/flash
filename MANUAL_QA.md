@@ -137,8 +137,9 @@ this regression is visible.
 | Swipe an article to the LEFT | Article dims in-place (reduced opacity); stays in list; no removal animation |
 | Swipe an article to the RIGHT | Same result — article dims in-place |
 | Pick an article whose title wraps to three lines, and watch it closely as it dims | **The card's height does not change.** Nothing below it moves. Read state is carried by colour and opacity only; the title weight is constant at `w600` |
+| Immediately after the swipe, check the list length | **Nothing has been removed.** A swipe marks read; it never retires. The row dims where it is |
 | Scroll away and back, with **Show read** on | Dimmed article is still present at its original position |
-| Same, with **Show read** off | The article is gone once the list rebuilds — see §19 |
+| Same, with **Show read** off | The article is gone once it passes the retirement frontier, or at the next refresh — see §19 |
 
 ---
 
@@ -213,27 +214,28 @@ this regression is visible.
 
 ---
 
-## 19. Read Visibility and the Show Read Toggle
+## 19. Retirement and the Show Read Toggle
 
-**Show read** lives in the Filter bubble (the funnel button, top right). Read
-articles are never deleted by this setting — deletion is the cleanup window's
-job, a separate rule this one never consults.
+Read is not a state an article rests in — it is a step on the way out. An
+article is **retired** when the user is finished with it: the row is deleted
+and a tombstone written so a re-fetch cannot bring it back. **Show read**
+decides only *when*.
+
+**Retirement is permanent. There is no undo.** Do this on a device whose
+library you are willing to lose.
 
 | Step | Expected |
 |------|----------|
-| Find a Gaming folder with at least two unread articles (call them 5 and 6). Turn **Show read on**. Start on the All tab | All shows 5 and 6; Gaming shows 5 and 6 |
-| Scroll past article 5 in All (mark-read-on-scroll on) | Article 5 dims in place in All |
-| Switch to Gaming | **Article 5 is still there, dimmed, in position.** Read state lives on the row, so it is the same answer in every tab |
-| Switch back to All | Unchanged — 5 dimmed, 6 full weight |
-| Now turn **Show read off** and Apply | The list re-queries and resets to the top. Article 5 is gone from All |
-| Switch to Gaming | Article 5 is gone there too. **This is the headline check** — it is the behaviour the toggle exists for |
-| Still with Show read off, scroll past article 6 in the tab you are looking at | **It greys in place and does not vanish under your thumb.** A row disappearing mid-scroll is the exact defect this design avoids |
-| Switch tabs and come back (or refresh) | *Now* article 6 is gone. It leaves on the next rebuild, not under the finger that read it |
-| Swipe article 5 unread | It returns at full weight in every tab, under either toggle setting — mark-unread clears the timestamp outright |
-| Turn **Show read back on** and Apply | Articles read within the last 48 hours return, dimmed. This is what the persisted `read_at` buys |
-| Force-close and relaunch with Show read on | **Articles read in the last 48 hours are still there, dimmed.** This is the opposite of the old session-scoped behaviour, where a relaunch showed unread-only |
-| Press Mark all as read, confirm the dialog, then make sure Show read is on | Those articles do **not** come back. Mark-all-read stamps a dismissal sentinel that sits outside every window — pressing it means "clear these out" |
-| Reach the bottom of a feed and wait for the auto-mark-read, then check with Show read on | These *do* come back, dimmed. Reaching the end of a feed is passive reading, not dismissal, so it stamps a real time |
+| Open the Filter bubble (funnel button) and turn **Show read off**. Apply | The list re-queries and resets to the top |
+| Scroll down slowly past six or seven articles, then stop | Articles behind you are removed once they are two cards above the viewport. **The list does not move under you** — see §25 |
+| Scroll back up to the top | The retired articles are gone. The ones still on screen are the ones you had not passed |
+| Now turn **Show read on** and Apply | Nothing you retired comes back. Retirement is not hiding |
+| With Show read **on**, scroll past several articles | They dim in place and stay. Nothing is removed while you scroll |
+| Pull to refresh | *Now* the dimmed ones disappear — retirement was deferred to the refresh, not skipped |
+| Bookmark an article, mark it read, with Show read **off** | It stays in the feed. Saved articles are exempt from retirement under either setting |
+| Refresh again with that bookmark still saved | Still there, still in Bookmarks |
+| Un-bookmark it, then refresh | Now it retires like anything else |
+| Force-close and relaunch | Retired articles are still gone; nothing is restored by a restart |
 
 ---
 
@@ -250,17 +252,31 @@ job, a separate rule this one never consults.
 
 ---
 
-## 21. Refresh Resets to Top
+## 21. Refresh Is Conditional
+
+A refresh either leaves the list completely alone or rebuilds it and jumps to
+the top. Which one depends on whether anything *visible* actually arrived —
+not whether anything was inserted, since an article can be inserted and then
+hidden by the age filter, the per-feed cap or a blocklist match.
+
+**Nothing arrived**
 
 | Step | Expected |
 |------|----------|
-| Scroll well down the list and note where you are | — |
-| Pull to refresh | The list returns to offset 0 |
-| Repeat with the refresh FAB | Same — the button and the pull gesture are the same operation |
-| Immediately after either, look at the articles now at the top | Still unread. They must not be marked read by the jump |
-| Wait a few seconds without touching the screen, then look again | Still unread |
-| Now scroll down yourself | *Now* articles mark read as they pass the midpoint — a real scroll re-arms it |
-| Open an article in the browser and come back | Scroll position is restored **exactly**. Only refresh paths reset to top |
+| Scroll well down the list and note exactly where you are | — |
+| Pull to refresh at a quiet moment, when the feeds have nothing new | **The scroll position does not move at all.** You pulled to check, not to be relocated |
+| Check the read articles that were on screen | Still there, still dimmed. Nothing is retired when nothing arrived |
+| Repeat with the refresh FAB | Identical behaviour — the button and the pull are the same operation |
+
+**Something arrived**
+
+| Step | Expected |
+|------|----------|
+| Scroll down, then refresh when a feed genuinely has new items | Read articles are retired, the new ones load, and the list jumps to offset 0 |
+| Immediately look at the articles now at the top | **Still unread.** The jump must not be mistaken for you scrolling past them — anything newly fetched showing up dimmed is a `MarkReadGate` regression |
+| Wait ten seconds without touching the screen | Still unread |
+| Scroll down yourself | *Now* articles mark read as they pass the midpoint |
+| Open an article in the browser and come back | Scroll position restored **exactly**. Only refresh paths reset to top |
 
 ---
 
@@ -300,3 +316,78 @@ job, a separate rule this one never consults.
 | Press Apply | The list re-queries immediately and articles older than the window are gone |
 | Move it back up and Apply | They return, provided they are still in the database |
 | Set a value below 5 days | The visible list is correct. Note that `runCleanup` clamps to 5–20, so rows linger in the database a few days longer than the label implies — storage lags, the list does not |
+
+---
+
+## 25. Tombstones — Retired Articles Stay Gone
+
+> **The single most important manual check in this sheet.** Dedup used to work
+> because a read article kept its row, and therefore its guid, to collide with.
+> Retirement deletes the row. The article is still in the feed's XML and still
+> inside the seven-day fetch window, so without the tombstone table a refresh
+> re-inserts everything you just cleared, as unread.
+
+| Step | Expected |
+|------|----------|
+| Show read **off**. Note the titles of five or six articles at the top | — |
+| Scroll past all of them and let the list settle | They are retired and gone |
+| Pull to refresh | **None of those titles return.** If any comes back unread, the `NOT EXISTS` guard in `insertArticles` is broken and nothing else in this area can be trusted |
+| Force-close, relaunch, refresh again | Still gone |
+| Leave the app for eight days, then refresh | They *may* return — tombstones prune past `kTombstoneDayLimit`, and by then a feed still offering the guid has genuinely republished. This is intended, not a leak |
+
+---
+
+## 26. The List Never Moves
+
+The invariant the whole retirement design is built around: the article list
+must never move by a single pixel while you are looking at it.
+
+| Step | Expected |
+|------|----------|
+| Show read **off**. Scroll down slowly, in small drags, pausing after each | Rows are removed behind you at each pause. **Nothing on screen shifts** — no jump, no flicker, no settle |
+| Pick a headline in the middle of the screen and keep your eye on it through a pause | It does not move a pixel when rows above it are removed |
+| Now fling hard and let it come to rest | Same — the removal happens at rest, and the correction lands in the same frame |
+| Fling down, then immediately drag back up before it settles | Nothing is removed from what you scrolled back to. The frontier is recomputed at rest, not reused from mid-scroll |
+| Scroll to the very top and overscroll-bounce repeatedly | **No rows are eaten.** A bounce is not a scroll past the frontier |
+| Bookmark an article, then scroll past it | Nothing above it is removed either — a saved article blocks the whole block, so the list stays put rather than resequencing around a survivor |
+
+---
+
+## 27. Retiring Across a Day Boundary
+
+| Step | Expected |
+|------|----------|
+| Find a list with at least two day groups (**TODAY** and **YESTERDAY**) | — |
+| Show read **off**. Scroll so the frontier lands in the *middle* of the first group | The header stays. The surviving articles still have a date above them |
+| Keep scrolling until the whole first group is retired | **TODAY** goes with its last article; **YESTERDAY** becomes the top header |
+| Watch the moment the header is removed | Nothing jumps — the header's height is inside the correction |
+| Scroll to the top | The list opens on a header, never on a bare article |
+
+---
+
+## 28. Reaching the Bottom Zeroes the Badge
+
+| Step | Expected |
+|------|----------|
+| Pick a category tab with a visible unread count | — |
+| Scroll to the very bottom of that tab and stop | Its badge drops to **0** immediately, even though articles down there are still unread |
+| Check the other category tabs | Unchanged |
+| Check the **All** badge | It is now the sum over the categories that were *not* zeroed — clearing one category must not claim the whole app is caught up |
+| Switch away and back | Still zero |
+| Refresh so that new articles genuinely arrive for that tab | The badge shows the true count again — the suppression is display-only and clears when there is something new to show |
+| Force-close and relaunch | True counts everywhere; nothing was written to the database |
+
+---
+
+## 29. "Don't Show Again" on Mark All as Read
+
+| Step | Expected |
+|------|----------|
+| Tap **Mark all as read** | Confirmation dialog, now with a **Don't show again** checkbox |
+| Tick the box, then tap **Cancel** | Nothing is marked. **The setting is unchanged** — open Quick Settings and confirm *Confirm mark all as read* is still on |
+| Tap Mark all as read again, tick the box, tap **Mark all read** | It runs, and the setting is now off |
+| Tap Mark all as read again | It runs immediately, no dialog |
+| Open Quick Settings and turn **Confirm mark all as read** back on | — |
+| Tap Mark all as read once more | The dialog is back |
+
+---

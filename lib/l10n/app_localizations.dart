@@ -713,7 +713,7 @@ abstract class AppLocalizations {
   /// No description provided for @markAllReadWarningBody.
   ///
   /// In en, this message translates to:
-  /// **'This will mark all articles in the current view as read. You won\'t be able to undo this.'**
+  /// **'This will mark every article in the current view as read and remove it from your feed. You won\'t be able to undo this.'**
   String get markAllReadWarningBody;
 
   /// No description provided for @markAllReadConfirm.
@@ -1049,7 +1049,7 @@ abstract class AppLocalizations {
   /// No description provided for @filterBubbleFootnote.
   ///
   /// In en, this message translates to:
-  /// **'Also editable in Settings. Applies to every feed.'**
+  /// **'Applies to every feed.'**
   String get filterBubbleFootnote;
 
   /// No description provided for @filterTooltip.
