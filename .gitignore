@@ -52,3 +52,4 @@ app.*.map.json
 # Scratch working copies — not part of the build
 files/
 files2/
+graphify-out/
