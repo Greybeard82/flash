@@ -305,7 +305,7 @@ void main() {
         await _fetchInto(id, 200, limit: 50);
       }
 
-      final all = await _repo.getAllArticles();
+      final all = await _repo.getAllArticles(showRead: true);
       final perFeed = <int>[
         for (final id in _twoFeedIds) await _countForFeed(id),
       ];
@@ -325,7 +325,7 @@ void main() {
       expect(await _countForFeed(_twoFeedIds[1]), 12,
           reason: 'the cap is a ceiling, not a quota to fill');
 
-      final all = await _repo.getAllArticles();
+      final all = await _repo.getAllArticles(showRead: true);
       expect(all.length, 62);
     });
 

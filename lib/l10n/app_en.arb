@@ -238,5 +238,13 @@
   "dayYesterday": "Yesterday",
   "@dayYesterday": {
     "description": "Day divider heading for articles published yesterday."
+  },
+  "dontShowAgain": "Don't show again",
+  "@dontShowAgain": {
+    "description": "Checkbox in the mark-all-read dialog that suppresses it in future."
+  },
+  "confirmMarkAllRead": "Confirm mark all as read",
+  "@confirmMarkAllRead": {
+    "description": "Quick Settings switch that re-enables the mark-all-read confirmation."
   }
 }

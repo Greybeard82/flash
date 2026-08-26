@@ -12,13 +12,10 @@
 // ping ReadStateNotifier, which FeedScreen listens to and answers by
 // re-querying counts from the DB.
 //
-// Behaviour change in schema v11: an article read from Bookmarks or Search
-// now stamps read_at like any other read, so with "Show read" on it stays
-// visible in the feed, dimmed, rather than vanishing. That is a deliberate
-// consequence of read state being genuinely global — the previous behaviour
-// was an artefact of those screens writing is_read directly while never
-// touching the in-memory session set. Counts were, and remain, the thing
-// this file actually pins.
+// Behaviour under schema v13: an article read from Bookmarks or Search is
+// read like any other, so with "Show read" on it stays visible in the feed,
+// dimmed, until the next refresh retires it. Counts were, and remain, the
+// thing this file actually pins.
 //
 // Plain test(), not testWidgets() — this codebase never combines testWidgets()
 // with real sqflite FFI I/O (see feed_repository_test.dart).
@@ -29,12 +26,7 @@ import 'package:flash/db/database.dart';
 import 'package:flash/db/schema.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/repositories/article_repository.dart';
-import 'package:flash/utils/constants.dart';
 
-/// The show-read cutoff FeedScreen would pass for a query happening now.
-int get _windowStart => DateTime.now()
-    .subtract(const Duration(hours: kShowReadBufferHours))
-    .millisecondsSinceEpoch;
 
 late ArticleRepository _repo;
 late int _folderId;
@@ -91,7 +83,7 @@ void main() {
 
     final visible = await _repo.getArticlesByFolder(
       _folderId,
-      readSinceMs: _windowStart,
+      showRead: true,
     );
     expect(visible.map((a) => a.id), contains(id),
         reason: 'a just-read article stays in the list, dimmed in place, in '
@@ -137,13 +129,11 @@ void main() {
     await _repo.markAsUnread(id);
 
     final visible =
-        await _repo.getArticlesByFolder(_folderId, readSinceMs: _windowStart);
+        await _repo.getArticlesByFolder(_folderId, showRead: true);
     final row = visible.singleWhere((a) => a.id == id);
-    expect(row.readAt, isNull,
-        reason: 'leaving a read_at behind while the row is unread in the DB '
-            'makes the article simultaneously counted unread by the badge '
-            'and matched by the show-read half of the visibility query');
-    expect(row.isRead, isFalse);
+    expect(row.isRead, isFalse,
+        reason: 'leaving it read while the badge counts it unread would make '
+            'the two disagree');
     expect(await _repo.getTotalUnreadCount(), 1);
   });
 
@@ -156,14 +146,14 @@ void main() {
     await _repo.markAsRead(id);
 
     final shown =
-        await _repo.getArticlesByFolder(_folderId, readSinceMs: _windowStart);
+        await _repo.getArticlesByFolder(_folderId, showRead: true);
     expect(shown.map((a) => a.id), contains(id),
         reason: 'read state is genuinely global now: the article is dimmed '
             'in place rather than vanishing, which is what reading it in the '
             'feed would have done');
 
     final hidden =
-        await _repo.getArticlesByFolder(_folderId, readSinceMs: null);
+        await _repo.getArticlesByFolder(_folderId, showRead: false);
     expect(hidden, isEmpty,
         reason: 'with Show read off it goes, like any other read article. '
             'The badge counts update either way — see the test above.');

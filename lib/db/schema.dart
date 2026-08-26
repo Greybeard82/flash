@@ -6,6 +6,7 @@ class TableNames {
   static const String keywordAlerts = 'keyword_alerts';
   static const String articleSummaries = 'article_summaries';
   static const String settings = 'settings';
+  static const String deletedArticles = 'deleted_articles';
 }
 
 class SchemaStatements {
@@ -54,7 +55,6 @@ class SchemaStatements {
       published_at   INTEGER,
       fetched_at     INTEGER NOT NULL,
       is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
-      read_at        INTEGER,
       is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
       is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
       blocked_keyword TEXT
@@ -70,10 +70,6 @@ class SchemaStatements {
   static const String createArticlesIsReadIndex = '''
     CREATE INDEX idx_articles_is_read ON articles(is_read)
   ''';
-  static const String createArticlesReadAtIndex = '''
-    CREATE INDEX idx_articles_read_at ON articles(read_at)
-  ''';
-
   static const String createArticlesIsBlockedIndex = '''
     CREATE INDEX idx_articles_is_blocked ON articles(is_blocked)
   ''';
@@ -117,6 +113,32 @@ class SchemaStatements {
     )
   ''';
 
+  /// Guids the user has retired, so a re-fetch cannot resurrect them.
+  ///
+  /// Article rows used to survive being read, which is what made
+  /// INSERT OR IGNORE on (feed_id, guid) a working dedup. Retirement deletes
+  /// the row, taking the guid with it — and the article is still in the feed's
+  /// XML and still inside the fetch window, so without this table the next
+  /// refresh re-inserts everything the user just cleared.
+  static const String createDeletedArticles = '''
+    CREATE TABLE IF NOT EXISTS deleted_articles (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      feed_id    INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      guid       TEXT    NOT NULL,
+      deleted_at INTEGER NOT NULL
+    )
+  ''';
+
+  static const String createDeletedArticlesGuidIndex = '''
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_deleted_articles_guid_feed
+      ON deleted_articles(feed_id, guid)
+  ''';
+
+  static const String createDeletedArticlesAgeIndex = '''
+    CREATE INDEX IF NOT EXISTS idx_deleted_articles_deleted_at
+      ON deleted_articles(deleted_at)
+  ''';
+
   static const String createSettings = '''
     CREATE TABLE settings (
       key        TEXT PRIMARY KEY,
@@ -147,5 +169,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'cleanup_age_days', 'value': '7'},
   {'key': 'newspaper_mode', 'value': 'false'},
   {'key': 'show_read', 'value': 'true'},
+  {'key': 'mark_all_read_confirm', 'value': 'true'},
 ];
 

@@ -19,7 +19,7 @@ import 'package:flash/repositories/settings_repository.dart';
 
 /// Kept in sync by hand with the `version:` passed to openDatabase in
 /// database.dart. Bump both together when adding a migration.
-const int kExpectedSchemaVersion = 12;
+const int kExpectedSchemaVersion = 13;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();
@@ -27,19 +27,21 @@ Future<void> _setUp() async {
   AppDatabase.useForTesting();
 }
 
-/// Reshapes the freshly-created v11 `articles` table back to v10 so the
-/// migration under test has real work to do.
+/// Reshapes the freshly-created current-version database back to v10 so the
+/// migration chain under test has real work to do.
 ///
 /// [AppDatabase.migrateForTesting] runs `_onUpgrade` against a database
 /// `_onCreate` has already built at the current version, so without this the
-/// v11 step only ever exercises its own idempotency guards — worth testing,
-/// but not the same thing as testing the upgrade.
+/// steps only ever exercise their own idempotency guards — worth testing, but
+/// not the same thing as testing the upgrade.
 ///
-/// `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35 (March 2021) or newer.
+/// Note there is no `read_at` to drop: v11 added it and v13 removed it again,
+/// so a v10-shaped and a v13-shaped `articles` table agree on that column
+/// being absent.
 Future<void> _reshapeToV10(Database db) async {
-  await db.execute('DROP INDEX IF EXISTS idx_articles_read_at');
-  await db.execute('ALTER TABLE articles DROP COLUMN read_at');
+  await db.execute('DROP TABLE IF EXISTS deleted_articles');
   await db.delete('settings', where: "key = 'show_read'");
+  await db.delete('settings', where: "key = 'mark_all_read_confirm'");
 }
 
 Future<Set<String>> _articleColumns(Database db) async {
@@ -142,22 +144,40 @@ void main() {
         reason: 'unrelated settings must survive the migration');
   });
 
-  group('v10 → v11 (read_at)', () {
-    test('adds the column, its index, and the show_read default', () async {
+  group('v10 → v13 in one hop', () {
+    // This group used to assert that v11 added `read_at` and its index. It no
+    // longer can: v13 removes both, so the end of the chain is the same shape
+    // as its start for that column. What is still worth pinning is that a v10
+    // database walked all the way forward lands correctly — the settings the
+    // intermediate steps seed, and idempotency across the whole run.
+
+    test('seeds show_read without a read_at column surviving', () async {
       final db = await AppDatabase.instance.database;
       await _reshapeToV10(db);
-      expect(await _articleColumns(db), isNot(contains('read_at')),
-          reason: 'the fixture must actually be v10-shaped, or this test '
-              'proves nothing beyond idempotency');
 
       await AppDatabase.instance.migrateForTesting(fromVersion: 10);
 
-      expect(await _articleColumns(db), contains('read_at'));
-      expect(await _articleIndexes(db), contains('idx_articles_read_at'));
       expect(await SettingsRepository().get('show_read'), 'true');
+      expect(await _articleColumns(db), isNot(contains('read_at')),
+          reason: 'v11 adds it, v13 drops it again — a user upgrading from '
+              'v10 in one hop must not be left carrying it');
+      expect(await _articleIndexes(db), isNot(contains('idx_articles_read_at')));
     });
 
-    test('articles read before the upgrade keep a null read_at', () async {
+    test('an existing show_read choice survives the whole chain', () async {
+      final db = await AppDatabase.instance.database;
+      await _reshapeToV10(db);
+      await SettingsRepository().set('show_read', 'false');
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+
+      expect(await SettingsRepository().get('show_read'), 'false',
+          reason: 'INSERT OR IGNORE seeds a default; it must never overwrite '
+              'a choice the user already made');
+    });
+
+    test('articles read before the upgrade are still there afterwards',
+        () async {
       final db = await AppDatabase.instance.database;
       await _reshapeToV10(db);
       final feedId = await _seedFeed(db);
@@ -176,39 +196,142 @@ void main() {
 
       await AppDatabase.instance.migrateForTesting(fromVersion: 10);
 
-      final rows = await db.query('articles', columns: ['is_read', 'read_at']);
+      final rows = await db.query('articles', columns: ['is_read']);
+      expect(rows.length, 1,
+          reason: 'no migration step may destroy the user\'s library');
       expect(rows.first['is_read'], 1);
-      expect(rows.first['read_at'], isNull,
-          reason: 'there is no honest read time for these. Back-filling them '
-              'with "now" would drop the entire backlog into the list the '
-              'first time the user opens the app after upgrading.');
     });
 
-    test('an existing show_read choice survives the migration', () async {
+    test('re-running the whole chain is a no-op', () async {
       final db = await AppDatabase.instance.database;
       await _reshapeToV10(db);
-      await SettingsRepository().set('show_read', 'false');
 
       await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
 
-      expect(await SettingsRepository().get('show_read'), 'false',
+      final tables = (await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type = 'table' "
+              "AND name = 'deleted_articles'"))
+          .length;
+      expect(tables, 1);
+      expect(await SettingsRepository().get('show_read'), 'true');
+    });
+  });
+
+  group('v12 → v13 (retirement)', () {
+    /// Reshapes a fresh v13 database back to v12: read_at present, no
+    /// tombstone table, no mark_all_read_confirm.
+    Future<void> reshapeToV12(Database db) async {
+      await db.execute('DROP TABLE IF EXISTS deleted_articles');
+      final cols = await _articleColumns(db);
+      if (!cols.contains('read_at')) {
+        await db.execute('ALTER TABLE articles ADD COLUMN read_at INTEGER');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_articles_read_at ON articles(read_at)');
+      }
+      await db.delete('settings', where: "key = 'mark_all_read_confirm'");
+    }
+
+    test('creates the tombstone table and both its indexes', () async {
+      final db = await AppDatabase.instance.database;
+      await reshapeToV12(db);
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+
+      final tables = (await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type = 'table'"))
+          .map((r) => r['name'] as String)
+          .toSet();
+      expect(tables, contains('deleted_articles'));
+
+      final indexes = (await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type = 'index' "
+              "AND tbl_name = 'deleted_articles'"))
+          .map((r) => r['name'] as String)
+          .toSet();
+      expect(indexes, contains('idx_deleted_articles_guid_feed'));
+      expect(indexes, contains('idx_deleted_articles_deleted_at'));
+    });
+
+    test('drops read_at and its index', () async {
+      final db = await AppDatabase.instance.database;
+      await reshapeToV12(db);
+      expect(await _articleColumns(db), contains('read_at'));
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+
+      expect(await _articleColumns(db), isNot(contains('read_at')));
+      expect(await _articleIndexes(db), isNot(contains('idx_articles_read_at')));
+    });
+
+    test('seeds mark_all_read_confirm', () async {
+      final db = await AppDatabase.instance.database;
+      await reshapeToV12(db);
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+
+      expect(await SettingsRepository().get('mark_all_read_confirm'), 'true');
+    });
+
+    test('an existing mark_all_read_confirm choice is not overwritten',
+        () async {
+      final db = await AppDatabase.instance.database;
+      await reshapeToV12(db);
+      await SettingsRepository().set('mark_all_read_confirm', 'false');
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+
+      expect(await SettingsRepository().get('mark_all_read_confirm'), 'false',
           reason: 'INSERT OR IGNORE seeds a default; it must never overwrite '
               'a choice the user already made');
     });
 
+    test('articles already read are NOT retired by the migration', () async {
+      final db = await AppDatabase.instance.database;
+      await reshapeToV12(db);
+      final feedId = await _seedFeed(db);
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.insert('articles', {
+        'feed_id': feedId,
+        'guid': 'read-before-upgrade',
+        'title': 'Read before the upgrade',
+        'url': 'https://example.com/1',
+        'published_at': now,
+        'fetched_at': now,
+        'is_read': 1,
+        'is_blocked': 0,
+        'is_saved': 0,
+      });
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+
+      final rows = await db.query('articles', columns: ['guid', 'is_read']);
+      expect(rows.length, 1,
+          reason: 'a migration that silently destroys several hundred '
+              'articles on first launch is indistinguishable from a bug. The '
+              'first refresh retires them through the normal path instead.');
+      expect(rows.first['is_read'], 1);
+
+      final tombstones = await db.query('deleted_articles');
+      expect(tombstones, isEmpty,
+          reason: 'nothing was retired, so nothing is tombstoned');
+    });
+
     test('re-running the migration is a no-op', () async {
       final db = await AppDatabase.instance.database;
-      await _reshapeToV10(db);
+      await reshapeToV12(db);
 
-      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
-      await AppDatabase.instance.migrateForTesting(fromVersion: 10);
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
+      await AppDatabase.instance.migrateForTesting(fromVersion: 12);
 
-      final readAt =
-          (await _articleColumns(db)).where((c) => c == 'read_at').toList();
-      expect(readAt.length, 1,
-          reason: 'the PRAGMA table_info guard and CREATE INDEX IF NOT '
-              'EXISTS both have to hold, or an interrupted upgrade throws on '
-              'the retry');
+      expect(await _articleColumns(db), isNot(contains('read_at')));
+      final tables = (await db.rawQuery(
+              "SELECT name FROM sqlite_master WHERE type = 'table' "
+              "AND name = 'deleted_articles'"))
+          .length;
+      expect(tables, 1,
+          reason: 'CREATE TABLE IF NOT EXISTS and the PRAGMA guard both have '
+              'to hold, or an interrupted upgrade throws on the retry');
     });
   });
 

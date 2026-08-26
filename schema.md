@@ -91,7 +91,6 @@ CREATE TABLE articles (
   published_at    INTEGER,                  -- Unix timestamp (ms), NULL if not provided
   fetched_at      INTEGER NOT NULL,         -- Unix timestamp (ms) when Flash fetched it
   is_read         INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
-  read_at         INTEGER,                  -- Unix timestamp (ms) when read; NULL if unread
   is_blocked      INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),  -- matched keyword blocklist
   is_opinion      INTEGER NOT NULL DEFAULT 0 CHECK(is_opinion IN (0,1)),  -- moved to Opinions folder
   opinion_source  TEXT,                     -- 'heuristic' | 'ai' | NULL
@@ -101,7 +100,6 @@ CREATE TABLE articles (
 CREATE UNIQUE INDEX idx_articles_guid_feed ON articles(feed_id, guid);
 CREATE INDEX idx_articles_feed_id         ON articles(feed_id);
 CREATE INDEX idx_articles_is_read         ON articles(is_read);
-CREATE INDEX idx_articles_read_at         ON articles(read_at);
 CREATE INDEX idx_articles_is_blocked      ON articles(is_blocked);
 CREATE INDEX idx_articles_is_opinion      ON articles(is_opinion);
 CREATE INDEX idx_articles_published_at    ON articles(published_at DESC);
@@ -109,13 +107,35 @@ CREATE INDEX idx_articles_published_at    ON articles(published_at DESC);
 
 **Notes:**
 - `guid` uniqueness is scoped per feed (`feed_id + guid`) -- different feeds can have colliding GUIDs
-- `read_at` (added v11) drives read *visibility*, not deletion. The feed shows an article when `is_read = 0 OR read_at >= cutoff`, where the cutoff is 48 hours ago while the Show read setting is on, and NULL while it is off. Rows read before v11 carry `read_at IS NULL` and so never match the second half -- deliberate, since there is no honest read time to give them
-- `read_at = 0` (the epoch) is a sentinel meaning "dismissed": written by Mark all as read, it is outside every possible window, so those articles never return when Show read is switched back on
+- Read articles are not hidden, they are **retired** -- deleted, with a tombstone written to `deleted_articles`. `show_read` decides only *when*: off retires on scroll, on defers to the next refresh. Saved articles are exempt and stay forever
+- `articles.read_at` existed from v11 to v13 to drive a 48-hour "show read" window. It was dropped when nothing needed to un-hide any more
 - `is_blocked = 1` articles are hidden from all feed views but retained in DB for the audit view
 - `is_opinion = 1` articles are excluded from normal folder views and shown only in the Opinions tab
 - `thumbnail_path` is populated lazily on first scroll into view -- `thumbnail_url` is stored immediately on fetch
 - Auto-cleanup deletes the oldest `is_read = 1` articles when count exceeds the feed's effective limit
 - Blocked articles (`is_blocked = 1`) are counted toward the limit and cleaned up first
+
+---
+
+### `deleted_articles`
+
+```sql
+CREATE TABLE deleted_articles (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  feed_id    INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+  guid       TEXT    NOT NULL,
+  deleted_at INTEGER NOT NULL         -- Unix timestamp (ms)
+);
+
+CREATE UNIQUE INDEX idx_deleted_articles_guid_feed ON deleted_articles(feed_id, guid);
+CREATE INDEX        idx_deleted_articles_deleted_at ON deleted_articles(deleted_at);
+```
+
+**Notes:**
+- Tombstones. Added in v13, and the reason retirement is safe: deleting an article takes its guid with it, and the article is still in the feed's XML and still inside the seven-day fetch window, so `INSERT OR IGNORE` alone would let the next refresh resurrect it as unread
+- `insertArticles` therefore carries a `WHERE NOT EXISTS (SELECT 1 FROM deleted_articles WHERE feed_id = ? AND guid = ?)` guard **as well as** `INSERT OR IGNORE`. The index guards within one fetch, the tombstone across one. Removing either brings the bug back
+- Pruned by `runCleanup` past `kTombstoneDayLimit` (eight days). After that the guid can insert again, which is intended -- the fetch window has moved on, so a feed still offering it has genuinely republished
+- Cascades away with its feed
 
 ---
 
@@ -231,7 +251,8 @@ CREATE TABLE settings (
 | `feedly_api_key` | `null` | Feedly feed search API key |
 | `google_account_email` | `null` | Signed-in Google account, NULL if not connected |
 | `onboarding_complete` | `false` | Whether first-launch empty state has been dismissed |
-| `show_read` | `true` | Keep read articles visible for 48 hours (see `articles.read_at`) |
+| `show_read` | `true` | Defer retirement to the next refresh instead of retiring on scroll |
+| `mark_all_read_confirm` | `true` | Whether Mark all as read asks first |
 
 **Notes:**
 - `value` is always stored as TEXT -- app layer handles type casting (int, bool, etc.)

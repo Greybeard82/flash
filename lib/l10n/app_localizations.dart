@@ -1111,6 +1111,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Yesterday'**
   String get dayYesterday;
+
+  /// Checkbox in the mark-all-read dialog that suppresses it in future.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show again'**
+  String get dontShowAgain;
+
+  /// Quick Settings switch that re-enables the mark-all-read confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm mark all as read'**
+  String get confirmMarkAllRead;
 }
 
 class _AppLocalizationsDelegate

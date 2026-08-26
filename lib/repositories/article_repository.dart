@@ -10,8 +10,16 @@ class ArticleRepository {
 
   // ── Insert ─────────────────────────────────────────────────────────────────
 
-  /// Insert articles for a feed using INSERT OR IGNORE to deduplicate.
-  /// An existing row (same feed_id + guid) is silently skipped — never reset to unread.
+  /// Insert articles for a feed, deduplicating two ways.
+  ///
+  /// `INSERT OR IGNORE` against the unique (feed_id, guid) index stops
+  /// duplicates *within* the table. That alone used to be enough, because a
+  /// read article kept its row and so kept its guid to collide with.
+  /// Retirement deletes the row, taking the guid with it — and the article is
+  /// still in the feed's XML and still inside the fetch window, so the
+  /// NOT EXISTS check against [TableNames.deletedArticles] is what stops the
+  /// next refresh resurrecting everything the user just cleared. Both are
+  /// needed: the index guards within a fetch, the tombstone guards across one.
   Future<void> insertArticles(int feedId, List<Article> articles) async {
     if (articles.isEmpty) return;
     final db = await _db;
@@ -22,7 +30,11 @@ class ArticleRepository {
         INSERT OR IGNORE INTO ${TableNames.articles}
         (feed_id, guid, title, url, description, thumbnail_url, thumbnail_path,
          published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?
+        WHERE NOT EXISTS (
+          SELECT 1 FROM ${TableNames.deletedArticles}
+          WHERE feed_id = ? AND guid = ?
+        )
       ''', [
         feedId,
         a.guid,
@@ -35,6 +47,8 @@ class ArticleRepository {
         fetchedAt,
         a.isBlocked ? 1 : 0,
         a.blockedKeyword,
+        feedId,
+        a.guid,
       ]);
     }
     await batch.commit(noResult: true);
@@ -42,14 +56,11 @@ class ArticleRepository {
 
   // ── Read queries ───────────────────────────────────────────────────────────
 
-  /// Unblocked articles across all folders that are visible under the current
+  /// Unblocked articles across all folders visible under the current
   /// read-visibility rule. Newest first.
-  ///
-  /// [readSinceMs] null hides every read article. Otherwise an article read
-  /// at or after that instant stays visible. See [kShowReadBufferHours].
-  Future<List<Article>> getAllArticles({int? readSinceMs}) async {
+  Future<List<Article>> getAllArticles({required bool showRead}) async {
     final db = await _db;
-    final (where, args) = _visibilityClause(null, readSinceMs);
+    final (where, args) = _visibilityClause(null, showRead);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
@@ -63,10 +74,10 @@ class ArticleRepository {
   /// As [getAllArticles], scoped to one folder.
   Future<List<Article>> getArticlesByFolder(
     int folderId, {
-    int? readSinceMs,
+    required bool showRead,
   }) async {
     final db = await _db;
-    final (where, args) = _visibilityClause(folderId, readSinceMs);
+    final (where, args) = _visibilityClause(folderId, showRead);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
@@ -79,25 +90,20 @@ class ArticleRepository {
 
   /// WHERE clause and args for the visible set.
   ///
-  /// Fixed arity, unlike the session-id union this replaces, which emitted one
-  /// `?` per article read since launch and would eventually have run into
-  /// SQLite's variable limit on a long session.
-  ///
-  /// A NULL `read_at` never satisfies `>=`, so articles read before the v11
-  /// migration are treated as outside the window. Intended.
-  (String, List<Object?>) _visibilityClause(int? folderId, int? readSinceMs) {
+  /// With [showRead] on, every unblocked article — read ones are dimmed by the
+  /// UI and retired at the next refresh. With it off, unread only, **plus**
+  /// saved articles: those are exempt from retirement, so hiding them once read
+  /// would make a bookmark vanish from the feed while still sitting in
+  /// Bookmarks.
+  (String, List<Object?>) _visibilityClause(int? folderId, bool showRead) {
     final buf = StringBuffer();
     final args = <Object?>[];
     if (folderId != null) {
       buf.write('f.folder_id = ? AND ');
       args.add(folderId);
     }
-    buf.write('a.is_blocked = 0 AND (a.is_read = 0');
-    if (readSinceMs != null) {
-      buf.write(' OR a.read_at >= ?');
-      args.add(readSinceMs);
-    }
-    buf.write(')');
+    buf.write('a.is_blocked = 0');
+    if (!showRead) buf.write(' AND (a.is_read = 0 OR a.is_saved = 1)');
     return (buf.toString(), args);
   }
 
@@ -182,69 +188,143 @@ class ArticleRepository {
 
   // ── Mark read / unread ─────────────────────────────────────────────────────
 
-  /// [readAt] defaults to now. `COALESCE` so re-marking an already-read
-  /// article keeps its original read time rather than silently extending its
-  /// stay in the show-read window.
-  Future<void> markAsRead(int articleId, {int? readAt}) async {
+  /// Marks read. Deliberately does **not** delete anything — retirement is a
+  /// separate explicit call, which is what lets "Show read ON" defer it to the
+  /// next refresh while "OFF" retires on scroll.
+  Future<void> markAsRead(int articleId) async {
     final db = await _db;
-    final ts = readAt ?? DateTime.now().millisecondsSinceEpoch;
-    await db.rawUpdate('''
-      UPDATE ${TableNames.articles}
-      SET is_read = 1, read_at = COALESCE(read_at, ?)
-      WHERE id = ?
-    ''', [ts, articleId]);
+    await db.update(
+      TableNames.articles,
+      {'is_read': 1},
+      where: 'id = ?',
+      whereArgs: [articleId],
+    );
   }
 
   Future<void> markAsUnread(int articleId) async {
     final db = await _db;
-    await db.rawUpdate('''
-      UPDATE ${TableNames.articles}
-      SET is_read = 0, read_at = NULL
-      WHERE id = ?
-    ''', [articleId]);
+    await db.update(
+      TableNames.articles,
+      {'is_read': 0},
+      where: 'id = ?',
+      whereArgs: [articleId],
+    );
   }
 
-  Future<void> markManyRead(List<int> articleIds, {int? readAt}) async {
+  Future<void> markManyRead(List<int> articleIds) async {
     if (articleIds.isEmpty) return;
     final db = await _db;
-    final ts = readAt ?? DateTime.now().millisecondsSinceEpoch;
     final batch = db.batch();
     for (final id in articleIds) {
-      batch.rawUpdate('''
-        UPDATE ${TableNames.articles}
-        SET is_read = 1, read_at = COALESCE(read_at, ?)
-        WHERE id = ?
-      ''', [ts, id]);
+      batch.update(
+        TableNames.articles,
+        {'is_read': 1},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
     }
     await batch.commit(noResult: true);
   }
 
-  /// [readAt] is required and overwrites any existing value, because the two
-  /// callers mean different things by it. *Mark all as read* passes
-  /// [kDismissedReadAt] — a dismissal, gone for good. The end-of-feed dwell
-  /// timer passes a real timestamp — passive reading, restorable like any
-  /// other. Defaulting this would silently pick one of those for the other.
-  Future<void> markAllAsRead({required int readAt}) async {
+  Future<void> markAllAsRead() async {
     final db = await _db;
     await db.update(
       TableNames.articles,
-      {'is_read': 1, 'read_at': readAt},
+      {'is_read': 1},
       where: 'is_blocked = 0',
     );
   }
 
-  Future<void> markAllAsReadByFolder(
-    int folderId, {
-    required int readAt,
-  }) async {
+  Future<void> markAllAsReadByFolder(int folderId) async {
     final db = await _db;
     await db.rawUpdate('''
       UPDATE ${TableNames.articles}
-      SET is_read = 1, read_at = ?
+      SET is_read = 1
       WHERE feed_id IN (
         SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
       ) AND is_blocked = 0
-    ''', [readAt, folderId]);
+    ''', [folderId]);
+  }
+
+  // ── Retirement ─────────────────────────────────────────────────────────────
+
+  /// Retires [articleIds]: the user is finished with them.
+  ///
+  /// Saved articles are exempt — marked read and kept, under either show-read
+  /// setting, until un-bookmarked. Everything else is tombstoned and deleted.
+  ///
+  /// Tombstone first, delete second, both in one transaction. The other order
+  /// leaves a window where an interrupted retirement has deleted rows with
+  /// nothing to stop the next fetch restoring them.
+  ///
+  /// Returns the number of rows deleted.
+  Future<int> retireArticles(List<int> articleIds) async {
+    if (articleIds.isEmpty) return 0;
+    final db = await _db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final ph = List.filled(articleIds.length, '?').join(',');
+
+    return db.transaction((txn) async {
+      await txn.rawUpdate('''
+        UPDATE ${TableNames.articles}
+        SET is_read = 1
+        WHERE id IN ($ph) AND is_saved = 1
+      ''', articleIds);
+
+      await txn.rawInsert('''
+        INSERT OR IGNORE INTO ${TableNames.deletedArticles}
+          (feed_id, guid, deleted_at)
+        SELECT feed_id, guid, ?
+        FROM ${TableNames.articles}
+        WHERE id IN ($ph) AND is_saved = 0
+      ''', [now, ...articleIds]);
+
+      return txn.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE id IN ($ph) AND is_saved = 0
+      ''', articleIds);
+    });
+  }
+
+  /// Retires every read, unsaved article in scope.
+  ///
+  /// This is what makes "Show read ON" mean *deferred* retirement rather than
+  /// a different outcome. With the toggle off nothing is read by the time this
+  /// runs, so it is a cheap no-op — call it unconditionally rather than
+  /// branching on the setting.
+  Future<int> retireAllRead({int? folderId}) async {
+    final db = await _db;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final scope = folderId == null
+        ? ''
+        : 'AND feed_id IN (SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?)';
+    final args = folderId == null ? <Object?>[] : <Object?>[folderId];
+
+    return db.transaction((txn) async {
+      await txn.rawInsert('''
+        INSERT OR IGNORE INTO ${TableNames.deletedArticles}
+          (feed_id, guid, deleted_at)
+        SELECT feed_id, guid, ?
+        FROM ${TableNames.articles}
+        WHERE is_read = 1 AND is_saved = 0 $scope
+      ''', [now, ...args]);
+
+      return txn.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE is_read = 1 AND is_saved = 0 $scope
+      ''', args);
+    });
+  }
+
+  /// Drops tombstones old enough that the feed has stopped offering the
+  /// article anyway.
+  Future<int> pruneTombstones() async {
+    final db = await _db;
+    final cutoff = DateTime.now()
+        .subtract(const Duration(days: kTombstoneDayLimit))
+        .millisecondsSinceEpoch;
+    return db.delete(TableNames.deletedArticles,
+        where: 'deleted_at < ?', whereArgs: [cutoff]);
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────
@@ -253,8 +333,13 @@ class ArticleRepository {
   /// [days] is clamped to [5, 20].
   /// Scoped to [folderId] if provided; otherwise applies to all feeds.
   /// Returns the number of rows deleted.
+  /// Tombstone pruning rides along here rather than at the call sites:
+  /// runCleanup already runs on cold start and background refresh, which is
+  /// exactly the cadence a tombstone table needs, and doing it here means a
+  /// new cleanup caller cannot forget it.
   Future<int> runCleanup({int? folderId, int days = kFetchDayLimit}) async {
     final db = await _db;
+    await pruneTombstones();
     final clampedDays = days.clamp(5, 20);
     final cutoffMs = DateTime.now()
         .subtract(Duration(days: clampedDays))

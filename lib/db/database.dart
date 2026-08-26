@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 12,
+      version: 13,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -60,7 +60,6 @@ class AppDatabase {
     await db.execute(SchemaStatements.createArticlesGuidIndex);
     await db.execute(SchemaStatements.createArticlesFeedIdIndex);
     await db.execute(SchemaStatements.createArticlesIsReadIndex);
-    await db.execute(SchemaStatements.createArticlesReadAtIndex);
     await db.execute(SchemaStatements.createArticlesIsBlockedIndex);
     await db.execute(SchemaStatements.createArticlesPublishedAtIndex);
     await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
@@ -69,6 +68,9 @@ class AppDatabase {
     await db.execute(SchemaStatements.createKeywordAlerts);
     await db.execute(SchemaStatements.createArticleSummaries);
     await db.execute(SchemaStatements.createSettings);
+    await db.execute(SchemaStatements.createDeletedArticles);
+    await db.execute(SchemaStatements.createDeletedArticlesGuidIndex);
+    await db.execute(SchemaStatements.createDeletedArticlesAgeIndex);
 
     final batch = db.batch();
     for (final s in defaultSettings) {
@@ -180,6 +182,32 @@ class AppDatabase {
         "DELETE FROM settings WHERE key = 'anthropic_api_key_set'",
       );
     }
+    if (oldVersion < 13) {
+      // Retirement replaces the 48-hour show-read window. read_at existed only
+      // to answer "is this recent enough to un-hide", and nothing un-hides any
+      // more — a retired article is gone, not hidden.
+      await db.execute(SchemaStatements.createDeletedArticles);
+      await db.execute(SchemaStatements.createDeletedArticlesGuidIndex);
+      await db.execute(SchemaStatements.createDeletedArticlesAgeIndex);
+
+      await db.execute('DROP INDEX IF EXISTS idx_articles_read_at');
+      final cols = await db.rawQuery('PRAGMA table_info(${TableNames.articles})');
+      if (cols.any((c) => c['name'] == 'read_at')) {
+        await db.execute(
+          'ALTER TABLE ${TableNames.articles} DROP COLUMN read_at',
+        );
+      }
+
+      // Articles already marked read are deliberately NOT retired here. They
+      // are read rows with no tombstone; the first refresh retires them
+      // through the normal path. A migration that silently destroys several
+      // hundred articles on first launch is indistinguishable from a bug.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) "
+        "VALUES ('mark_all_read_confirm', 'true', $now)",
+      );
+    }
   }
 
   /// Runs the real [_onUpgrade] path against the open database as though it
@@ -190,7 +218,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 12);
+    await _onUpgrade(db, fromVersion, 13);
   }
 
   Future<void> close() async {

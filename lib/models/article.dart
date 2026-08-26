@@ -10,10 +10,6 @@ class Article {
   final int? publishedAt;
   final int fetchedAt;
   final bool isRead;
-
-  /// When this article was read, or null if unread. Drives the "Show read"
-  /// window — see kShowReadBufferHours. Null on rows read before schema v11.
-  final int? readAt;
   final bool isBlocked;
   final bool isSaved;
   final String? blockedKeyword;
@@ -34,7 +30,6 @@ class Article {
     this.publishedAt,
     required this.fetchedAt,
     this.isRead = false,
-    this.readAt,
     this.isBlocked = false,
     this.isSaved = false,
     this.blockedKeyword,
@@ -55,7 +50,6 @@ class Article {
       publishedAt: map['published_at'] as int?,
       fetchedAt: map['fetched_at'] as int,
       isRead: (map['is_read'] as int? ?? 0) == 1,
-      readAt: map['read_at'] as int?,
       isBlocked: (map['is_blocked'] as int? ?? 0) == 1,
       isSaved: (map['is_saved'] as int? ?? 0) == 1,
       blockedKeyword: map['blocked_keyword'] as String?,
@@ -77,16 +71,12 @@ class Article {
       'published_at': publishedAt,
       'fetched_at': fetchedAt,
       'is_read': isRead ? 1 : 0,
-      'read_at': readAt,
       'is_blocked': isBlocked ? 1 : 0,
       'is_saved': isSaved ? 1 : 0,
       'blocked_keyword': blockedKeyword,
     };
   }
 
-  /// `copyWith(clearReadAt: true)` sets [readAt] to null. The `??` idiom used
-  /// by every other field here cannot express "make this null", and
-  /// mark-as-unread has to.
   Article copyWith({
     int? id,
     int? feedId,
@@ -99,8 +89,6 @@ class Article {
     int? publishedAt,
     int? fetchedAt,
     bool? isRead,
-    int? readAt,
-    bool clearReadAt = false,
     bool? isBlocked,
     bool? isSaved,
     String? blockedKeyword,
@@ -119,7 +107,6 @@ class Article {
       publishedAt: publishedAt ?? this.publishedAt,
       fetchedAt: fetchedAt ?? this.fetchedAt,
       isRead: isRead ?? this.isRead,
-      readAt: clearReadAt ? null : (readAt ?? this.readAt),
       isBlocked: isBlocked ?? this.isBlocked,
       isSaved: isSaved ?? this.isSaved,
       blockedKeyword: blockedKeyword ?? this.blockedKeyword,

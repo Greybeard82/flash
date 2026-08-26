@@ -182,5 +182,7 @@
   "showRead": "Gelesene anzeigen",
   "showReadSubtitle": "Gelesene Artikel bleiben 48 Stunden sichtbar",
   "dayToday": "Heute",
-  "dayYesterday": "Gestern"
+  "dayYesterday": "Gestern",
+  "dontShowAgain": "Nicht mehr anzeigen",
+  "confirmMarkAllRead": "Alle als gelesen bestätigen"
 }

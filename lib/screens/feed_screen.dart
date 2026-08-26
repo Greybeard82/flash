@@ -23,6 +23,7 @@ import '../services/share_service.dart';
 import '../utils/bottom_dwell_timer.dart';
 import '../utils/day_grouping.dart';
 import '../utils/mark_read_gate.dart';
+import '../utils/retirement_frontier.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
@@ -140,17 +141,24 @@ class _FeedScreenState extends State<FeedScreen>
   int _displayLimit = kFetchArticleLimit;
   int _displayAgeDays = 7;
 
-  /// Whether read articles stay in the list. See AppSettings.showRead.
+  /// Whether read articles stay in the list until the next refresh, rather
+  /// than being retired as they scroll past. See AppSettings.showRead.
   bool _showRead = true;
 
-  /// Null when read articles are hidden; otherwise the start of the show-read
-  /// window. Computed per query rather than cached, so the window slides
-  /// rather than freezing at whatever it was when the screen booted.
-  int? get _readSinceMs => _showRead
-      ? DateTime.now()
-          .subtract(const Duration(hours: kShowReadBufferHours))
-          .millisecondsSinceEpoch
-      : null;
+  /// Scopes whose badge is forced to zero because the user reached the bottom.
+  /// Folder id, or [kAllScope] for the All tab.
+  ///
+  /// Display-only: the articles stay unread in the database until something
+  /// actually marks them. Cleared when new articles arrive for the scope, or
+  /// on cold start — a scope with genuinely new unread content has to show it.
+  final Set<int> _zeroedScopes = {};
+
+  /// The scope the selected tab represents, for [_zeroedScopes].
+  int get _currentScope => _selectedTabIndex == 0
+      ? kAllScope
+      : (_folders[_selectedTabIndex - 1].id ?? kAllScope);
+
+  void _clearZeroedScopes() => _zeroedScopes.clear();
 
   /// Applies the Filter bubble's two limits to a newest-first list.
   ///
@@ -362,6 +370,7 @@ class _FeedScreenState extends State<FeedScreen>
     }
 
     // 2. Show the cached list immediately. No network in the way.
+    _clearZeroedScopes();
     await _loadArticles();
     if (mounted) setState(() => _booting = false);
     _scrollController.addListener(_onScroll);
@@ -372,22 +381,53 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// Network fetch that never covers the content. Shared by cold start and
   /// resume so the two look the same.
-  ///
-  /// This used to take `preserveScroll: true` on the resume path. It no
-  /// longer does: a fetch that brought in new articles must not leave the
-  /// user parked below them.
   Future<void> _backgroundRefresh() async {
     if (!mounted || _backgroundFetching) return;
     setState(() => _backgroundFetching = true);
+    await _fetchAndApply();
+    if (mounted) setState(() => _backgroundFetching = false);
+  }
+
+  /// Fetches, then decides whether anything actually arrived before touching
+  /// the list.
+  ///
+  /// Retirement happens *after* the decision, not before. Retiring first would
+  /// delete read rows even in the case where the user is meant to see nothing
+  /// change at all — and they would then vanish at the next unrelated rebuild,
+  /// which reads as a random glitch.
+  ///
+  /// "Visible" not "inserted": an article can be inserted and then hidden by
+  /// the age filter, the per-feed cap or a blocklist match. Triggering on
+  /// inserts would jump the user to the top to see nothing new.
+  ///
+  /// The list is either left completely alone or rebuilt from scratch and
+  /// reset to the top, so this never removes a row from a list the user is
+  /// looking at mid-position.
+  Future<void> _fetchAndApply() async {
+    final beforeIds = _articles.map((a) => a.id).toSet();
+
     try {
       await RefreshService(_settingsRepo).refreshAll();
       _lastFetchAt = DateTime.now();
     } catch (_) {
       _reportRefreshFailure();
     }
+
+    if (!mounted) return;
+    final folders = await _folderRepo.getAll();
+    if (!mounted) return;
+    final probe = await _articlesForTab(_selectedTabIndex, folders);
+    final hasNew = probe.any((a) => !beforeIds.contains(a.id));
+
+    if (!hasNew) {
+      await _refreshCountsFromDb();
+      return; // nothing moves
+    }
+
+    await _articleRepo.retireAllRead();
     await _loadArticles();
     _resetScrollToTop();
-    if (mounted) setState(() => _backgroundFetching = false);
+    _clearZeroedScopes();
   }
 
   // ── Core data operations ───────────────────────────────────────────────────
@@ -457,16 +497,22 @@ class _FeedScreenState extends State<FeedScreen>
     });
   }
 
+  /// Re-reads the counts, then applies the reached-the-bottom suppression.
+  ///
+  /// Suppression is display-only and is applied *after* the read, never
+  /// written back: the articles are still unread, and the moment new content
+  /// arrives for the scope the set is cleared and the true count returns.
   Future<void> _refreshCountsFromDb() async {
     final (folderCounts, allCount) = await (
       _articleRepo.getAllFolderUnreadCounts(),
       _articleRepo.getTotalUnreadCount(),
     ).wait;
     if (!mounted) return;
-    setState(() {
-      _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
-    });
-    AppBadgePlus.updateBadge(allCount);
+    final suppressed =
+        UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts)
+            .withZeroedScopes(_zeroedScopes);
+    setState(() => _counts = suppressed);
+    AppBadgePlus.updateBadge(suppressed.all);
   }
 
   Future<void> _reloadArticles() async {
@@ -488,12 +534,11 @@ class _FeedScreenState extends State<FeedScreen>
   /// The one place articles enter this screen, so ordering is applied here and
   /// every path — boot, reload, tab switch, refresh — gets it for free.
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) async {
-    final since = _readSinceMs;
     final articles = tab == 0
-        ? await _articleRepo.getAllArticles(readSinceMs: since)
+        ? await _articleRepo.getAllArticles(showRead: _showRead)
         : await _articleRepo.getArticlesByFolder(
             folders[tab - 1].id!,
-            readSinceMs: since,
+            showRead: _showRead,
           );
     // Filters run on the newest-first result, so the cap keeps the newest N
     // per feed; ordering is applied last.
@@ -558,13 +603,8 @@ class _FeedScreenState extends State<FeedScreen>
     setState(() => _refreshing = true);
     await LoadingController.instance.run(() async {
       try {
-        await RefreshService(_settingsRepo).refreshAll();
-        _lastFetchAt = DateTime.now();
-      } catch (_) {
-        _reportRefreshFailure();
+        await _fetchAndApply();
       } finally {
-        await _loadArticles();
-        _resetScrollToTop();
         if (mounted) setState(() => _refreshing = false);
       }
     }, label: 'Refreshing');
@@ -583,6 +623,7 @@ class _FeedScreenState extends State<FeedScreen>
 
     await LoadingController.instance.run(() async {
       try {
+        final beforeIds = _articles.map((a) => a.id).toSet();
         final svc = RefreshService(_settingsRepo);
         if (_selectedTabIndex == 0) {
           await svc.refreshAll();
@@ -594,11 +635,24 @@ class _FeedScreenState extends State<FeedScreen>
           await svc.refreshFeeds(feeds);
         }
         _lastFetchAt = DateTime.now();
+
+        // Same conditional rule as _fetchAndApply: nothing arrived, nothing
+        // moves. The user pulled to check, not to be relocated.
+        if (!mounted) return;
+        final probe = await _articlesForTab(_selectedTabIndex, _folders);
+        final hasNew = probe.any((a) => !beforeIds.contains(a.id));
+        if (!hasNew) {
+          await _refreshCountsFromDb();
+          return;
+        }
+
+        await _articleRepo.retireAllRead();
+        await _loadArticles();
+        _resetScrollToTop();
+        _clearZeroedScopes();
       } catch (_) {
         _reportRefreshFailure();
       } finally {
-        await _loadArticles();
-        _resetScrollToTop();
         if (mounted) setState(() => _refreshing = false);
       }
     }, label: 'Refreshing');
@@ -648,6 +702,106 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   // ── Mark as read on scroll ─────────────────────────────────────────────────
+
+  /// Everything that must wait for the list to stop moving.
+  ///
+  /// Both jobs here need an idle position: retirement corrects the scroll
+  /// offset, which `jumpTo` can only do without cancelling a gesture once the
+  /// activity is already idle; and "reached the bottom" is only meaningful
+  /// once the fling has settled.
+  void _onScrollEnd() {
+    if (!_scrollController.hasClients) return;
+
+    final position = _scrollController.position;
+    if (position.pixels >= position.maxScrollExtent && position.atEdge) {
+      if (_zeroedScopes.add(_currentScope)) {
+        unawaited(_refreshCountsFromDb());
+      }
+    }
+
+    _retireScrolledPast();
+  }
+
+  /// Removes rows that have scrolled past the retirement frontier, holding the
+  /// visual position exactly.
+  ///
+  /// Only ever called from ScrollEndNotification. The position is idle there,
+  /// so jumpTo cannot cancel a gesture — and the removal and the correction
+  /// land in the same synchronous turn, so the frame the user sees already has
+  /// both applied. Nothing moves.
+  void _retireScrolledPast() {
+    if (!_markReadOnScroll || _showRead) return;
+    if (!_scrollController.hasClients) return;
+    if (_booting || _refreshing || _backgroundFetching) return;
+
+    final offset = _scrollController.offset;
+    final plan = planRetirement(
+      rows: _rowMetrics(),
+      scrollOffset: offset,
+      bufferCards: kRetirementBufferCards,
+    );
+    if (plan.isEmpty) return;
+
+    final removed = plan.rowIndices.toSet();
+    final keptRows = [
+      for (var i = 0; i < _rows.length; i++)
+        if (!removed.contains(i)) _rows[i],
+    ];
+    final retiredIds = plan.articleIds.toSet();
+
+    _markReadGate.close();
+    setState(() {
+      _articles = [
+        for (final a in _articles)
+          if (!retiredIds.contains(a.id)) a,
+      ];
+      _rows = keptRows;
+      _syncCardKeys(_articles);
+    });
+    // Same turn as the setState above. Do not move this into a post-frame
+    // callback — that is exactly one frame of visible jump.
+    _scrollController.jumpTo(offset - plan.removedHeight);
+
+    unawaited(_retireInBackground(plan.articleIds));
+  }
+
+  /// The database half. Unawaited on purpose: the list has already moved on,
+  /// and a failed write is self-healing — the row survives and reappears at
+  /// the next rebuild rather than being lost.
+  Future<void> _retireInBackground(List<int> ids) async {
+    try {
+      await _articleRepo.retireArticles(ids);
+      await _refreshCountsFromDb();
+      ReadStateNotifier.instance.articleReadStateChanged();
+    } catch (_) {
+      // Self-healing, as above.
+    }
+  }
+
+  /// Measures the current rows for the frontier calculation. Heights come from
+  /// the same GlobalKeys _onScroll uses, so the two agree by construction.
+  List<RowMetric> _rowMetrics() {
+    return [
+      for (final row in _rows)
+        if (row is DayHeaderRow)
+          const RowMetric(height: kDayHeaderHeight)
+        else
+          () {
+            final article = (row as ArticleRow).article;
+            final key = article.id != null ? _cardKeys[article.id!] : null;
+            var h = 120.0;
+            if (key?.currentContext != null) {
+              final box = key!.currentContext!.findRenderObject() as RenderBox?;
+              if (box != null && box.hasSize) h = box.size.height;
+            }
+            return RowMetric(
+              height: h,
+              articleId: article.id,
+              isSaved: article.isSaved,
+            );
+          }(),
+    ];
+  }
 
   void _onScroll() {
     // Before the early return below: the fade has to work whether or not
@@ -732,15 +886,15 @@ class _FeedScreenState extends State<FeedScreen>
     // to read) so unread-count propagation to every tab an article appears
     // in — its own category and "All" — stays consistent with the rest of
     // the app, rather than a bespoke bulk-update path.
-    // A real timestamp, not kDismissedReadAt: reaching the end of a feed is
-    // passive reading, so these stay restorable by the Show read window.
-    final readAt = DateTime.now().millisecondsSinceEpoch;
+    // Marks read only. Retirement is deliberately NOT triggered here: the
+    // user is parked at the bottom with the whole feed above them, and
+    // removing rows would collapse the list while they watch. The next
+    // refresh retires them.
     if (_selectedTabIndex == 0) {
-      await _articleRepo.markAllAsRead(readAt: readAt);
+      await _articleRepo.markAllAsRead();
     } else {
       await _articleRepo.markAllAsReadByFolder(
         _folders[_selectedTabIndex - 1].id!,
-        readAt: readAt,
       );
     }
 
@@ -844,29 +998,62 @@ class _FeedScreenState extends State<FeedScreen>
   /// outright. Both entry points — the FAB and the folder tab bar — call
   /// this, so the guard covers both.
   Future<void> _markAllRead() async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.markAllReadWarningTitle),
-        content: Text(l10n.markAllReadWarningBody),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
+    final settings = await _settingsRepo.getAll();
+    if (!mounted) return;
+
+    if (settings.markAllReadConfirm) {
+      final l10n = AppLocalizations.of(context)!;
+      var dontAsk = false;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        // StatefulBuilder so ticking the checkbox rebuilds the dialog alone,
+        // not the feed screen behind it.
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            title: Text(l10n.markAllReadWarningTitle),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.markAllReadWarningBody),
+                const SizedBox(height: 8),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: dontAsk,
+                  title: Text(l10n.dontShowAgain,
+                      style: Theme.of(ctx).textTheme.bodyMedium),
+                  onChanged: (v) => setDialogState(() => dontAsk = v ?? false),
+                ),
+              ],
             ),
-            child: Text(l10n.markAllReadConfirm),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text(l10n.cancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(ctx).colorScheme.error,
+                  foregroundColor: Theme.of(ctx).colorScheme.onError,
+                ),
+                child: Text(l10n.markAllReadConfirm),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      // Only on confirm. Ticking the box and then backing out must not
+      // disable the warning.
+      if (dontAsk) {
+        await _settingsRepo.set('mark_all_read_confirm', 'false');
+        SettingsNotifier.instance.settingsChanged();
+      }
+      if (!mounted) return;
+    }
 
     HapticFeedback.mediumImpact();
     await LoadingController.instance.run(_markAllReadBody, label: 'Marking all read');
@@ -877,10 +1064,11 @@ class _FeedScreenState extends State<FeedScreen>
     final cleanupDays = settings.cleanupAgeDays;
 
     if (_selectedTabIndex == 0) {
-      // All tab: mark all read, run cleanup, cold-start fetch. The dismissal
-      // sentinel — pressing this button means "clear these out", so they must
-      // not come back when Show read is switched on.
-      await _articleRepo.markAllAsRead(readAt: kDismissedReadAt);
+      // All tab: mark all read, retire them outright, run cleanup, then a
+      // cold-start fetch. This path rebuilds the list from scratch behind
+      // _booting, so retiring here cannot move anything on screen.
+      await _articleRepo.markAllAsRead();
+      await _articleRepo.retireAllRead();
       await _articleRepo.runCleanup(days: cleanupDays);
 
       if (!mounted) return;
@@ -903,10 +1091,8 @@ class _FeedScreenState extends State<FeedScreen>
 
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
-      await _articleRepo.markAllAsReadByFolder(
-        folderId,
-        readAt: kDismissedReadAt,
-      );
+      await _articleRepo.markAllAsReadByFolder(folderId);
+      await _articleRepo.retireAllRead(folderId: folderId);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       // Refresh feeds in this folder — one pass, not one call per feed.
@@ -1157,14 +1343,26 @@ class _FeedScreenState extends State<FeedScreen>
     return RefreshIndicator(
       onRefresh: _refreshCurrentTab,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      child: NotificationListener<UserScrollNotification>(
-        // A non-idle direction means a person moved the list — touch, wheel
-        // or trackpad. `jumpTo` goes idle first, so it can never open the
-        // gate. Returns false so the notification keeps bubbling: the
+      child: NotificationListener<ScrollNotification>(
+        // Two jobs, one listener.
+        //
+        // UserScrollNotification with a non-idle direction means a person
+        // moved the list — touch, wheel or trackpad. `jumpTo` goes idle
+        // first, so it can never open the gate.
+        //
+        // ScrollEndNotification is the *only* place retirement runs: the
+        // position is idle there, so the offset correction cannot cancel a
+        // gesture or destroy a ballistic simulation.
+        //
+        // Returns false either way so the notification keeps bubbling: the
         // RefreshIndicator above is an ancestor and depends on seeing it.
         onNotification: (notification) {
-          if (notification.direction != ScrollDirection.idle) {
+          if (notification is UserScrollNotification &&
+              notification.direction != ScrollDirection.idle) {
             _markReadGate.open();
+          }
+          if (notification is ScrollEndNotification) {
+            _onScrollEnd();
           }
           return false;
         },

@@ -49,13 +49,21 @@ class AppSettings {
   final int cleanupAgeDays; // [2, 20]
   final bool newspaperMode;
 
-  /// Whether articles that have been read stay in the list.
+  /// Whether read articles stay in the list until the next refresh.
   ///
-  /// Off hides every read article from every tab — read state is global, so
-  /// an article read in All is equally gone from its own category. Read
-  /// articles are not deleted: anything read within [kShowReadBufferHours]
-  /// comes back the moment this is switched on again.
+  /// This no longer decides *whether* a read article survives — every read
+  /// article is eventually retired, which deletes the row and tombstones its
+  /// guid. It decides *when*: off retires as the article scrolls two cards
+  /// above the viewport, on keeps it visible and dimmed and retires it at the
+  /// next refresh or cold start. Saved articles are exempt either way.
   final bool showRead;
+
+  /// Whether *Mark all as read* asks for confirmation first.
+  ///
+  /// Turned off by the dialog's own "Don't show again" checkbox, and back on
+  /// from the Quick Settings bubble — a setting that can only ever be
+  /// disabled is a trap.
+  final bool markAllReadConfirm;
 
   const AppSettings({
     this.theme = 'system',
@@ -72,6 +80,7 @@ class AppSettings {
     this.cleanupAgeDays = 7,
     this.newspaperMode = false,
     this.showRead = true,
+    this.markAllReadConfirm = true,
   });
 
   /// Snaps a stored delay onto the offered options, so a value written by an
@@ -113,6 +122,8 @@ class AppSettings {
           (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(2, 20),
       newspaperMode: (map['newspaper_mode'] ?? 'false') == 'true',
       showRead: (map['show_read'] ?? 'true') == 'true',
+      markAllReadConfirm:
+          (map['mark_all_read_confirm'] ?? 'true') == 'true',
     );
   }
 
@@ -131,6 +142,7 @@ class AppSettings {
     int? cleanupAgeDays,
     bool? newspaperMode,
     bool? showRead,
+    bool? markAllReadConfirm,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -148,6 +160,7 @@ class AppSettings {
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
       newspaperMode: newspaperMode ?? this.newspaperMode,
       showRead: showRead ?? this.showRead,
+      markAllReadConfirm: markAllReadConfirm ?? this.markAllReadConfirm,
     );
   }
 }

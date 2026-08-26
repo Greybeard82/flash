@@ -19,14 +19,11 @@ import 'package:flash/models/article.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-const int _now = 1750000000000;
-const int _windowStart = _now - 48 * 60 * 60 * 1000;
-
 Article _article({
   required int id,
   bool isRead = false,
   int feedId = 1,
-  int? readAt,
+  bool isSaved = false,
 }) =>
     Article(
       id: id,
@@ -37,20 +34,15 @@ Article _article({
       description: '',
       fetchedAt: 0,
       isRead: isRead,
-      // A read article with no explicit stamp is treated as read "now",
-      // which is what markAsRead does.
-      readAt: readAt ?? (isRead ? _now : null),
       isBlocked: false,
-      isSaved: false,
+      isSaved: isSaved,
     );
 
-// Simulates the visibility query: unread, or read at/after the cutoff.
-// A null cutoff means read articles are hidden entirely.
-List<Article> _visible(List<Article> list, int? readSinceMs) => list
-    .where((a) =>
-        !a.isRead ||
-        (readSinceMs != null && a.readAt != null && a.readAt! >= readSinceMs))
-    .toList();
+// Simulates the visibility query. With showRead on, everything unblocked;
+// with it off, unread only plus saved articles, which are exempt from
+// retirement and so must not vanish from the feed once read.
+List<Article> _visible(List<Article> list, bool showRead) =>
+    list.where((a) => showRead || !a.isRead || a.isSaved).toList();
 
 // Simulates _openArticle / _markRead: dims the tapped article in-place.
 List<Article> _dimArticle(List<Article> list, int articleId) => [
@@ -85,7 +77,7 @@ void main() {
         _article(id: 3, isRead: false),
         _article(id: 4, isRead: true),
       ];
-      final result = _visible(all, null);
+      final result = _visible(all, false);
       expect(result.length, 2);
       expect(result.every((a) => !a.isRead), isTrue);
     });
@@ -96,18 +88,22 @@ void main() {
         _article(id: 2, isRead: true),
         _article(id: 3, isRead: false),
       ];
-      final result = _visible(all, _windowStart);
+      final result = _visible(all, true);
       expect(result.length, 3);
       expect(result.any((a) => a.id == 2 && a.isRead), isTrue);
     });
 
-    test('articles read before the window stay hidden', () {
+    test('a saved article stays visible once read, with Show read off', () {
       final all = [
         _article(id: 1, isRead: false),
-        _article(id: 2, isRead: true, readAt: _windowStart - 1),
+        _article(id: 2, isRead: true, isSaved: true),
+        _article(id: 3, isRead: true),
       ];
-      final result = _visible(all, _windowStart);
-      expect(result.map((a) => a.id), [1]);
+      final result = _visible(all, false);
+      expect(result.map((a) => a.id), [1, 2],
+          reason: 'saved articles are exempt from retirement, so hiding them '
+              'once read would make a bookmark vanish from the feed while '
+              'still sitting in Bookmarks');
     });
 
     test('cold open: Show read off, all read in DB → empty list', () {
@@ -115,26 +111,9 @@ void main() {
         _article(id: 1, isRead: true),
         _article(id: 2, isRead: true),
       ];
-      expect(_visible(all, null), isEmpty);
+      expect(_visible(all, false), isEmpty);
     });
 
-    test('a read row with no timestamp (pre-v11) is never restored', () {
-      // Built directly rather than through _article: that helper stamps a
-      // read article with _now, and `??` cannot tell "omitted" from an
-      // explicit null. A migrated row genuinely has read_at NULL.
-      const legacy = Article(
-        id: 1,
-        feedId: 1,
-        guid: 'guid-1',
-        title: 'Article 1',
-        url: 'https://example.com/1',
-        fetchedAt: 0,
-        isRead: true,
-      );
-      expect(legacy.readAt, isNull);
-      expect(_visible([legacy], _windowStart), isEmpty,
-          reason: 'NULL never satisfies >=');
-    });
   });
 
   group('Opening an article dims it in-place', () {
@@ -224,26 +203,23 @@ void main() {
       expect(result.length, 2);
     });
 
-    test('mark-unread produces an article with no read_at', () {
+    test('mark-unread returns the article to the unread set', () {
       final read = _article(id: 2, isRead: true);
-      expect(read.readAt, isNotNull);
+      final unread = read.copyWith(isRead: false);
 
-      final unread = read.copyWith(isRead: false, clearReadAt: true);
-      expect(unread.readAt, isNull);
-      // Excluded by the read half of the query under every cutoff — and
-      // included by the unread half, which is the point.
-      expect(_visible([unread], _windowStart).single.id, 2);
-      expect(_visible([unread], null).single.id, 2);
+      expect(unread.isRead, isFalse);
+      expect(_visible([unread], true).single.id, 2);
+      expect(_visible([unread], false).single.id, 2,
+          reason: 'visible under either setting once it is unread again');
     });
 
     test('after mark-unread the article is visible as unread, not as read',
         () {
       final articles = [
-        _article(id: 1, isRead: true)
-            .copyWith(isRead: false, clearReadAt: true),
+        _article(id: 1, isRead: true).copyWith(isRead: false),
         _article(id: 2),
       ];
-      final result = _visible(articles, null);
+      final result = _visible(articles, false);
       expect(result.map((a) => a.id), [1, 2]);
       expect(result.every((a) => !a.isRead), isTrue);
     });
@@ -263,7 +239,7 @@ void main() {
         _article(id: 5, feedId: 2, isRead: true),
         _article(id: 7, feedId: 2),
       ];
-      final folderResult = _visible(folderTabArticles, _windowStart);
+      final folderResult = _visible(folderTabArticles, true);
 
       // Article 5 was read in the All tab — still present here, dimmed, not
       // vanished out from under the user. This is the Palabre model, and
@@ -281,7 +257,7 @@ void main() {
         _article(id: 7, feedId: 2, isRead: true), // read while in a category
         _article(id: 8, feedId: 1),
       ];
-      final result = _visible(allTabArticles, _windowStart);
+      final result = _visible(allTabArticles, true);
 
       expect(result.any((a) => a.id == 7), isTrue,
           reason: 'the rule is symmetric — neither direction hides anything');
@@ -295,29 +271,26 @@ void main() {
         _article(id: 2, isRead: false),
       ];
       // Before: article 1 is recently read, so it is still on screen.
-      expect(_visible(before, _windowStart).length, 2);
+      expect(_visible(before, true).length, 2);
 
-      // markAllAsRead(readAt: kDismissedReadAt) writes epoch, which is
-      // outside every window.
-      const dismissed = 0;
-      final reloaded = [
-        _article(id: 1, isRead: true, readAt: dismissed),
-        _article(id: 2, isRead: true, readAt: dismissed),
-      ];
-      expect(_visible(reloaded, _windowStart), isEmpty,
-          reason: 'pressing Mark all as read means clear these out — they '
-              'must not come back when Show read is switched on');
+      // Mark all as read marks and then retires, so the rows are gone
+      // entirely rather than hidden. The list models that as an empty set.
+      const reloaded = <Article>[];
+      expect(_visible(reloaded, true), isEmpty,
+          reason: 'pressing Mark all as read retires them — the rows are '
+              'deleted and tombstoned, so no setting brings them back');
     });
 
-    test('the dwell timer stamps a real time, so those stay restorable', () {
-      // Same bulk write, different intent: reaching the end of a feed is
-      // passive reading, so the articles remain inside the window.
+    test('the dwell timer marks read without retiring', () {
+      // Different intent from the button: the user is parked at the bottom
+      // with the whole feed above them, so nothing is removed. Show read on
+      // keeps them visible and dimmed until the next refresh retires them.
       final reloaded = [
-        _article(id: 1, isRead: true, readAt: _now),
-        _article(id: 2, isRead: true, readAt: _now),
+        _article(id: 1, isRead: true),
+        _article(id: 2, isRead: true),
       ];
-      expect(_visible(reloaded, _windowStart).length, 2);
-      expect(_visible(reloaded, null), isEmpty);
+      expect(_visible(reloaded, true).length, 2);
+      expect(_visible(reloaded, false), isEmpty);
     });
   });
 

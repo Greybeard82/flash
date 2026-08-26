@@ -577,4 +577,10 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get dayYesterday => 'Ieri';
+
+  @override
+  String get dontShowAgain => 'Non mostrare più';
+
+  @override
+  String get confirmMarkAllRead => 'Conferma segna tutto come letto';
 }

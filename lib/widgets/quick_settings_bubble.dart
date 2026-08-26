@@ -45,6 +45,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   late String _theme;
   late bool _newspaper;
   late bool _markReadOnScroll;
+  late bool _markAllReadConfirm;
 
   @override
   void initState() {
@@ -52,6 +53,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
     _theme = widget.initial.theme;
     _newspaper = widget.initial.newspaperMode;
     _markReadOnScroll = widget.initial.markReadOnScroll;
+    _markAllReadConfirm = widget.initial.markAllReadConfirm;
   }
 
   Future<void> _setTheme(String value) async {
@@ -75,6 +77,14 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   Future<void> _setMarkReadOnScroll(bool value) async {
     setState(() => _markReadOnScroll = value);
     await _repo.set('mark_read_on_scroll', value.toString());
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// The only way back on once the dialog's "Don't show again" has turned
+  /// it off.
+  Future<void> _setMarkAllReadConfirm(bool value) async {
+    setState(() => _markAllReadConfirm = value);
+    await _repo.set('mark_all_read_confirm', value.toString());
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -149,6 +159,13 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
           ),
           value: _markReadOnScroll,
           onChanged: _setMarkReadOnScroll,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title:
+              Text(l10n.confirmMarkAllRead, style: theme.textTheme.bodyMedium),
+          value: _markAllReadConfirm,
+          onChanged: _setMarkAllReadConfirm,
         ),
       ],
     );

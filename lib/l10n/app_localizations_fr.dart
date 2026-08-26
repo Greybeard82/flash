@@ -578,4 +578,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get dayYesterday => 'Hier';
+
+  @override
+  String get dontShowAgain => 'Ne plus afficher';
+
+  @override
+  String get confirmMarkAllRead => 'Confirmer tout marquer comme lu';
 }

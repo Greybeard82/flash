@@ -1,19 +1,19 @@
-// Read-visibility tests against the real database.
+// Read visibility and retirement, against the real database.
 //
-// Written independently of the implementation. Replaces
-// session_read_visibility_test.dart, which covered the in-memory
-// SessionReadTracker that schema v11 removed. Same question — "which articles
-// does the list show?" — asked of a persisted read_at instead.
+// Rewritten for schema v13. The previous version covered a 48-hour show-read
+// window backed by articles.read_at; that column and that window are gone.
+// Read articles are no longer *hidden* — they are retired, which deletes the
+// row and tombstones the guid (see tombstone_test.dart). show_read now decides
+// only *when* that happens: off retires on scroll, on defers to the next
+// refresh.
 //
 // Covered behaviours:
-//  1. Show read off: unread only, in every tab
-//  2. Show read on: unread, plus anything read inside the window
-//  3. The window has an edge, and articles read before it stay hidden
-//  4. Read state is global — a folder query hides an article read in All
-//  5. Mark-unread clears read_at and returns the article to the unread set
-//  6. Re-marking a read article does not extend its stay
-//  7. Mark all as read dismisses permanently; the dwell timer does not
-//  8. Rows read before the migration (read_at NULL) stay hidden
+//  1. Show read off: unread only, plus saved-and-read
+//  2. Show read on: everything unblocked
+//  3. retireArticles deletes unsaved, keeps and marks saved
+//  4. retireAllRead is scoped, and leaves unread alone
+//  5. Mixed saved/unsaved batches split correctly
+//  6. Read state is global across tabs
 //
 // Plain test(), not testWidgets() — this codebase never combines testWidgets()
 // with real sqflite FFI I/O (see feed_repository_test.dart).
@@ -24,7 +24,6 @@ import 'package:flash/db/database.dart';
 import 'package:flash/db/schema.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/repositories/article_repository.dart';
-import 'package:flash/utils/constants.dart';
 
 late ArticleRepository _repo;
 late int _gamingId;
@@ -32,9 +31,7 @@ late int _newsId;
 late int _gamingFeedId;
 late int _newsFeedId;
 
-const int _now = 1750000000000; // fixed clock, ms
-int get _windowStart =>
-    _now - const Duration(hours: kShowReadBufferHours).inMilliseconds;
+const int _now = 1750000000000;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();
@@ -67,7 +64,8 @@ Future<void> _setUp() async {
   });
 }
 
-Future<int> _insert(int feedId, String guid) async {
+Future<int> _insert(int feedId, String guid,
+    {bool read = false, bool saved = false}) async {
   final db = await AppDatabase.instance.database;
   return db.insert(TableNames.articles, {
     'feed_id': feedId,
@@ -76,27 +74,20 @@ Future<int> _insert(int feedId, String guid) async {
     'url': 'https://example.com/$guid',
     'published_at': _now,
     'fetched_at': _now,
-    'is_read': 0,
+    'is_read': read ? 1 : 0,
     'is_blocked': 0,
-    'is_saved': 0,
+    'is_saved': saved ? 1 : 0,
   });
-}
-
-Future<void> _setReadAt(int id, int? readAt) async {
-  final db = await AppDatabase.instance.database;
-  await db.update(TableNames.articles, {'is_read': 1, 'read_at': readAt},
-      where: 'id = ?', whereArgs: [id]);
-}
-
-Future<int?> _readAtOf(int id) async {
-  final db = await AppDatabase.instance.database;
-  final rows = await db.query(TableNames.articles,
-      columns: ['read_at'], where: 'id = ?', whereArgs: [id]);
-  return rows.first['read_at'] as int?;
 }
 
 List<String> _guids(List<Article> articles) =>
     articles.map((a) => a.guid).toList()..sort();
+
+Future<List<String>> _remaining() async {
+  final db = await AppDatabase.instance.database;
+  final rows = await db.query(TableNames.articles, columns: ['guid']);
+  return rows.map((r) => r['guid'] as String).toList()..sort();
+}
 
 void main() {
   setUp(_setUp);
@@ -105,63 +96,53 @@ void main() {
   group('Show read off', () {
     test('the All tab shows unread articles only', () async {
       await _insert(_gamingFeedId, 'unread');
-      final read = await _insert(_gamingFeedId, 'read');
-      await _setReadAt(read, _now - 1000);
+      await _insert(_gamingFeedId, 'read', read: true);
 
-      final visible = await _repo.getAllArticles(readSinceMs: null);
-      expect(_guids(visible), ['unread'],
-          reason: 'a null cutoff hides every read article, however recent');
+      final visible = await _repo.getAllArticles(showRead: false);
+      expect(_guids(visible), ['unread']);
+    });
+
+    test('a saved article stays visible after being read', () async {
+      await _insert(_gamingFeedId, 'unread');
+      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+
+      final visible = await _repo.getAllArticles(showRead: false);
+      expect(_guids(visible), ['saved_read', 'unread'],
+          reason: 'saved articles are exempt from retirement, so hiding them '
+              'once read would make a bookmark vanish from the feed while '
+              'still sitting in Bookmarks');
     });
 
     test('an article read in All is gone from its own category too', () async {
       await _insert(_gamingFeedId, 'unread');
-      final read = await _insert(_gamingFeedId, 'read_in_all');
-      await _setReadAt(read, _now - 1000);
+      await _insert(_gamingFeedId, 'read_in_all', read: true);
 
       final visible =
-          await _repo.getArticlesByFolder(_gamingId, readSinceMs: null);
+          await _repo.getArticlesByFolder(_gamingId, showRead: false);
       expect(_guids(visible), ['unread'],
-          reason: 'read state is global — scrolling past a gaming article in '
-              'the All tab must clear it from the Gaming tab as well');
+          reason: 'read state lives on the row, so it is the same answer in '
+              'every tab');
     });
   });
 
   group('Show read on', () {
-    test('recently read articles come back', () async {
+    test('read articles stay visible', () async {
       await _insert(_gamingFeedId, 'unread');
-      final read = await _insert(_gamingFeedId, 'read_recently');
-      await _setReadAt(read, _now - 1000);
+      await _insert(_gamingFeedId, 'read', read: true);
 
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(_guids(visible), ['read_recently', 'unread']);
+      final visible = await _repo.getAllArticles(showRead: true);
+      expect(_guids(visible), ['read', 'unread']);
     });
 
-    test('articles read before the window stay hidden', () async {
-      await _insert(_gamingFeedId, 'unread');
-      final old = await _insert(_gamingFeedId, 'read_long_ago');
-      await _setReadAt(old, _windowStart - 1);
+    test('blocked articles are hidden under either setting', () async {
+      final db = await AppDatabase.instance.database;
+      await _insert(_gamingFeedId, 'ok');
+      final blocked = await _insert(_gamingFeedId, 'blocked');
+      await db.update(TableNames.articles, {'is_blocked': 1},
+          where: 'id = ?', whereArgs: [blocked]);
 
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(_guids(visible), ['unread'],
-          reason: 'one millisecond outside the window is outside the window');
-    });
-
-    test('an article read exactly at the window edge is visible', () async {
-      final edge = await _insert(_gamingFeedId, 'edge');
-      await _setReadAt(edge, _windowStart);
-
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(_guids(visible), ['edge'], reason: 'the comparison is >=');
-    });
-
-    test('rows carried over from before the migration stay hidden', () async {
-      final legacy = await _insert(_gamingFeedId, 'legacy');
-      await _setReadAt(legacy, null); // is_read = 1, read_at NULL
-
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(visible, isEmpty,
-          reason: 'NULL never satisfies >=, and there is no honest timestamp '
-              'to invent for articles read before v11');
+      expect(_guids(await _repo.getAllArticles(showRead: true)), ['ok']);
+      expect(_guids(await _repo.getAllArticles(showRead: false)), ['ok']);
     });
 
     test('a folder query is scoped to that folder', () async {
@@ -169,94 +150,118 @@ void main() {
       await _insert(_newsFeedId, 'news');
 
       final visible =
-          await _repo.getArticlesByFolder(_gamingId, readSinceMs: _windowStart);
+          await _repo.getArticlesByFolder(_gamingId, showRead: true);
       expect(_guids(visible), ['gaming']);
     });
   });
 
-  group('Stamping', () {
-    test('markAsRead records when it happened', () async {
-      final id = await _insert(_gamingFeedId, 'a');
-      await _repo.markAsRead(id, readAt: _now);
+  group('retireArticles', () {
+    test('deletes unsaved articles', () async {
+      final id = await _insert(_gamingFeedId, 'gone');
+      await _insert(_gamingFeedId, 'stays');
 
-      expect(await _readAtOf(id), _now);
+      final deleted = await _repo.retireArticles([id]);
+
+      expect(deleted, 1);
+      expect(await _remaining(), ['stays']);
     });
 
-    test('re-marking a read article does not extend its stay', () async {
-      final id = await _insert(_gamingFeedId, 'a');
-      await _repo.markAsRead(id, readAt: _now - 5000);
-      await _repo.markAsRead(id, readAt: _now);
+    test('keeps saved articles and marks them read', () async {
+      final id = await _insert(_gamingFeedId, 'saved', saved: true);
 
-      expect(await _readAtOf(id), _now - 5000,
-          reason: 'COALESCE keeps the original read time, so an article '
-              'cannot be kept alive in the window by touching it again');
+      final deleted = await _repo.retireArticles([id]);
+
+      expect(deleted, 0);
+      expect(await _remaining(), ['saved']);
+      final db = await AppDatabase.instance.database;
+      final row = (await db.query(TableNames.articles,
+              columns: ['is_read'], where: 'id = ?', whereArgs: [id]))
+          .first;
+      expect(row['is_read'], 1);
     });
 
-    test('markManyRead stamps every id', () async {
+    test('a mixed batch splits correctly', () async {
       final a = await _insert(_gamingFeedId, 'a');
-      final b = await _insert(_gamingFeedId, 'b');
-      await _repo.markManyRead([a, b], readAt: _now);
+      final b = await _insert(_gamingFeedId, 'b', saved: true);
+      final c = await _insert(_gamingFeedId, 'c');
 
-      expect(await _readAtOf(a), _now);
-      expect(await _readAtOf(b), _now);
+      final deleted = await _repo.retireArticles([a, b, c]);
+
+      expect(deleted, 2);
+      expect(await _remaining(), ['b']);
     });
 
-    test('markAsUnread clears read_at', () async {
-      final id = await _insert(_gamingFeedId, 'a');
-      await _repo.markAsRead(id, readAt: _now);
-      await _repo.markAsUnread(id);
-
-      expect(await _readAtOf(id), isNull);
-      final visible = await _repo.getAllArticles(readSinceMs: null);
-      expect(_guids(visible), ['a'],
-          reason: 'an unread article is visible even with read articles '
-              'hidden');
+    test('an empty list is a no-op', () async {
+      await _insert(_gamingFeedId, 'a');
+      expect(await _repo.retireArticles([]), 0);
+      expect(await _remaining(), ['a']);
     });
   });
 
-  group('Mark all as read vs the end-of-feed dwell timer', () {
-    test('mark all as read dismisses permanently', () async {
+  group('retireAllRead', () {
+    test('retires every read unsaved article and leaves unread alone',
+        () async {
+      await _insert(_gamingFeedId, 'unread');
+      await _insert(_gamingFeedId, 'read', read: true);
+      await _insert(_gamingFeedId, 'read_saved', read: true, saved: true);
+
+      final deleted = await _repo.retireAllRead();
+
+      expect(deleted, 1);
+      expect(await _remaining(), ['read_saved', 'unread']);
+    });
+
+    test('is a cheap no-op when nothing is read', () async {
       await _insert(_gamingFeedId, 'a');
       await _insert(_newsFeedId, 'b');
-      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(visible, isEmpty,
-          reason: 'pressing Mark all as read means clear these out — they '
-              'must not reappear when Show read is switched on');
+      expect(await _repo.retireAllRead(), 0,
+          reason: 'with Show read off nothing is read by the time this runs, '
+              'so callers can invoke it unconditionally');
+      expect(await _remaining(), ['a', 'b']);
     });
 
-    test('mark all as read overwrites an existing read time', () async {
+    test('scopes to one folder', () async {
+      await _insert(_gamingFeedId, 'gaming_read', read: true);
+      await _insert(_newsFeedId, 'news_read', read: true);
+
+      final deleted = await _repo.retireAllRead(folderId: _gamingId);
+
+      expect(deleted, 1);
+      expect(await _remaining(), ['news_read'],
+          reason: 'clearing one category must not clear another');
+    });
+  });
+
+  group('mark read', () {
+    test('marking read deletes nothing — retirement is separate', () async {
       final id = await _insert(_gamingFeedId, 'a');
-      await _repo.markAsRead(id, readAt: _now - 1000);
-      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
-      expect(await _readAtOf(id), kDismissedReadAt,
-          reason: 'clearing a tab clears the whole tab, including what was '
-              'read ten minutes ago');
+      await _repo.markAsRead(id);
+
+      expect(await _remaining(), ['a'],
+          reason: 'this is what lets Show read ON defer retirement to the '
+              'next refresh instead of removing the row under the reader');
+      expect(_guids(await _repo.getAllArticles(showRead: true)), ['a']);
+      expect(await _repo.getAllArticles(showRead: false), isEmpty);
     });
 
-    test('mark all as read by folder leaves other folders alone', () async {
-      await _insert(_gamingFeedId, 'gaming');
-      await _insert(_newsFeedId, 'news');
-      await _repo.markAllAsReadByFolder(_gamingId, readAt: kDismissedReadAt);
+    test('markAsUnread returns the article to the unread set', () async {
+      final id = await _insert(_gamingFeedId, 'a', read: true);
 
-      final visible = await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(_guids(visible), ['news']);
+      await _repo.markAsUnread(id);
+
+      expect(_guids(await _repo.getAllArticles(showRead: false)), ['a']);
     });
 
-    test('the dwell timer marks read without dismissing', () async {
+    test('markAllAsRead does not delete', () async {
       await _insert(_gamingFeedId, 'a');
-      await _repo.markAllAsRead(readAt: _now);
+      await _insert(_newsFeedId, 'b');
 
-      final withReadShown =
-          await _repo.getAllArticles(readSinceMs: _windowStart);
-      expect(_guids(withReadShown), ['a'],
-          reason: 'reaching the end of a feed is passive reading, not '
-              'dismissal — those articles stay restorable');
+      await _repo.markAllAsRead();
 
-      final withReadHidden = await _repo.getAllArticles(readSinceMs: null);
-      expect(withReadHidden, isEmpty);
+      expect(await _remaining(), ['a', 'b']);
+      expect(await _repo.getTotalUnreadCount(), 0);
     });
   });
 }
