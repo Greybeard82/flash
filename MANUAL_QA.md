@@ -90,19 +90,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 9. Real Claude Haiku Summary (Anthropic API)
-
-| Step | Expected |
-|------|----------|
-| Go to Settings → Anthropic API key → enter a valid key | Key saved and masked |
-| Long-press an article → ✦ Summary | Bottom sheet loads; summary arrives as 4 bullet points |
-| Tap "Open article" in the sheet | Launches article URL externally |
-| Remove the API key then trigger summary | "No API key — add one in Settings" message shown |
-| Enter an invalid key | "Couldn't load summary. Tap to retry." shown; no crash |
-
----
-
-## 10. Google Drive Backup / Restore Round-Trip
+## 9. Google Drive Backup / Restore Round-Trip
 
 | Step | Expected |
 |------|----------|
@@ -116,7 +104,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 11. Folder Tabs Position (Thumb-Zone Hard Requirement)
+## 10. Folder Tabs Position (Thumb-Zone Hard Requirement)
 
 | Step | Expected |
 |------|----------|
@@ -127,7 +115,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 12. Minimum Tap Target Size
+## 11. Minimum Tap Target Size
 
 | Step | Expected |
 |------|----------|
@@ -136,17 +124,25 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 13. Swipe Mark-as-Read (Dims In-Place)
+## 12. Swipe Mark-as-Read (Dims In-Place)
+
+The height check below cannot be automated. `flutter_test` renders with a font
+whose glyphs all share identical metrics, so a font-weight change produces no
+measurable size difference in a widget test — a height-equality assertion there
+passed just as happily before the fix as after it. A device is the only place
+this regression is visible.
 
 | Step | Expected |
 |------|----------|
 | Swipe an article to the LEFT | Article dims in-place (reduced opacity); stays in list; no removal animation |
 | Swipe an article to the RIGHT | Same result — article dims in-place |
-| Scroll away and back | Dimmed article is still present at its original position |
+| Pick an article whose title wraps to three lines, and watch it closely as it dims | **The card's height does not change.** Nothing below it moves. Read state is carried by colour and opacity only; the title weight is constant at `w600` |
+| Scroll away and back, with **Show read** on | Dimmed article is still present at its original position |
+| Same, with **Show read** off | The article is gone once the list rebuilds — see §19 |
 
 ---
 
-## 14. Onboarding (First-Launch Only)
+## 13. Onboarding (First-Launch Only)
 
 | Step | Expected |
 |------|----------|
@@ -156,7 +152,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 15. Cross-Tab Unread Counts (Live)
+## 14. Cross-Tab Unread Counts (Live)
 
 | Step | Expected |
 |------|----------|
@@ -168,7 +164,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 16. Folder Tab Size
+## 15. Folder Tab Size
 
 | Step | Expected |
 |------|----------|
@@ -179,7 +175,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 17. Global Loading Indicator
+## 16. Global Loading Indicator
 
 | Step | Expected |
 |------|----------|
@@ -190,18 +186,21 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 18. Resume Refresh
+## 17. Resume Refresh
 
 | Step | Expected |
 |------|----------|
 | Open an article in the external browser, then return to Flash within ~10 seconds | No network fetch runs; scroll position is untouched |
 | Background the app for at least 2 minutes, then return | A network fetch runs automatically; new articles appear at the top |
-| After that fetch | Previously-read articles remain dimmed in their original position — they are NOT purged from the list |
+| After that fetch, check where the list sits | **The list has reset to offset 0.** Preserving the old offset would point it at different content, since new articles insert *above* the viewport |
+| Wait ten seconds, then look at the articles that just arrived | **They are still unread.** This is the point of the exercise: the jump to the top must not be mistaken for the user scrolling past them. Anything newly fetched showing up dimmed is a `MarkReadGate` regression |
+| With **Show read** on, look for articles read earlier | Still present, dimmed. Nothing is purged by a refresh — a refresh never deletes |
+| With **Show read** off, same check | Read articles are absent. Deletion is still not involved; they simply no longer match the visibility rule |
 | Return to the app again immediately after the above fetch | No second fetch fires (5-minute minimum interval) |
 
 ---
 
-## 19. AI Summary Reads the Full Article
+## 18. AI Summary Reads the Full Article
 
 | Step | Expected |
 |------|----------|
@@ -214,14 +213,90 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 20. Session-Read Visibility Is Per-Tab
+## 19. Read Visibility and the Show Read Toggle
+
+**Show read** lives in the Filter bubble (the funnel button, top right). Read
+articles are never deleted by this setting — deletion is the cleanup window's
+job, a separate rule this one never consults.
 
 | Step | Expected |
 |------|----------|
-| Find a Gaming folder with at least two unread articles (call them 5 and 6). Start on the All tab | All shows 5 and 6; Gaming shows 5 and 6 |
-| Scroll past article 5 in All (mark-read-on-scroll on) | All shows 5 dimmed and 6; Gaming (not yet visited) still logically shows only 6 |
-| Switch to Gaming | Article 5 is **absent** — not dimmed, not present. Only 6 shows |
-| Switch back to All | Article 5 is back, dimmed, at its original position; 6 unchanged |
-| Swipe article 5 unread while in All | Both All and Gaming now show 5 and 6, full weight (unread), in both tabs |
-| Mark all read in Gaming | The Gaming badge clears and its list empties down to newly-fetched unread. The All tab's visible list is unaffected — articles read only in All remain exactly as they were before the Gaming mark-all-read ran |
-| Force-close and relaunch the app | Every tab shows unread-only — no article appears dimmed anywhere until it's read again this session |
+| Find a Gaming folder with at least two unread articles (call them 5 and 6). Turn **Show read on**. Start on the All tab | All shows 5 and 6; Gaming shows 5 and 6 |
+| Scroll past article 5 in All (mark-read-on-scroll on) | Article 5 dims in place in All |
+| Switch to Gaming | **Article 5 is still there, dimmed, in position.** Read state lives on the row, so it is the same answer in every tab |
+| Switch back to All | Unchanged — 5 dimmed, 6 full weight |
+| Now turn **Show read off** and Apply | The list re-queries and resets to the top. Article 5 is gone from All |
+| Switch to Gaming | Article 5 is gone there too. **This is the headline check** — it is the behaviour the toggle exists for |
+| Still with Show read off, scroll past article 6 in the tab you are looking at | **It greys in place and does not vanish under your thumb.** A row disappearing mid-scroll is the exact defect this design avoids |
+| Switch tabs and come back (or refresh) | *Now* article 6 is gone. It leaves on the next rebuild, not under the finger that read it |
+| Swipe article 5 unread | It returns at full weight in every tab, under either toggle setting — mark-unread clears the timestamp outright |
+| Turn **Show read back on** and Apply | Articles read within the last 48 hours return, dimmed. This is what the persisted `read_at` buys |
+| Force-close and relaunch with Show read on | **Articles read in the last 48 hours are still there, dimmed.** This is the opposite of the old session-scoped behaviour, where a relaunch showed unread-only |
+| Press Mark all as read, confirm the dialog, then make sure Show read is on | Those articles do **not** come back. Mark-all-read stamps a dismissal sentinel that sits outside every window — pressing it means "clear these out" |
+| Reach the bottom of a feed and wait for the auto-mark-read, then check with Show read on | These *do* come back, dimmed. Reaching the end of a feed is passive reading, not dismissal, so it stamps a real time |
+
+---
+
+## 20. Day Dividers
+
+| Step | Expected |
+|------|----------|
+| Open the feed with articles spanning several days | Headers break the list up: **TODAY**, **YESTERDAY**, then a weekday name within the last week, then a day-and-month label beyond that |
+| Check the label language on a non-English device | Headers are localised, weekday and date included |
+| Find an article published late last night (e.g. 23:50) and check it in the morning | Filed under **YESTERDAY**, not TODAY — grouping is by calendar day, not elapsed hours, even though it is under 24 hours ago |
+| Count the headers at the top of the list | **Exactly one TODAY header.** A feed publishing an hour into tomorrow must group *and* label as today; clamping only the label produced two "Today" headers stacked, which shipped briefly |
+| Switch Article order to Oldest first in the Filter bubble | Headers appear in reverse order and still bracket the right articles |
+| Scroll slowly with mark-read-on-scroll on, past a header | Articles mark read at the same point they would without a header in the way — headers contribute height to the calculation but never trigger a read |
+
+---
+
+## 21. Refresh Resets to Top
+
+| Step | Expected |
+|------|----------|
+| Scroll well down the list and note where you are | — |
+| Pull to refresh | The list returns to offset 0 |
+| Repeat with the refresh FAB | Same — the button and the pull gesture are the same operation |
+| Immediately after either, look at the articles now at the top | Still unread. They must not be marked read by the jump |
+| Wait a few seconds without touching the screen, then look again | Still unread |
+| Now scroll down yourself | *Now* articles mark read as they pass the midpoint — a real scroll re-arms it |
+| Open an article in the browser and come back | Scroll position is restored **exactly**. Only refresh paths reset to top |
+
+---
+
+## 22. Feed Add / Remove Reaches the Article List
+
+> ⚠️ **Not yet exercised on device.** The `needsFetch` branch below has been
+> verified only by unit test and by its `structureOnly` sibling (a category
+> rename, which did reach the feed screen on device). Run it.
+
+| Step | Expected |
+|------|----------|
+| On Categories, add a real feed to a category | Feed appears with its article count |
+| Return to the Flash tab **without touching refresh** | The new feed's articles are in the list |
+| Remove that feed, then return to Flash again | Its articles are gone |
+| Rename a category, then return to Flash | The tab label updates |
+| Add several feeds in a row before returning | One refresh happens, not one per feed |
+
+---
+
+## 23. Categories Collapsed by Default
+
+| Step | Expected |
+|------|----------|
+| Open the Categories tab | **All categories render collapsed** — a tidy list of headers, chevrons pointing right |
+| Expand one, leave the tab, come back | Collapsed again. Expansion is per-visit and deliberately not remembered |
+| Long-press a feed in an expanded category and drag it onto a *collapsed* category's header | Accepted — the feed is appended to the end of that category |
+| Try to start a drag from inside a collapsed category | Not possible; the rows are not rendered. Expand it first |
+| Drop a feed at a specific position inside a collapsed category | Not possible — positioning needs the category expanded. Append-to-end is the only option while collapsed |
+
+---
+
+## 24. Filter Bubble — Article Age
+
+| Step | Expected |
+|------|----------|
+| Open the Filter bubble and move **Article age** down | The label tracks the slider; nothing changes in the list yet |
+| Press Apply | The list re-queries immediately and articles older than the window are gone |
+| Move it back up and Apply | They return, provided they are still in the database |
+| Set a value below 5 days | The visible list is correct. Note that `runCleanup` clamps to 5–20, so rows linger in the database a few days longer than the label implies — storage lags, the list does not |

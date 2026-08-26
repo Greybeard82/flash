@@ -34,7 +34,6 @@ class AppSettings {
   final int autoMarkReadAtBottomSeconds;
   final bool driveBackupEnabled;
   final int? driveLastBackupAt;
-  final bool anthropicApiKeySet;
   final String? googleAccountEmail;
   final bool onboardingComplete;
   /// Age window for cleanup, in days. Meaning is unchanged — read articles
@@ -68,7 +67,6 @@ class AppSettings {
     this.autoMarkReadAtBottomSeconds = 5,
     this.driveBackupEnabled = false,
     this.driveLastBackupAt,
-    this.anthropicApiKeySet = false,
     this.googleAccountEmail,
     this.onboardingComplete = false,
     this.cleanupAgeDays = 7,
@@ -109,7 +107,6 @@ class AppSettings {
       driveLastBackupAt: map['drive_last_backup_at'] != null && map['drive_last_backup_at'] != 'null'
           ? int.tryParse(map['drive_last_backup_at']!)
           : null,
-      anthropicApiKeySet: (map['anthropic_api_key_set'] ?? 'false') == 'true',
       googleAccountEmail: map['google_account_email'] == 'null' ? null : map['google_account_email'],
       onboardingComplete: (map['onboarding_complete'] ?? 'false') == 'true',
       cleanupAgeDays:
@@ -129,7 +126,6 @@ class AppSettings {
     int? autoMarkReadAtBottomSeconds,
     bool? driveBackupEnabled,
     int? driveLastBackupAt,
-    bool? anthropicApiKeySet,
     String? googleAccountEmail,
     bool? onboardingComplete,
     int? cleanupAgeDays,
@@ -147,7 +143,6 @@ class AppSettings {
           autoMarkReadAtBottomSeconds ?? this.autoMarkReadAtBottomSeconds,
       driveBackupEnabled: driveBackupEnabled ?? this.driveBackupEnabled,
       driveLastBackupAt: driveLastBackupAt ?? this.driveLastBackupAt,
-      anthropicApiKeySet: anthropicApiKeySet ?? this.anthropicApiKeySet,
       googleAccountEmail: googleAccountEmail ?? this.googleAccountEmail,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,

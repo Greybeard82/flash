@@ -138,7 +138,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'drive_backup_enabled', 'value': 'false'},
   {'key': 'drive_last_backup_at', 'value': 'null'},
   {'key': 'feedly_api_key', 'value': 'null'},
-  {'key': 'anthropic_api_key_set', 'value': 'false'},
   {'key': 'google_account_email', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
   // NB: no 'schema_version' row. PRAGMA user_version — set by the `version:`

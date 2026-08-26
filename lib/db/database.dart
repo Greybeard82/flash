@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 11,
+      version: 12,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -170,6 +170,16 @@ class AppDatabase {
         "VALUES ('show_read', 'true', $now)",
       );
     }
+    if (oldVersion < 12) {
+      // The Anthropic / Claude Haiku summary path was specified but never
+      // built: no client, no key entry, nothing that ever read this flag.
+      // Summaries run on-device through Gemini Nano. Same treatment as the
+      // reader-mode keys in the v8 step — a settings row nothing consults is
+      // a standing invitation to write code that trusts it.
+      await db.execute(
+        "DELETE FROM settings WHERE key = 'anthropic_api_key_set'",
+      );
+    }
   }
 
   /// Runs the real [_onUpgrade] path against the open database as though it
@@ -180,7 +190,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 11);
+    await _onUpgrade(db, fromVersion, 12);
   }
 
   Future<void> close() async {

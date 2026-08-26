@@ -52,7 +52,7 @@ Specific mandates:
 
 ### 3.4 Local Storage
 - **SQLite via `sqflite`** — feeds, articles, read state, folders, blocklist, settings, keyword alerts
-- Schema versioned with migration support. Currently **v11**; `PRAGMA user_version` is the single source of truth (a duplicate `schema_version` settings row existed until v9, drifted permanently to "3", and was deleted)
+- Schema versioned with migration support. Currently **v12**; `PRAGMA user_version` is the single source of truth (a duplicate `schema_version` settings row existed until v9, drifted permanently to "3", and was deleted)
 - `articles.read_at` (v11) records *when* an article was read, indexed by `idx_articles_read_at`. It is what makes the Show read window in §4.3 possible: a persisted timestamp survives a restart, where the in-memory session set it replaced could not
 
 ### 3.5 Background Processing

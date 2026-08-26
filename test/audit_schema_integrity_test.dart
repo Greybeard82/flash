@@ -19,7 +19,7 @@ import 'package:flash/repositories/settings_repository.dart';
 
 /// Kept in sync by hand with the `version:` passed to openDatabase in
 /// database.dart. Bump both together when adding a migration.
-const int kExpectedSchemaVersion = 11;
+const int kExpectedSchemaVersion = 12;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();
@@ -209,6 +209,37 @@ void main() {
           reason: 'the PRAGMA table_info guard and CREATE INDEX IF NOT '
               'EXISTS both have to hold, or an interrupted upgrade throws on '
               'the retry');
+    });
+  });
+
+  group('v11 → v12 (dead Anthropic key)', () {
+    test('drops the settings row for upgrading users', () async {
+      final db = await AppDatabase.instance.database;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.insert('settings', {
+        'key': 'anthropic_api_key_set',
+        'value': 'true',
+        'updated_at': now,
+      });
+      expect(await SettingsRepository().get('anthropic_api_key_set'), 'true');
+
+      await AppDatabase.instance.migrateForTesting(fromVersion: 11);
+
+      expect(await SettingsRepository().get('anthropic_api_key_set'), isNull,
+          reason: 'a fresh install no longer seeds it; upgrading users must '
+              'lose it too, or the row survives as a second stale answer the '
+              'way schema_version did');
+    });
+
+    test('a fresh install does not seed it', () async {
+      await AppDatabase.instance.database;
+      expect(await SettingsRepository().get('anthropic_api_key_set'), isNull);
+    });
+
+    test('unrelated settings survive', () async {
+      final before = await SettingsRepository().get('show_read');
+      await AppDatabase.instance.migrateForTesting(fromVersion: 11);
+      expect(await SettingsRepository().get('show_read'), before);
     });
   });
 }

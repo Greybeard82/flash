@@ -229,15 +229,13 @@ CREATE TABLE settings (
 | `drive_backup_enabled` | `false` | Auto-backup to Google Drive on change |
 | `drive_last_backup_at` | `null` | Unix timestamp (ms) of last Drive backup |
 | `feedly_api_key` | `null` | Feedly feed search API key |
-| `anthropic_api_key_set` | `false` | Boolean flag -- actual key stored in Android Keystore |
 | `google_account_email` | `null` | Signed-in Google account, NULL if not connected |
 | `onboarding_complete` | `false` | Whether first-launch empty state has been dismissed |
 | `show_read` | `true` | Keep read articles visible for 48 hours (see `articles.read_at`) |
 
 **Notes:**
-- API keys are never stored in this table in plaintext -- `anthropic_api_key_set` is a boolean flag only
-- Actual Anthropic API key lives in Android Keystore via `flutter_secure_storage`
 - `value` is always stored as TEXT -- app layer handles type casting (int, bool, etc.)
+- No API keys are stored here. `anthropic_api_key_set` was seeded until v12 for a Claude Haiku summary path that was specified and never built -- no client, no key entry, nothing that read the flag. The v12 migration deletes it; summaries run on-device through Gemini Nano, which needs no key
 
 ---
 
