@@ -61,13 +61,20 @@ int groupingInstant(Article a) => a.publishedAt ?? a.fetchedAt;
 /// newest-first yields Today, Yesterday, …; oldest-first yields the reverse.
 /// A future-dated article buckets as [DayBucket.today].
 List<FeedRow> groupByDay(List<Article> articles, {required DateTime now}) {
+  final today = _startOfDay(now);
   final rows = <FeedRow>[];
   DateTime? currentDay;
 
   for (final article in articles) {
-    final day = _startOfDay(
+    var day = _startOfDay(
       DateTime.fromMillisecondsSinceEpoch(groupingInstant(article)),
     );
+    // [bucketFor] already clamps a future date to today, so the grouping key
+    // has to be clamped too. Without this a clock-skewed feed — and there is
+    // at least one in the wild, seen publishing an hour into tomorrow —
+    // makes its own group, which then renders a second header reading
+    // "Today" directly above the real one.
+    if (day.isAfter(today)) day = today;
     if (currentDay == null || day != currentDay) {
       rows.add(DayHeaderRow(day, bucketFor(day, now)));
       currentDay = day;

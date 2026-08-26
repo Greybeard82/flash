@@ -113,6 +113,21 @@ void main() {
       expect(rows.whereType<ArticleRow>().length, 20);
     });
 
+    test('a clock-skewed future article does not create a second header', () {
+      // Found on device: one feed publishes an hour into tomorrow, and the
+      // list showed two headers both reading "Today", one above the other.
+      // bucketFor clamps a future date to today for the *label*, so the
+      // grouping key has to be clamped to match.
+      final rows = groupByDay([
+        _article('skewed', DateTime(2026, 8, 27, 1)),
+        _article('a', DateTime(2026, 8, 26, 12)),
+        _article('b', DateTime(2026, 8, 26, 9)),
+      ], now: _now);
+
+      expect(_shape(rows), ['H:today', 'A:skewed', 'A:a', 'A:b'],
+          reason: 'there is only one today, so there is one Today header');
+    });
+
     test('a missing publish date falls back to fetched_at', () {
       final rows = groupByDay([
         _article('no_date', null, fetched: DateTime(2026, 8, 25, 10)),

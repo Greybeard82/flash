@@ -122,7 +122,7 @@ void main() {
       // Built directly rather than through _article: that helper stamps a
       // read article with _now, and `??` cannot tell "omitted" from an
       // explicit null. A migrated row genuinely has read_at NULL.
-      final legacy = Article(
+      const legacy = Article(
         id: 1,
         feedId: 1,
         guid: 'guid-1',
