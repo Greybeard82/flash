@@ -42,6 +42,7 @@ class _FilterBubbleState extends State<FilterBubble> {
   late double _articles;
   late double _days;
   late String _sortOrder;
+  late bool _showRead;
 
   @override
   void initState() {
@@ -56,6 +57,7 @@ class _FilterBubbleState extends State<FilterBubble> {
         .toDouble()
         .clamp(FilterBubble.minDays, FilterBubble.maxDays);
     _sortOrder = widget.initial.articleSortOrder;
+    _showRead = widget.initial.showRead;
   }
 
   void _setSortOrder(String value) => setState(() => _sortOrder = value);
@@ -66,12 +68,14 @@ class _FilterBubbleState extends State<FilterBubble> {
   bool get _hasPendingChanges =>
       _articles.round() != widget.initial.articleLimit ||
       _days.round() != widget.initial.cleanupAgeDays ||
-      _sortOrder != widget.initial.articleSortOrder;
+      _sortOrder != widget.initial.articleSortOrder ||
+      _showRead != widget.initial.showRead;
 
   Future<void> _apply() async {
     await _repo.set('article_limit', _articles.round().toString());
     await _repo.set('cleanup_age_days', _days.round().toString());
     await _repo.set('article_sort_order', _sortOrder);
+    await _repo.set('show_read', _showRead.toString());
     // One notify for the whole set, so the feed re-queries once.
     SettingsNotifier.instance.settingsChanged();
     if (mounted) await BubblePanelScope.maybeOf(context)?.dismiss();
@@ -129,6 +133,17 @@ class _FilterBubbleState extends State<FilterBubble> {
           selected: {_sortOrder},
           showSelectedIcon: false,
           onSelectionChanged: (s) => _setSortOrder(s.first),
+        ),
+        const SizedBox(height: 6),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _showRead,
+          title: Text(l10n.showRead, style: theme.textTheme.bodyMedium),
+          subtitle: Text(
+            l10n.showReadSubtitle,
+            style: theme.textTheme.labelSmall,
+          ),
+          onChanged: (v) => setState(() => _showRead = v),
         ),
         const SizedBox(height: 10),
         Text(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,17 +13,21 @@ import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
 import '../services/refresh_service.dart';
-import '../services/session_read_tracker.dart';
+import '../services/saved_state_notifier.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
 import '../utils/bottom_dwell_timer.dart';
+import '../utils/day_grouping.dart';
+import '../utils/mark_read_gate.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
+import '../widgets/day_header.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/filter_bubble.dart';
 import '../widgets/quick_settings_bubble.dart';
@@ -37,10 +42,16 @@ class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
   final int refreshTrigger;
 
+  /// Whether this screen is the one the IndexedStack is currently showing.
+  /// The stack keeps all four screens alive, so this is the only signal that
+  /// the user has arrived back here.
+  final bool isVisible;
+
   const FeedScreen({
     super.key,
     required this.onNavigateToFeeds,
     this.refreshTrigger = 0,
+    this.isVisible = true,
   });
 
   @override
@@ -66,6 +77,9 @@ class _FeedScreenState extends State<FeedScreen>
   // ── UI state ───────────────────────────────────────────────────────────────
   List<Folder> _folders = [];
   List<Article> _articles = [];
+
+  /// The rendered list: [_articles] with day headers interleaved.
+  List<FeedRow> _rows = const [];
   UnreadCounts _counts = const UnreadCounts.empty();
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
@@ -84,6 +98,11 @@ class _FeedScreenState extends State<FeedScreen>
 
   Timer? _scrollDebounce;
   final Set<int> _pendingMarkReadUI = {};
+
+  /// Guards the mark-as-read pass against programmatic scrolling. See
+  /// [MarkReadGate] — this is what stops a refresh from reading the articles
+  /// it just fetched.
+  final _markReadGate = MarkReadGate();
 
   /// Drives the fade on every floating button while the list is moving. One
   /// controller for the whole cluster — a sixth button is a `ScrollFade`
@@ -121,6 +140,18 @@ class _FeedScreenState extends State<FeedScreen>
   int _displayLimit = kFetchArticleLimit;
   int _displayAgeDays = 7;
 
+  /// Whether read articles stay in the list. See AppSettings.showRead.
+  bool _showRead = true;
+
+  /// Null when read articles are hidden; otherwise the start of the show-read
+  /// window. Computed per query rather than cached, so the window slides
+  /// rather than freezing at whatever it was when the screen booted.
+  int? get _readSinceMs => _showRead
+      ? DateTime.now()
+          .subtract(const Duration(hours: kShowReadBufferHours))
+          .millisecondsSinceEpoch
+      : null;
+
   /// Applies the Filter bubble's two limits to a newest-first list.
   ///
   /// Age first, then the count cap **per feed** — matching the setting's own
@@ -154,6 +185,7 @@ class _FeedScreenState extends State<FeedScreen>
     _sortOrder = settings.articleSortOrder;
     _displayLimit = settings.articleLimit;
     _displayAgeDays = settings.cleanupAgeDays;
+    _showRead = settings.showRead;
     _bottomDwellTimer.configure(
       enabled: settings.autoMarkReadAtBottom,
       duration: Duration(seconds: settings.autoMarkReadAtBottomSeconds),
@@ -167,8 +199,10 @@ class _FeedScreenState extends State<FeedScreen>
     final orderChanged = settings.articleSortOrder != _sortOrder;
     // A widened filter needs rows the current list no longer holds, so it
     // can't be satisfied in memory — re-query instead.
+    final visibilityChanged = settings.showRead != _showRead;
     final filtersChanged = settings.articleLimit != _displayLimit ||
-        settings.cleanupAgeDays != _displayAgeDays;
+        settings.cleanupAgeDays != _displayAgeDays ||
+        visibilityChanged;
 
     setState(() {
       _applyReadingSettings(settings);
@@ -176,7 +210,7 @@ class _FeedScreenState extends State<FeedScreen>
       // Flip the list already on screen rather than waiting for the next
       // reload — the user changed the order to see it change.
       if (orderChanged && !filtersChanged) {
-        _articles = _articles.reversed.toList();
+        _setArticles(_articles.reversed.toList());
       }
     });
 
@@ -184,9 +218,11 @@ class _FeedScreenState extends State<FeedScreen>
     final refreshed = await _articlesForTab(_selectedTabIndex, _folders);
     if (!mounted) return;
     setState(() {
-      _articles = refreshed;
-      _syncCardKeys(refreshed);
+      _setArticles(refreshed);
     });
+    // The list just changed length substantially; leaving the offset where it
+    // was would land the user somewhere arbitrary.
+    if (visibilityChanged) _resetScrollToTop();
   }
 
   static const _resumePolicy = ResumeRefreshPolicy();
@@ -207,13 +243,47 @@ class _FeedScreenState extends State<FeedScreen>
     // without this screen being rebuilt or reloaded.
     ReadStateNotifier.instance.addListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.addListener(_onSettingsChanged);
+    // Bookmarks toggles the saved flag on articles this list may be holding,
+    // and it is kept alive alongside this screen, so the change would
+    // otherwise never reach here. (Feed/folder structure changes use
+    // FeedsChangedNotifier instead — see _consumeFeedsChange.)
+    SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
     _boot();
   }
 
   @override
   void didUpdateWidget(FeedScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.refreshTrigger != oldWidget.refreshTrigger) _fetchAndReload();
+    if (widget.refreshTrigger != oldWidget.refreshTrigger) {
+      _fetchAndReload();
+      return;
+    }
+    // Arrived back on the Flash tab. Apply anything the Categories or
+    // Settings screens changed while this one was hidden.
+    if (widget.isVisible && !oldWidget.isVisible) {
+      unawaited(_consumeFeedsChange());
+    }
+  }
+
+  /// Acts on a feed or folder change made on another tab.
+  ///
+  /// Nothing is consumed while a boot or refresh is already in flight — the
+  /// change stays queued and is picked up on the next visit, rather than
+  /// racing a fetch that is already running.
+  Future<void> _consumeFeedsChange() async {
+    if (!mounted || _booting || _refreshing || _backgroundFetching) return;
+    final change = FeedsChangedNotifier.instance.consume();
+    if (change == null) return;
+
+    if (change == FeedsChange.needsFetch) {
+      // A new feed has no articles yet. _backgroundRefresh reloads and
+      // resets to top on its own.
+      await _backgroundRefresh();
+    } else {
+      // Removed, moved or renamed — everything needed is already local.
+      await _loadArticles();
+      _resetScrollToTop();
+    }
   }
 
   @override
@@ -221,6 +291,7 @@ class _FeedScreenState extends State<FeedScreen>
     WidgetsBinding.instance.removeObserver(this);
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
+    SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     _scrollDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _fabFade.dispose();
@@ -255,9 +326,9 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
-  /// Resume from background. Same indicator as cold start, so the two read as
-  /// one behaviour rather than two — and the user keeps their scroll position.
-  Future<void> _fetchOnResume() => _backgroundRefresh(preserveScroll: true);
+  /// Resume from background with a fetch. Same indicator as cold start, so
+  /// the two read as one behaviour.
+  Future<void> _fetchOnResume() => _backgroundRefresh();
 
   /// A refresh threw. These were previously swallowed silently, so on a
   /// captive-portal wifi or an expired certificate the spinner simply
@@ -301,13 +372,13 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// Network fetch that never covers the content. Shared by cold start and
   /// resume so the two look the same.
-  Future<void> _backgroundRefresh({bool preserveScroll = false}) async {
+  ///
+  /// This used to take `preserveScroll: true` on the resume path. It no
+  /// longer does: a fetch that brought in new articles must not leave the
+  /// user parked below them.
+  Future<void> _backgroundRefresh() async {
     if (!mounted || _backgroundFetching) return;
     setState(() => _backgroundFetching = true);
-
-    final offset = preserveScroll && _scrollController.hasClients
-        ? _scrollController.offset
-        : 0.0;
     try {
       await RefreshService(_settingsRepo).refreshAll();
       _lastFetchAt = DateTime.now();
@@ -315,7 +386,7 @@ class _FeedScreenState extends State<FeedScreen>
       _reportRefreshFailure();
     }
     await _loadArticles();
-    if (preserveScroll) _restoreScrollOffset(offset);
+    _resetScrollToTop();
     if (mounted) setState(() => _backgroundFetching = false);
   }
 
@@ -345,8 +416,7 @@ class _FeedScreenState extends State<FeedScreen>
       _folders = folders;
       _hasFeeds = feeds.isNotEmpty;
       _selectedTabIndex = safeTab;
-      _articles = articles;
-      _syncCardKeys(articles);
+      _setArticles(articles);
       _feedFolderId = {for (final f in feeds) f.id!: f.folderId};
       _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
@@ -361,6 +431,30 @@ class _FeedScreenState extends State<FeedScreen>
   void _onExternalReadStateChanged() {
     if (!mounted || _booting) return;
     unawaited(_refreshCountsFromDb());
+  }
+
+  /// Patches the one article in place rather than re-querying — the saved
+  /// flag only drives the radial menu's icon, and a reload here would rebuild
+  /// the list and move the scroll position under the user.
+  ///
+  /// Bails out when the list already agrees, which is exactly the case when
+  /// this screen made the change itself and [_toggleSaved] has already
+  /// applied it.
+  void _onExternalSavedStateChanged() {
+    if (!mounted) return;
+    final id = SavedStateNotifier.instance.articleId;
+    if (id == null) return;
+    final saved = SavedStateNotifier.instance.saved;
+
+    final current = _articles.indexWhere((a) => a.id == id);
+    if (current < 0 || _articles[current].isSaved == saved) return;
+
+    setState(() {
+      _setArticles([
+        for (final a in _articles)
+          a.id == id ? a.copyWith(isSaved: saved) : a,
+      ]);
+    });
   }
 
   Future<void> _refreshCountsFromDb() async {
@@ -394,18 +488,28 @@ class _FeedScreenState extends State<FeedScreen>
   /// The one place articles enter this screen, so ordering is applied here and
   /// every path — boot, reload, tab switch, refresh — gets it for free.
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) async {
-    // Every tab passes the whole session set: an article read anywhere stays
-    // visible, dimmed in place, in every tab for the rest of the session.
-    final sessionIds = SessionReadTracker.instance.ids;
+    final since = _readSinceMs;
     final articles = tab == 0
-        ? await _articleRepo.getAllArticles(sessionReadIds: sessionIds)
+        ? await _articleRepo.getAllArticles(readSinceMs: since)
         : await _articleRepo.getArticlesByFolder(
             folders[tab - 1].id!,
-            sessionReadIds: sessionIds,
+            readSinceMs: since,
           );
     // Filters run on the newest-first result, so the cap keeps the newest N
     // per feed; ordering is applied last.
     return _applySortOrder(_applyDisplayFilters(articles));
+  }
+
+  /// The only place `_articles` is assigned. Keeps `_rows` and the card keys
+  /// in step with it — there are seven assignment sites, and any one of them
+  /// forgetting to regroup would show stale headers or throw off `_onScroll`'s
+  /// height accounting.
+  ///
+  /// Safe to call inside a `setState` closure; it only assigns fields.
+  void _setArticles(List<Article> articles) {
+    _articles = articles;
+    _rows = groupByDay(articles, now: DateTime.now());
+    _syncCardKeys(articles);
   }
 
   void _syncCardKeys(List<Article> articles) {
@@ -416,7 +520,28 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
+  /// Puts the list back at the top. Every path that hits the network calls
+  /// this.
+  ///
+  /// Preserving the offset across a refresh was actively harmful: with
+  /// newest-first ordering, new articles are inserted *above* the viewport,
+  /// so the same offset now points at different content and everything above
+  /// it — including everything just fetched — reads as "already scrolled
+  /// past". This replaces the scroll-restoration half of PRD §4.3 for
+  /// refresh paths only; returning from the browser and switching tabs both
+  /// still restore position.
+  void _resetScrollToTop() {
+    _markReadGate.close();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+    });
+  }
+
   void _restoreScrollOffset(double offset) {
+    // Same hazard as _resetScrollToTop, for the same reason: the jump below
+    // fires _onScroll.
+    _markReadGate.close();
     if (offset <= 0) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
@@ -439,32 +564,22 @@ class _FeedScreenState extends State<FeedScreen>
         _reportRefreshFailure();
       } finally {
         await _loadArticles();
+        _resetScrollToTop();
         if (mounted) setState(() => _refreshing = false);
       }
     }, label: 'Refreshing');
   }
 
-  // Pull-to-refresh: fetch without cleanup.
-  /// [dropReadArticles] clears the rows the user has already read out of the
-  /// list, leaving only unread ones — the refresh *button*'s behaviour, so it
-  /// reads as "tidy up and show me what's new".
+  /// Fetch without cleanup, for both pull-to-refresh and the refresh button.
   ///
-  /// Pull-to-refresh deliberately does not do this: it is a "check for new
-  /// content" gesture, and having the list collapse under the finger that
-  /// just pulled it would be the same disorienting jump the session-read
-  /// model exists to avoid.
-  Future<void> _refreshCurrentTab({bool dropReadArticles = false}) async {
+  /// The button used to additionally drop already-read rows from the list,
+  /// because there was no way to say "never show me read articles". There is
+  /// now — the Show read toggle — it is persistent, and it is one tap away,
+  /// so the two gestures are the same operation again.
+  Future<void> _refreshCurrentTab() async {
     if (_refreshing) return;
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
-
-    if (dropReadArticles) {
-      // Forgetting them in the session set is all it takes — the union query
-      // only keeps a read article visible because its id is in there.
-      SessionReadTracker.instance.removeAll(
-        [for (final a in _articles) if (a.isRead && a.id != null) a.id!],
-      );
-    }
 
     await LoadingController.instance.run(() async {
       try {
@@ -483,6 +598,7 @@ class _FeedScreenState extends State<FeedScreen>
         _reportRefreshFailure();
       } finally {
         await _loadArticles();
+        _resetScrollToTop();
         if (mounted) setState(() => _refreshing = false);
       }
     }, label: 'Refreshing');
@@ -509,12 +625,17 @@ class _FeedScreenState extends State<FeedScreen>
     final articles = await _articlesForTab(index, _folders);
     if (!mounted || gen != _tabGeneration) return;
     setState(() {
-      _articles = articles;
-      _syncCardKeys(articles);
+      _setArticles(articles);
       _loading = false;
     });
 
     final savedOffset = _tabScrollPositions[index] ?? 0.0;
+    // The jump below is programmatic like any other, and restoring a saved
+    // offset would otherwise have _onScroll mark everything above it as read
+    // in a tab the user has only just arrived at. The saved offsets
+    // themselves are untouched — only the mark-read pass is held off until
+    // the user actually scrolls.
+    _markReadGate.close();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       if (savedOffset > 0) {
@@ -534,11 +655,22 @@ class _FeedScreenState extends State<FeedScreen>
     _fabFade.onScroll();
     _updateBottomDwellTimer();
     if (!_markReadOnScroll || _articles.isEmpty) return;
+    // A programmatic jump moved the list, not the user. Marking here would
+    // read articles nobody has looked at.
+    if (!_markReadGate.isOpen) return;
     final offset = _scrollController.offset;
     double cumulative = 0.0;
     final toWrite = <int>[];
     final readFolderIds = <int?>[];
-    for (final article in _articles) {
+    for (final row in _rows) {
+      // Headers contribute height but never decide the break — an article is
+      // what marks read, and a header sitting just above the cutoff must not
+      // stop the walk before it.
+      if (row is DayHeaderRow) {
+        cumulative += kDayHeaderHeight;
+        continue;
+      }
+      final article = (row as ArticleRow).article;
       final key = article.id != null ? _cardKeys[article.id!] : null;
       double h = 120.0;
       if (key?.currentContext != null) {
@@ -560,7 +692,6 @@ class _FeedScreenState extends State<FeedScreen>
     // DB write is immediate.
     if (toWrite.isNotEmpty) {
       _articleRepo.markManyRead(toWrite);
-      SessionReadTracker.instance.addAll(toWrite);
       _counts = _counts.applyManyRead(readFolderIds);
       AppBadgePlus.updateBadge(_counts.all);
     }
@@ -575,10 +706,10 @@ class _FeedScreenState extends State<FeedScreen>
     final ids = Set<int>.from(_pendingMarkReadUI);
     _pendingMarkReadUI.clear();
     setState(() {
-      _articles = [
+      _setArticles([
         for (final a in _articles)
           ids.contains(a.id) ? a.copyWith(isRead: true) : a,
-      ];
+      ]);
     });
     unawaited(_refreshCountsFromDb());
   }
@@ -601,17 +732,21 @@ class _FeedScreenState extends State<FeedScreen>
     // to read) so unread-count propagation to every tab an article appears
     // in — its own category and "All" — stays consistent with the rest of
     // the app, rather than a bespoke bulk-update path.
+    // A real timestamp, not kDismissedReadAt: reaching the end of a feed is
+    // passive reading, so these stay restorable by the Show read window.
+    final readAt = DateTime.now().millisecondsSinceEpoch;
     if (_selectedTabIndex == 0) {
-      await _articleRepo.markAllAsRead();
+      await _articleRepo.markAllAsRead(readAt: readAt);
     } else {
-      await _articleRepo.markAllAsReadByFolder(_folders[_selectedTabIndex - 1].id!);
+      await _articleRepo.markAllAsReadByFolder(
+        _folders[_selectedTabIndex - 1].id!,
+        readAt: readAt,
+      );
     }
-    SessionReadTracker.instance
-        .addAll([for (final a in _articles) if (a.id != null) a.id!]);
 
     if (!mounted) return;
     setState(() {
-      _articles = [for (final a in _articles) a.copyWith(isRead: true)];
+      _setArticles([for (final a in _articles) a.copyWith(isRead: true)]);
     });
     unawaited(_refreshCountsFromDb());
   }
@@ -627,14 +762,13 @@ class _FeedScreenState extends State<FeedScreen>
     // Mark read immediately and dim in-place.
     if (wasUnread) {
       await _articleRepo.markAsRead(article.id!);
-      SessionReadTracker.instance.add(article.id!);
 
       if (mounted) {
         setState(() {
-          _articles = [
+          _setArticles([
             for (final a in _articles)
               a.id == article.id ? a.copyWith(isRead: true) : a,
-          ];
+          ]);
           _counts = _counts.applyRead(_folderOf(article));
         });
         AppBadgePlus.updateBadge(_counts.all);
@@ -654,15 +788,14 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
     await _articleRepo.markAsRead(article.id!);
-    SessionReadTracker.instance.add(article.id!);
 
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
-      _articles = [
+      _setArticles([
         for (final a in _articles)
           a.id == article.id ? a.copyWith(isRead: true) : a,
-      ];
+      ]);
       _counts = _counts.applyRead(_folderOf(article));
     });
     AppBadgePlus.updateBadge(_counts.all);
@@ -671,14 +804,13 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markAsUnread(article.id!);
-    SessionReadTracker.instance.remove(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
-      _articles = [
+      _setArticles([
         for (final a in _articles)
           a.id == article.id ? a.copyWith(isRead: false) : a,
-      ];
+      ]);
       _counts = _counts.applyUnread(_folderOf(article));
     });
     AppBadgePlus.updateBadge(_counts.all);
@@ -689,18 +821,53 @@ class _FeedScreenState extends State<FeedScreen>
     final nowSaved = !article.isSaved;
     await _articleRepo.setSaved(article.id!, saved: nowSaved);
     HapticFeedback.lightImpact();
-    if (!mounted) return;
-    setState(() {
-      _articles = [
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isSaved: nowSaved) : a,
-      ];
-    });
+    if (mounted) {
+      setState(() {
+        _setArticles([
+          for (final a in _articles)
+            a.id == article.id ? a.copyWith(isSaved: nowSaved) : a,
+        ]);
+      });
+    }
+    // After the local patch, so this screen's own listener sees a list that
+    // already agrees and does nothing. Bookmarks is kept alive and loads only
+    // in initState, so without this the bookmark doesn't appear there until a
+    // pull-to-refresh.
+    SavedStateNotifier.instance
+        .articleSavedStateChanged(article.id!, saved: nowSaved);
   }
 
   // ── Mark all read ──────────────────────────────────────────────────────────
 
+  /// Confirms before running: this cannot be undone, and [_markAllReadBody]
+  /// follows the write with a cleanup pass that deletes read articles
+  /// outright. Both entry points — the FAB and the folder tab bar — call
+  /// this, so the guard covers both.
   Future<void> _markAllRead() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.markAllReadWarningTitle),
+        content: Text(l10n.markAllReadWarningBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+              foregroundColor: Theme.of(ctx).colorScheme.onError,
+            ),
+            child: Text(l10n.markAllReadConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
     HapticFeedback.mediumImpact();
     await LoadingController.instance.run(_markAllReadBody, label: 'Marking all read');
   }
@@ -710,9 +877,10 @@ class _FeedScreenState extends State<FeedScreen>
     final cleanupDays = settings.cleanupAgeDays;
 
     if (_selectedTabIndex == 0) {
-      // All tab: mark all read, clear tracker, run cleanup, cold-start fetch.
-      await _articleRepo.markAllAsRead();
-      SessionReadTracker.instance.clear();
+      // All tab: mark all read, run cleanup, cold-start fetch. The dismissal
+      // sentinel — pressing this button means "clear these out", so they must
+      // not come back when Show read is switched on.
+      await _articleRepo.markAllAsRead(readAt: kDismissedReadAt);
       await _articleRepo.runCleanup(days: cleanupDays);
 
       if (!mounted) return;
@@ -733,18 +901,12 @@ class _FeedScreenState extends State<FeedScreen>
       // Category tab: mark read, forget this tab's IDs, cleanup, refresh folder.
       final folderId = _folders[_selectedTabIndex - 1].id!;
 
-      // Exactly the articles this tab was showing when the action ran. The
-      // session set is global now, so clearing it wholesale would also forget
-      // articles read in other tabs — un-dimming them and then hiding them on
-      // the next query, in lists the user never touched.
-      final dismissedIds = [
-        for (final a in _articles) if (a.id != null) a.id!,
-      ];
-
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
-      await _articleRepo.markAllAsReadByFolder(folderId);
-      SessionReadTracker.instance.removeAll(dismissedIds);
+      await _articleRepo.markAllAsReadByFolder(
+        folderId,
+        readAt: kDismissedReadAt,
+      );
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       // Refresh feeds in this folder — one pass, not one call per feed.
@@ -765,10 +927,10 @@ class _FeedScreenState extends State<FeedScreen>
       final freshArticles = await _articlesForTab(_selectedTabIndex, _folders);
       if (!mounted) return;
       setState(() {
-        _articles = freshArticles;
-        _syncCardKeys(freshArticles);
+        _setArticles(freshArticles);
         _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       });
+      _resetScrollToTop();
       AppBadgePlus.updateBadge(allCount);
       final l10n = AppLocalizations.of(context)!;
       // The mark-all-read itself succeeded either way; say so, but don't
@@ -882,7 +1044,7 @@ class _FeedScreenState extends State<FeedScreen>
                       heroTag: 'refresh',
                       onPressed: _refreshing
                           ? null
-                          : () => _refreshCurrentTab(dropReadArticles: true),
+                          : () => _refreshCurrentTab(),
                       tooltip: l10n.refresh,
                       mini: true,
                       child: _refreshing
@@ -995,29 +1157,57 @@ class _FeedScreenState extends State<FeedScreen>
     return RefreshIndicator(
       onRefresh: _refreshCurrentTab,
       backgroundColor: Theme.of(context).colorScheme.surface,
-      child: Scrollbar(
-        controller: _scrollController,
-        thumbVisibility: true,
-        child: ListView.separated(
+      child: NotificationListener<UserScrollNotification>(
+        // A non-idle direction means a person moved the list — touch, wheel
+        // or trackpad. `jumpTo` goes idle first, so it can never open the
+        // gate. Returns false so the notification keeps bubbling: the
+        // RefreshIndicator above is an ancestor and depends on seeing it.
+        onNotification: (notification) {
+          if (notification.direction != ScrollDirection.idle) {
+            _markReadGate.open();
+          }
+          return false;
+        },
+        child: Scrollbar(
           controller: _scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          cacheExtent: 500,
-          itemCount: _articles.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, indent: 16, endIndent: 16),
-          itemBuilder: (context, i) {
-            final article = _articles[i];
-            final cardKey = article.id != null ? _cardKeys[article.id!] : null;
-            return ArticleCard(
-              key: cardKey,
-              article: article,
-              onTap: () => _openArticle(article),
-              onMarkRead: () => _markRead(article),
-              onMarkUnread: () => _markUnread(article),
-              onShare: () => _shareService.shareArticle(article),
-              onBookmark: () => _toggleSaved(article),
-            );
-          },
+          thumbVisibility: true,
+          child: ListView.builder(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            cacheExtent: 500,
+            itemCount: _rows.length,
+            itemBuilder: (context, i) {
+              final row = _rows[i];
+              if (row is DayHeaderRow) return DayHeader(row: row);
+
+              final article = (row as ArticleRow).article;
+              // The separator that ListView.separated used to draw, minus the
+              // ones that would have landed either side of a header.
+              final needsDivider = i > 0 && _rows[i - 1] is ArticleRow;
+              return KeyedSubtree(
+                // The key moves from the card to this wrapper so the height
+                // _onScroll measures includes the divider above it. On a
+                // fifty-card list, a per-card 1px error is a whole card's
+                // worth of drift by the bottom.
+                key: article.id != null ? _cardKeys[article.id!] : null,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (needsDivider)
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                    ArticleCard(
+                      article: article,
+                      onTap: () => _openArticle(article),
+                      onMarkRead: () => _markRead(article),
+                      onMarkUnread: () => _markUnread(article),
+                      onShare: () => _shareService.shareArticle(article),
+                      onBookmark: () => _toggleSaved(article),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

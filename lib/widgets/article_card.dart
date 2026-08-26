@@ -201,7 +201,15 @@ class ArticleCard extends StatelessWidget {
                   curve: Curves.easeOut,
                   style: (theme.textTheme.bodyMedium ?? const TextStyle())
                       .copyWith(
-                    fontWeight: isRead ? FontWeight.w400 : FontWeight.w600,
+                    // Constant by design. This used to drop to w400 when
+                    // read. Lighter glyphs are narrower, so a title sitting
+                    // near a wrap boundary reflowed from three lines to two
+                    // the moment mark-read-on-scroll fired: the card lost a
+                    // line of height and every card below it slid up under
+                    // the user's eyes, mid-scroll, with no gesture to explain
+                    // it. Read state is now carried by colour and opacity
+                    // alone — neither can change layout.
+                    fontWeight: FontWeight.w600,
                     color: theme.colorScheme.onSurface
                         .withValues(alpha: isRead ? 0.45 : 1.0),
                     height: 1.35,

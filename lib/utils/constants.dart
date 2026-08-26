@@ -15,3 +15,17 @@ const int kFetchDayLimit = 7;
 /// nothing has been stored, and exists so the default lives in one place
 /// rather than being repeated as a literal in the settings model.
 const int kFetchArticleLimit = 100;
+
+/// How long a read article stays restorable after being read. Switching
+/// "Show read" back on brings back anything read inside this window; anything
+/// older stays hidden even though the row is still in the database (deletion
+/// is owned by `cleanup_age_days`, which is a different rule entirely).
+const int kShowReadBufferHours = 48;
+
+/// Sentinel `read_at` meaning "read and deliberately dismissed".
+///
+/// Epoch, so it is outside every possible buffer window and the article never
+/// returns when "Show read" is switched on. Written by *Mark all as read*,
+/// which is an act of dismissal rather than an act of reading. The end-of-feed
+/// dwell timer deliberately does NOT use this — see the dwell-timer callers.
+const int kDismissedReadAt = 0;

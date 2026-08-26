@@ -136,7 +136,7 @@ void main() {
         _art(2, published: _recent),
         _art(3, published: _recent),
       ]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final db = await AppDatabase.instance.database;
       final rows = await db.query(TableNames.articles);
       expect(rows.every((r) => r['is_read'] == 1), isTrue);
@@ -156,7 +156,7 @@ void main() {
       final f1 = (await db.query(TableNames.folders,
               where: 'name = ?', whereArgs: ['Cat1'], limit: 1))
           .first['id'] as int;
-      await _repo.markAllAsReadByFolder(f1);
+      await _repo.markAllAsReadByFolder(f1, readAt: kDismissedReadAt);
 
       expect((await _row('guid-1'))!['is_read'], 1);
       expect((await _row('guid-2'))!['is_read'], 0);
@@ -170,7 +170,7 @@ void main() {
       final f2 = (await db.query(TableNames.folders,
               where: 'name = ?', whereArgs: ['Cat2'], limit: 1))
           .first['id'] as int;
-      await _repo.markAllAsReadByFolder(f2);
+      await _repo.markAllAsReadByFolder(f2, readAt: kDismissedReadAt);
 
       expect((await _row('guid-1'))!['is_read'], 0);
       expect((await _row('guid-2'))!['is_read'], 1);
@@ -184,7 +184,7 @@ void main() {
     test('deletes read articles where published_at is older than 7 days',
         () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       await _repo.runCleanup();
       expect(await _count(), 0);
     });
@@ -192,7 +192,7 @@ void main() {
     test('does not delete read articles where published_at is within 7 days',
         () async {
       await _repo.insertArticles(1, [_art(1, published: _recent)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       await _repo.runCleanup();
       expect(await _count(), 1);
     });
@@ -210,7 +210,7 @@ void main() {
         _art(2, published: _old),
         _art(3, published: _recent),
       ]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup();
       expect(deleted, 2);
     });
@@ -222,7 +222,7 @@ void main() {
       final id =
           (await db.query(TableNames.articles, limit: 1)).first['id'] as int;
       await _repo.setSaved(id, saved: true);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       await _repo.runCleanup();
       expect(await _count(), 1);
     });
@@ -235,7 +235,7 @@ void main() {
     test('deletes only that folder\'s eligible articles', () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       await _repo.insertArticles(2, [_art(2, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       final db = await AppDatabase.instance.database;
       final f1 = (await db.query(TableNames.folders,
@@ -251,7 +251,7 @@ void main() {
     test('does not delete eligible articles in other folders', () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       await _repo.insertArticles(2, [_art(2, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       final db = await AppDatabase.instance.database;
       final f1 = (await db.query(TableNames.folders,
@@ -294,7 +294,7 @@ void main() {
     test('articles within 7 days remain in DB as read after combined operation',
         () async {
       await _repo.insertArticles(1, [_art(1, published: _recent)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       await _repo.runCleanup();
       final row = await _row('guid-1');
       expect(row, isNotNull);
@@ -304,7 +304,7 @@ void main() {
     test('articles older than 7 days are gone from DB after combined operation',
         () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       await _repo.runCleanup();
       expect(await _row('guid-1'), isNull);
     });
@@ -322,7 +322,7 @@ void main() {
           .subtract(const Duration(days: kFetchDayLimit))
           .add(const Duration(seconds: 5));
       await _repo.insertArticles(1, [_art(1, published: justWithin)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       // runCleanup deletes where published_at < cutoff (strictly less than).
       // justWithin is >= cutoff, so it is NOT deleted.
       final deleted = await _repo.runCleanup();

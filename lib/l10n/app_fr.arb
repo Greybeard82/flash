@@ -176,6 +176,11 @@
   "quickSettingsTooltip": "Réglages rapides",
   "articleOrder": "Ordre des articles",
   "newestFirst": "Récents",
-  "oldestFirst": "Anciens",
-  "apply": "Appliquer"
+  "oldestFirst": "Anciens"
+,
+  "apply": "Appliquer",
+  "showRead": "Afficher les lus",
+  "showReadSubtitle": "Les articles lus restent visibles pendant 48 heures",
+  "dayToday": "Aujourd'hui",
+  "dayYesterday": "Hier"
 }

@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/folder.dart';
+import '../services/feeds_changed_notifier.dart';
 
 class FolderRepository {
   Future<Database> get _db async => AppDatabase.instance.database;
@@ -30,6 +31,7 @@ class FolderRepository {
   Future<Folder> insert(Folder folder) async {
     final db = await _db;
     final id = await db.insert(TableNames.folders, folder.toMap());
+    FeedsChangedNotifier.instance.structureChanged();
     return folder.copyWith(id: id);
   }
 
@@ -41,6 +43,7 @@ class FolderRepository {
       where: 'id = ?',
       whereArgs: [folder.id],
     );
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<void> delete(int id) async {
@@ -50,6 +53,7 @@ class FolderRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<void> reorder(List<Folder> folders) async {
@@ -64,6 +68,7 @@ class FolderRepository {
       );
     }
     await batch.commit(noResult: true);
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<int> getNextPosition() async {

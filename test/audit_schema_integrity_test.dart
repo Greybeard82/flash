@@ -19,7 +19,7 @@ import 'package:flash/repositories/settings_repository.dart';
 
 /// Kept in sync by hand with the `version:` passed to openDatabase in
 /// database.dart. Bump both together when adding a migration.
-const int kExpectedSchemaVersion = 10;
+const int kExpectedSchemaVersion = 11;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();

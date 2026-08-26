@@ -42,11 +42,14 @@ class ArticleRepository {
 
   // ── Read queries ───────────────────────────────────────────────────────────
 
-  /// Unblocked articles across all folders that are either unread OR in
-  /// [sessionReadIds] (read this session). Newest first.
-  Future<List<Article>> getAllArticles({Set<int> sessionReadIds = const {}}) async {
+  /// Unblocked articles across all folders that are visible under the current
+  /// read-visibility rule. Newest first.
+  ///
+  /// [readSinceMs] null hides every read article. Otherwise an article read
+  /// at or after that instant stays visible. See [kShowReadBufferHours].
+  Future<List<Article>> getAllArticles({int? readSinceMs}) async {
     final db = await _db;
-    final (where, args) = _unionClause(null, sessionReadIds);
+    final (where, args) = _visibilityClause(null, readSinceMs);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
@@ -57,14 +60,13 @@ class ArticleRepository {
     return rows.map(Article.fromMap).toList();
   }
 
-  /// Unblocked articles for a specific folder that are either unread OR in
-  /// [sessionReadIds] (read this session). Newest first.
+  /// As [getAllArticles], scoped to one folder.
   Future<List<Article>> getArticlesByFolder(
     int folderId, {
-    Set<int> sessionReadIds = const {},
+    int? readSinceMs,
   }) async {
     final db = await _db;
-    final (where, args) = _unionClause(folderId, sessionReadIds);
+    final (where, args) = _visibilityClause(folderId, readSinceMs);
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
@@ -75,9 +77,15 @@ class ArticleRepository {
     return rows.map(Article.fromMap).toList();
   }
 
-  /// Builds the WHERE clause and args for the union query.
-  /// Scope: all folders when [folderId] is null; a specific folder otherwise.
-  (String, List<Object?>) _unionClause(int? folderId, Set<int> sessionReadIds) {
+  /// WHERE clause and args for the visible set.
+  ///
+  /// Fixed arity, unlike the session-id union this replaces, which emitted one
+  /// `?` per article read since launch and would eventually have run into
+  /// SQLite's variable limit on a long session.
+  ///
+  /// A NULL `read_at` never satisfies `>=`, so articles read before the v11
+  /// migration are treated as outside the window. Intended.
+  (String, List<Object?>) _visibilityClause(int? folderId, int? readSinceMs) {
     final buf = StringBuffer();
     final args = <Object?>[];
     if (folderId != null) {
@@ -85,11 +93,9 @@ class ArticleRepository {
       args.add(folderId);
     }
     buf.write('a.is_blocked = 0 AND (a.is_read = 0');
-    if (sessionReadIds.isNotEmpty) {
-      buf.write(
-        ' OR a.id IN (${List.filled(sessionReadIds.length, '?').join(',')})',
-      );
-      args.addAll(sessionReadIds);
+    if (readSinceMs != null) {
+      buf.write(' OR a.read_at >= ?');
+      args.add(readSinceMs);
     }
     buf.write(')');
     return (buf.toString(), args);
@@ -176,59 +182,69 @@ class ArticleRepository {
 
   // ── Mark read / unread ─────────────────────────────────────────────────────
 
-  Future<void> markAsRead(int articleId) async {
+  /// [readAt] defaults to now. `COALESCE` so re-marking an already-read
+  /// article keeps its original read time rather than silently extending its
+  /// stay in the show-read window.
+  Future<void> markAsRead(int articleId, {int? readAt}) async {
     final db = await _db;
-    await db.update(
-      TableNames.articles,
-      {'is_read': 1},
-      where: 'id = ?',
-      whereArgs: [articleId],
-    );
+    final ts = readAt ?? DateTime.now().millisecondsSinceEpoch;
+    await db.rawUpdate('''
+      UPDATE ${TableNames.articles}
+      SET is_read = 1, read_at = COALESCE(read_at, ?)
+      WHERE id = ?
+    ''', [ts, articleId]);
   }
 
   Future<void> markAsUnread(int articleId) async {
     final db = await _db;
-    await db.update(
-      TableNames.articles,
-      {'is_read': 0},
-      where: 'id = ?',
-      whereArgs: [articleId],
-    );
+    await db.rawUpdate('''
+      UPDATE ${TableNames.articles}
+      SET is_read = 0, read_at = NULL
+      WHERE id = ?
+    ''', [articleId]);
   }
 
-  Future<void> markManyRead(List<int> articleIds) async {
+  Future<void> markManyRead(List<int> articleIds, {int? readAt}) async {
     if (articleIds.isEmpty) return;
     final db = await _db;
+    final ts = readAt ?? DateTime.now().millisecondsSinceEpoch;
     final batch = db.batch();
     for (final id in articleIds) {
-      batch.update(
-        TableNames.articles,
-        {'is_read': 1},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      batch.rawUpdate('''
+        UPDATE ${TableNames.articles}
+        SET is_read = 1, read_at = COALESCE(read_at, ?)
+        WHERE id = ?
+      ''', [ts, id]);
     }
     await batch.commit(noResult: true);
   }
 
-  Future<void> markAllAsRead() async {
+  /// [readAt] is required and overwrites any existing value, because the two
+  /// callers mean different things by it. *Mark all as read* passes
+  /// [kDismissedReadAt] — a dismissal, gone for good. The end-of-feed dwell
+  /// timer passes a real timestamp — passive reading, restorable like any
+  /// other. Defaulting this would silently pick one of those for the other.
+  Future<void> markAllAsRead({required int readAt}) async {
     final db = await _db;
     await db.update(
       TableNames.articles,
-      {'is_read': 1},
+      {'is_read': 1, 'read_at': readAt},
       where: 'is_blocked = 0',
     );
   }
 
-  Future<void> markAllAsReadByFolder(int folderId) async {
+  Future<void> markAllAsReadByFolder(
+    int folderId, {
+    required int readAt,
+  }) async {
     final db = await _db;
     await db.rawUpdate('''
       UPDATE ${TableNames.articles}
-      SET is_read = 1
+      SET is_read = 1, read_at = ?
       WHERE feed_id IN (
         SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
       ) AND is_blocked = 0
-    ''', [folderId]);
+    ''', [readAt, folderId]);
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

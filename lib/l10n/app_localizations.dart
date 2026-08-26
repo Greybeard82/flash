@@ -1087,6 +1087,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Apply'**
   String get apply;
+
+  /// Label for the switch that keeps read articles in the list.
+  ///
+  /// In en, this message translates to:
+  /// **'Show read'**
+  String get showRead;
+
+  /// Explains the 48-hour restore window under the Show read switch.
+  ///
+  /// In en, this message translates to:
+  /// **'Read articles stay visible for 48 hours'**
+  String get showReadSubtitle;
+
+  /// Day divider heading for articles published today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get dayToday;
+
+  /// Day divider heading for articles published yesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get dayYesterday;
 }
 
 class _AppLocalizationsDelegate

@@ -1,28 +1,32 @@
 // Feed behavior unit tests.
 //
 // These tests cover the pure-logic list mutations that the feed screen applies
-// to its in-memory article list, plus the union-query model that drives what
+// to its in-memory article list, plus the visibility model that drives what
 // the screen shows.
 //
 // Covered behaviors:
-//  1. Union query: unread OR session-read IDs — not unread-only
+//  1. Visibility query: unread OR read inside the show-read window
 //  2. Opening an article dims it in-place (isRead = true), scroll restored
 //  3. Scroll-to-read: DB write immediate, UI dims in-place after debounce
 //  4. Swipe (either direction) marks article as read and dims in-place
 //  5. Articles with isRead=true are rendered at reduced opacity but stay in list
 //  6. Tab switch restores that tab's saved scroll offset (or top if none)
 //  7. Read state is global: an article read in any tab stays dimmed in place in every tab
-//  8. Mark-unread removes from session tracker and restores full weight
+//  8. Mark-unread clears read_at and restores full weight
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/models/article.dart';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+const int _now = 1750000000000;
+const int _windowStart = _now - 48 * 60 * 60 * 1000;
+
 Article _article({
   required int id,
   bool isRead = false,
   int feedId = 1,
+  int? readAt,
 }) =>
     Article(
       id: id,
@@ -33,13 +37,20 @@ Article _article({
       description: '',
       fetchedAt: 0,
       isRead: isRead,
+      // A read article with no explicit stamp is treated as read "now",
+      // which is what markAsRead does.
+      readAt: readAt ?? (isRead ? _now : null),
       isBlocked: false,
       isSaved: false,
     );
 
-// Simulates the union query: unread OR id ∈ sessionReadIds.
-List<Article> _unionQuery(List<Article> list, Set<int> sessionReadIds) =>
-    list.where((a) => !a.isRead || sessionReadIds.contains(a.id)).toList();
+// Simulates the visibility query: unread, or read at/after the cutoff.
+// A null cutoff means read articles are hidden entirely.
+List<Article> _visible(List<Article> list, int? readSinceMs) => list
+    .where((a) =>
+        !a.isRead ||
+        (readSinceMs != null && a.readAt != null && a.readAt! >= readSinceMs))
+    .toList();
 
 // Simulates _openArticle / _markRead: dims the tapped article in-place.
 List<Article> _dimArticle(List<Article> list, int articleId) => [
@@ -66,42 +77,63 @@ List<Article> _dimUnread(List<Article> list, int articleId) => [
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
-  group('Union query (unread OR session-read)', () {
-    test('empty tracker returns only unread articles', () {
+  group('Visibility query (unread OR recently read)', () {
+    test('Show read off returns only unread articles', () {
       final all = [
         _article(id: 1, isRead: false),
         _article(id: 2, isRead: true),
         _article(id: 3, isRead: false),
         _article(id: 4, isRead: true),
       ];
-      final result = _unionQuery(all, {});
+      final result = _visible(all, null);
       expect(result.length, 2);
       expect(result.every((a) => !a.isRead), isTrue);
     });
 
-    test('tracker adds read articles back into view', () {
+    test('the window brings recently read articles back into view', () {
       final all = [
         _article(id: 1, isRead: false),
         _article(id: 2, isRead: true),
         _article(id: 3, isRead: false),
       ];
-      final result = _unionQuery(all, {2});
+      final result = _visible(all, _windowStart);
       expect(result.length, 3);
       expect(result.any((a) => a.id == 2 && a.isRead), isTrue);
     });
 
-    test('cold open: empty tracker, all read in DB → empty list', () {
+    test('articles read before the window stay hidden', () {
+      final all = [
+        _article(id: 1, isRead: false),
+        _article(id: 2, isRead: true, readAt: _windowStart - 1),
+      ];
+      final result = _visible(all, _windowStart);
+      expect(result.map((a) => a.id), [1]);
+    });
+
+    test('cold open: Show read off, all read in DB → empty list', () {
       final all = [
         _article(id: 1, isRead: true),
         _article(id: 2, isRead: true),
       ];
-      expect(_unionQuery(all, {}), isEmpty);
+      expect(_visible(all, null), isEmpty);
     });
 
-    test('tracker with IDs not in the list is safe (no crash, no phantom rows)', () {
-      final all = [_article(id: 1), _article(id: 2)];
-      final result = _unionQuery(all, {99, 100});
-      expect(result.length, 2);
+    test('a read row with no timestamp (pre-v11) is never restored', () {
+      // Built directly rather than through _article: that helper stamps a
+      // read article with _now, and `??` cannot tell "omitted" from an
+      // explicit null. A migrated row genuinely has read_at NULL.
+      final legacy = Article(
+        id: 1,
+        feedId: 1,
+        guid: 'guid-1',
+        title: 'Article 1',
+        url: 'https://example.com/1',
+        fetchedAt: 0,
+        isRead: true,
+      );
+      expect(legacy.readAt, isNull);
+      expect(_visible([legacy], _windowStart), isEmpty,
+          reason: 'NULL never satisfies >=');
     });
   });
 
@@ -184,7 +216,7 @@ void main() {
     });
   });
 
-  group('Mark-unread removes from tracker and restores full weight', () {
+  group('Mark-unread clears read_at and restores full weight', () {
     test('un-dimming restores isRead=false', () {
       final articles = [_article(id: 1, isRead: true), _article(id: 2)];
       final result = _dimUnread(articles, 1);
@@ -192,40 +224,46 @@ void main() {
       expect(result.length, 2);
     });
 
-    test('tracker removal: ID no longer in session set', () {
-      final tracker = <int>{1, 2, 3};
-      tracker.remove(2);
-      expect(tracker, containsAll([1, 3]));
-      expect(tracker, isNot(contains(2)));
+    test('mark-unread produces an article with no read_at', () {
+      final read = _article(id: 2, isRead: true);
+      expect(read.readAt, isNotNull);
+
+      final unread = read.copyWith(isRead: false, clearReadAt: true);
+      expect(unread.readAt, isNull);
+      // Excluded by the read half of the query under every cutoff — and
+      // included by the unread half, which is the point.
+      expect(_visible([unread], _windowStart).single.id, 2);
+      expect(_visible([unread], null).single.id, 2);
     });
 
-    test('after mark-unread, union query re-hides the article on next tab load', () {
-      final articles = [_article(id: 1, isRead: true), _article(id: 2)];
-      // Tracker no longer contains id 1 (was removed by _markUnread).
-      final result = _unionQuery(articles, {});
-      // Article 1 is read but not in tracker → excluded.
-      expect(result.any((a) => a.id == 1), isFalse);
-      expect(result.any((a) => a.id == 2), isTrue);
+    test('after mark-unread the article is visible as unread, not as read',
+        () {
+      final articles = [
+        _article(id: 1, isRead: true)
+            .copyWith(isRead: false, clearReadAt: true),
+        _article(id: 2),
+      ];
+      final result = _visible(articles, null);
+      expect(result.map((a) => a.id), [1, 2]);
+      expect(result.every((a) => !a.isRead), isTrue);
     });
   });
 
-  group('Read state is global across tabs (session tracker)', () {
+  group('Read state is global across tabs', () {
     test('article read in the All tab stays visible, dimmed, in a folder tab',
         () {
-      // Simulate: All tab loaded, user reads article 5. The session set is
-      // shared, so every tab's union query sees it.
+      // Simulate: All tab loaded, user reads article 5. read_at lives on the
+      // row itself, so every tab's visibility query sees it.
       final allTabArticles = [_article(id: 5, feedId: 2), _article(id: 6, feedId: 1)];
-      final tracker = <int>{};
 
       final updatedAll = _dimArticle(allTabArticles, 5);
-      tracker.add(5);
 
-      // Folder tab re-runs its union query with the same shared set.
+      // Folder tab re-runs its visibility query against the same rows.
       final folderTabArticles = [
         _article(id: 5, feedId: 2, isRead: true),
         _article(id: 7, feedId: 2),
       ];
-      final folderResult = _unionQuery(folderTabArticles, tracker);
+      final folderResult = _visible(folderTabArticles, _windowStart);
 
       // Article 5 was read in the All tab — still present here, dimmed, not
       // vanished out from under the user. This is the Palabre model, and
@@ -236,56 +274,50 @@ void main() {
 
       // And the All tab still shows it dimmed too.
       expect(updatedAll.firstWhere((a) => a.id == 5).isRead, isTrue);
-      expect(tracker, contains(5));
     });
 
     test('reading in a folder tab equally keeps it visible in All', () {
-      final tracker = <int>{};
-      tracker.add(7); // read while viewing a category
-
       final allTabArticles = [
-        _article(id: 7, feedId: 2, isRead: true),
+        _article(id: 7, feedId: 2, isRead: true), // read while in a category
         _article(id: 8, feedId: 1),
       ];
-      final result = _unionQuery(allTabArticles, tracker);
+      final result = _visible(allTabArticles, _windowStart);
 
       expect(result.any((a) => a.id == 7), isTrue,
           reason: 'the rule is symmetric — neither direction hides anything');
       expect(result.length, 2);
     });
 
-    test('mark-all-read (All) + clear tracker → reload shows unread-only', () {
-      final beforeClear = [
+    test('mark-all-read stamps the dismissal sentinel → reload shows nothing',
+        () {
+      final before = [
         _article(id: 1, isRead: true),
         _article(id: 2, isRead: false),
       ];
-      final tracker = <int>{1};
+      // Before: article 1 is recently read, so it is still on screen.
+      expect(_visible(before, _windowStart).length, 2);
 
-      // Before clear: article 1 still visible via tracker.
-      expect(_unionQuery(beforeClear, tracker).length, 2);
-
-      // After markAllAsRead + clear tracker: unread-only.
-      tracker.clear();
+      // markAllAsRead(readAt: kDismissedReadAt) writes epoch, which is
+      // outside every window.
+      const dismissed = 0;
       final reloaded = [
-        _article(id: 1, isRead: true),
-        _article(id: 2, isRead: true), // now also marked read
+        _article(id: 1, isRead: true, readAt: dismissed),
+        _article(id: 2, isRead: true, readAt: dismissed),
       ];
-      expect(_unionQuery(reloaded, tracker), isEmpty);
+      expect(_visible(reloaded, _windowStart), isEmpty,
+          reason: 'pressing Mark all as read means clear these out — they '
+              'must not come back when Show read is switched on');
     });
 
-    test('mark-all-read (Category) forgets only the IDs that tab was showing',
-        () {
-      // With one shared set, a category mark-all-read must remove exactly the
-      // articles visible in that tab — clearing wholesale would also forget
-      // articles read in other tabs and hide them there on the next query.
-      final tracker = <int>{10, 20}; // 10 shown in this tab, 20 read elsewhere
-      final visibleInThisTab = [10];
-
-      tracker.removeAll(visibleInThisTab);
-
-      expect(tracker, isNot(contains(10)));
-      expect(tracker, contains(20),
-          reason: 'an article read in another tab must survive this action');
+    test('the dwell timer stamps a real time, so those stay restorable', () {
+      // Same bulk write, different intent: reaching the end of a feed is
+      // passive reading, so the articles remain inside the window.
+      final reloaded = [
+        _article(id: 1, isRead: true, readAt: _now),
+        _article(id: 2, isRead: true, readAt: _now),
+      ];
+      expect(_visible(reloaded, _windowStart).length, 2);
+      expect(_visible(reloaded, null), isEmpty);
     });
   });
 

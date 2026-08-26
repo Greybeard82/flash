@@ -50,6 +50,14 @@ class AppSettings {
   final int cleanupAgeDays; // [2, 20]
   final bool newspaperMode;
 
+  /// Whether articles that have been read stay in the list.
+  ///
+  /// Off hides every read article from every tab — read state is global, so
+  /// an article read in All is equally gone from its own category. Read
+  /// articles are not deleted: anything read within [kShowReadBufferHours]
+  /// comes back the moment this is switched on again.
+  final bool showRead;
+
   const AppSettings({
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
@@ -65,6 +73,7 @@ class AppSettings {
     this.onboardingComplete = false,
     this.cleanupAgeDays = 7,
     this.newspaperMode = false,
+    this.showRead = true,
   });
 
   /// Snaps a stored delay onto the offered options, so a value written by an
@@ -106,6 +115,7 @@ class AppSettings {
       cleanupAgeDays:
           (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(2, 20),
       newspaperMode: (map['newspaper_mode'] ?? 'false') == 'true',
+      showRead: (map['show_read'] ?? 'true') == 'true',
     );
   }
 
@@ -124,6 +134,7 @@ class AppSettings {
     bool? onboardingComplete,
     int? cleanupAgeDays,
     bool? newspaperMode,
+    bool? showRead,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -141,6 +152,7 @@ class AppSettings {
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
       newspaperMode: newspaperMode ?? this.newspaperMode,
+      showRead: showRead ?? this.showRead,
     );
   }
 }

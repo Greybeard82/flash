@@ -564,4 +564,17 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get apply => 'Applica';
+
+  @override
+  String get showRead => 'Mostra letti';
+
+  @override
+  String get showReadSubtitle =>
+      'Gli articoli letti restano visibili per 48 ore';
+
+  @override
+  String get dayToday => 'Oggi';
+
+  @override
+  String get dayYesterday => 'Ieri';
 }

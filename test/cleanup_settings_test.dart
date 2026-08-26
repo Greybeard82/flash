@@ -62,7 +62,7 @@ void main() {
       const window = 10;
       final old = _now.subtract(const Duration(days: window + 1));
       await _repo.insertArticles(1, [_art(1, published: old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: window);
       expect(deleted, 1);
       expect(await _count(), 0);
@@ -72,7 +72,7 @@ void main() {
       const window = 10;
       final recent = _now.subtract(const Duration(days: window - 1));
       await _repo.insertArticles(1, [_art(1, published: recent)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: window);
       expect(deleted, 0);
       expect(await _count(), 1);
@@ -95,7 +95,7 @@ void main() {
       final db = await AppDatabase.instance.database;
       final id = (await db.query(TableNames.articles, limit: 1)).first['id'] as int;
       await _repo.setSaved(id, saved: true);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: window);
       expect(deleted, 0);
       expect(await _count(), 1);
@@ -108,7 +108,7 @@ void main() {
           .subtract(const Duration(days: window))
           .add(const Duration(seconds: 5));
       await _repo.insertArticles(1, [_art(1, published: boundary)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: window);
       expect(deleted, 0);
     });
@@ -117,7 +117,7 @@ void main() {
       // Article 4 days old — older than 2 but within 5 — must NOT be deleted.
       final fourDaysOld = _now.subtract(const Duration(days: 4));
       await _repo.insertArticles(1, [_art(1, published: fourDaysOld)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: 2); // clamped to 5
       expect(deleted, 0);
     });
@@ -126,7 +126,7 @@ void main() {
       // Article 21 days old — older than 20 — must be deleted even with days=99.
       final twentyOneDaysOld = _now.subtract(const Duration(days: 21));
       await _repo.insertArticles(1, [_art(1, published: twentyOneDaysOld)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: 99); // clamped to 20
       expect(deleted, 1);
     });
@@ -138,7 +138,7 @@ void main() {
         _art(1, published: sixDaysOld),
         _art(2, published: fourDaysOld),
       ]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deleted = await _repo.runCleanup(days: 5);
       expect(deleted, 1);
       expect(await _count(), 1);
@@ -147,7 +147,7 @@ void main() {
     test('window=20 keeps articles that window=7 would delete', () async {
       final tenDaysOld = _now.subtract(const Duration(days: 10));
       await _repo.insertArticles(1, [_art(1, published: tenDaysOld)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       // Default window (7) would delete it.
       final deletedDefault = await _repo.runCleanup(days: kFetchDayLimit);
@@ -155,7 +155,7 @@ void main() {
 
       // Re-insert and try with window=20.
       await _repo.insertArticles(1, [_art(1, published: tenDaysOld)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
       final deletedWide = await _repo.runCleanup(days: 20);
       expect(deletedWide, 0);
     });

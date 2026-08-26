@@ -6,7 +6,7 @@ import '../models/article.dart';
 import '../repositories/article_repository.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
-import '../services/session_read_tracker.dart';
+import '../services/saved_state_notifier.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 
@@ -27,6 +27,28 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   @override
   void initState() {
     super.initState();
+    // This screen is kept alive in the IndexedStack, so initState runs once
+    // per app launch. Without this listener a bookmark made anywhere else
+    // stayed invisible here until a pull-to-refresh or a restart.
+    SavedStateNotifier.instance.addListener(_onSavedStateChanged);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    SavedStateNotifier.instance.removeListener(_onSavedStateChanged);
+    super.dispose();
+  }
+
+  /// Membership of this list is exactly the saved flag, so a change to it
+  /// means a reload — unless the list already reflects the new value, which
+  /// is the case when the change came from this screen's own [_toggleSaved].
+  void _onSavedStateChanged() {
+    if (!mounted) return;
+    final id = SavedStateNotifier.instance.articleId;
+    if (id == null) return;
+    final present = _articles.any((a) => a.id == id);
+    if (present == SavedStateNotifier.instance.saved) return;
     _load();
   }
 
@@ -68,6 +90,11 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       if (mounted) {
         setState(() => _articles.removeWhere((a) => a.id == article.id));
       }
+      // After the local removal, so this screen's own listener sees a list
+      // that already agrees. FeedScreen may be holding the same article and
+      // needs the flag cleared for its radial menu.
+      SavedStateNotifier.instance
+          .articleSavedStateChanged(article.id!, saved: false);
     }, label: 'Removing bookmark');
   }
 
@@ -88,10 +115,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Future<void> _markUnread(Article article) async {
     if (article.id == null) return;
     await _articleRepo.markAsUnread(article.id!);
-    // Clear any session-read entry so the article isn't simultaneously
-    // counted unread by the badge and treated as session-read by the list
-    // query — the same thing FeedScreen._markUnread does.
-    SessionReadTracker.instance.remove(article.id!);
+    // markAsUnread clears read_at, so the article leaves the show-read window
+    // as well as the unread count. Ping so the feed's badges re-query.
     ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();
     if (mounted) {

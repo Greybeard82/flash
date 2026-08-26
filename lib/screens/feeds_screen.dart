@@ -450,7 +450,15 @@ class _FolderSection extends StatefulWidget {
 
 class _FolderSectionState extends State<_FolderSection>
     with SingleTickerProviderStateMixin {
-  bool _expanded = true;
+  /// Collapsed until the user says otherwise. Sections are keyed by folder
+  /// id, so this state survives a rebuild but not a remount — which is the
+  /// intended behaviour: entering the Categories screen always shows a tidy
+  /// list of category headers, and expansion is a deliberate act each time.
+  ///
+  /// It defaulted to true, so every newly created folder — and every section
+  /// after any remount — appeared already open. Adding several feeds in a row
+  /// made the screen unfold itself in a way that looked random.
+  bool _expanded = false;
   late final AnimationController _chevronController;
 
   @override
@@ -459,7 +467,7 @@ class _FolderSectionState extends State<_FolderSection>
     _chevronController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
-      value: 1.0, // starts expanded
+      value: 0.0, // starts collapsed, matching _expanded
     );
   }
 

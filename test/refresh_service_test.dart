@@ -77,7 +77,7 @@ void main() {
         () async {
       // Pre-condition: an old read article exists in the DB.
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       // Cold start: cleanup fires first, then new articles are inserted.
       await _simulateColdStart([_art(2, published: _recent)]);
@@ -99,7 +99,7 @@ void main() {
         () async {
       // Insert an old article, mark it read, then cold-start with NO new articles.
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       await _simulateColdStart([]); // fetch returns nothing
 
@@ -114,7 +114,7 @@ void main() {
     test('pull-to-refresh does NOT run the cleanup job', () async {
       // Pre-condition: old read article in DB.
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       // Pull-to-refresh: no cleanup.
       await _simulatePullToRefresh([_art(2, published: _recent)]);
@@ -138,7 +138,7 @@ void main() {
 
     test('background job: cleanup then fetch — same outcome as cold start', () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      await _repo.markAllAsRead();
+      await _repo.markAllAsRead(readAt: kDismissedReadAt);
 
       // Background uses the same cleanup-first pattern as cold start.
       await _simulateColdStart([_art(2, published: _recent)]);

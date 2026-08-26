@@ -293,6 +293,7 @@ class _AppShellState extends State<_AppShell> {
             FeedScreen(
               onNavigateToFeeds: () => _navigateTo(1),
               refreshTrigger: _feedRefreshTrigger,
+              isVisible: _currentIndex == 0,
             ),
             const FeedsScreen(),
             const BookmarksScreen(),

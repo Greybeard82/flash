@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 10,
+      version: 11,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -60,6 +60,7 @@ class AppDatabase {
     await db.execute(SchemaStatements.createArticlesGuidIndex);
     await db.execute(SchemaStatements.createArticlesFeedIdIndex);
     await db.execute(SchemaStatements.createArticlesIsReadIndex);
+    await db.execute(SchemaStatements.createArticlesReadAtIndex);
     await db.execute(SchemaStatements.createArticlesIsBlockedIndex);
     await db.execute(SchemaStatements.createArticlesPublishedAtIndex);
     await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
@@ -146,6 +147,29 @@ class AppDatabase {
         "VALUES ('auto_mark_read_at_bottom_seconds', '5', $now)",
       );
     }
+    if (oldVersion < 11) {
+      // Read visibility moved from an in-memory session set to a persisted
+      // timestamp, so "Show read" can offer a 48-hour restore window that
+      // survives a restart.
+      final cols = await db.rawQuery('PRAGMA table_info(${TableNames.articles})');
+      if (!cols.any((c) => c['name'] == 'read_at')) {
+        await db.execute(
+          'ALTER TABLE ${TableNames.articles} ADD COLUMN read_at INTEGER',
+        );
+      }
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_articles_read_at ON articles(read_at)',
+      );
+      // Articles already read before this migration keep read_at NULL and so
+      // fall outside every buffer window. That is intended: there is no
+      // honest timestamp to give them, and pretending they were read "now"
+      // would dump the entire backlog into the list on first launch.
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) "
+        "VALUES ('show_read', 'true', $now)",
+      );
+    }
   }
 
   /// Runs the real [_onUpgrade] path against the open database as though it
@@ -156,7 +180,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 10);
+    await _onUpgrade(db, fromVersion, 11);
   }
 
   Future<void> close() async {

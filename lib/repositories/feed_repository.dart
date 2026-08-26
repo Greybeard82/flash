@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/feed.dart';
+import '../services/feeds_changed_notifier.dart';
 
 class FeedRepository {
   Future<Database> get _db async => AppDatabase.instance.database;
@@ -53,6 +54,7 @@ class FeedRepository {
   Future<Feed> insert(Feed feed) async {
     final db = await _db;
     final id = await db.insert(TableNames.feeds, feed.toMap());
+    FeedsChangedNotifier.instance.feedAdded();
     return feed.copyWith(id: id);
   }
 
@@ -64,6 +66,7 @@ class FeedRepository {
       where: 'id = ?',
       whereArgs: [feed.id],
     );
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<void> delete(int id) async {
@@ -73,6 +76,7 @@ class FeedRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<void> updateFetchResult({
@@ -132,6 +136,7 @@ class FeedRepository {
       );
     }
     await batch.commit(noResult: true);
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   /// Moves [feed] into [folderId] and renumbers positions for
@@ -161,6 +166,7 @@ class FeedRepository {
       );
     }
     await batch.commit(noResult: true);
+    FeedsChangedNotifier.instance.structureChanged();
   }
 
   Future<int> getUnreadCountForFeed(int feedId) async {

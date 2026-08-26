@@ -220,6 +220,23 @@
   "@daysCount": { "placeholders": { "n": { "type": "int" } } },
   "articleOrder": "Article order",
   "newestFirst": "Newest",
-  "oldestFirst": "Oldest",
-  "apply": "Apply"
+  "oldestFirst": "Oldest"
+,
+  "apply": "Apply",
+  "showRead": "Show read",
+  "@showRead": {
+    "description": "Label for the switch that keeps read articles in the list."
+  },
+  "showReadSubtitle": "Read articles stay visible for 48 hours",
+  "@showReadSubtitle": {
+    "description": "Explains the 48-hour restore window under the Show read switch."
+  },
+  "dayToday": "Today",
+  "@dayToday": {
+    "description": "Day divider heading for articles published today."
+  },
+  "dayYesterday": "Yesterday",
+  "@dayYesterday": {
+    "description": "Day divider heading for articles published yesterday."
+  }
 }

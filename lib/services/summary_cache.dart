@@ -1,6 +1,7 @@
 /// In-memory, session-scoped cache of AI summaries keyed by article URL.
-/// Mirrors [SessionReadTracker]'s pattern: empty on launch, never persisted,
-/// no DB migration.
+/// Session-scoped by design: empty on launch, never persisted, no DB
+/// migration. A summary is cheap to regenerate and tied to a reading session,
+/// so it does not earn a table.
 class SummaryCache {
   static final SummaryCache instance = SummaryCache._();
   SummaryCache._();

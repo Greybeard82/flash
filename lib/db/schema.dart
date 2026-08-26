@@ -54,6 +54,7 @@ class SchemaStatements {
       published_at   INTEGER,
       fetched_at     INTEGER NOT NULL,
       is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+      read_at        INTEGER,
       is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
       is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
       blocked_keyword TEXT
@@ -69,6 +70,10 @@ class SchemaStatements {
   static const String createArticlesIsReadIndex = '''
     CREATE INDEX idx_articles_is_read ON articles(is_read)
   ''';
+  static const String createArticlesReadAtIndex = '''
+    CREATE INDEX idx_articles_read_at ON articles(read_at)
+  ''';
+
   static const String createArticlesIsBlockedIndex = '''
     CREATE INDEX idx_articles_is_blocked ON articles(is_blocked)
   ''';
@@ -142,5 +147,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   // '3' and was removed in the v9 migration.
   {'key': 'cleanup_age_days', 'value': '7'},
   {'key': 'newspaper_mode', 'value': 'false'},
+  {'key': 'show_read', 'value': 'true'},
 ];
 

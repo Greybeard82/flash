@@ -176,6 +176,11 @@
   "quickSettingsTooltip": "Schnelleinstellungen",
   "articleOrder": "Reihenfolge",
   "newestFirst": "Neueste",
-  "oldestFirst": "Älteste",
-  "apply": "Übernehmen"
+  "oldestFirst": "Älteste"
+,
+  "apply": "Übernehmen",
+  "showRead": "Gelesene anzeigen",
+  "showReadSubtitle": "Gelesene Artikel bleiben 48 Stunden sichtbar",
+  "dayToday": "Heute",
+  "dayYesterday": "Gestern"
 }
