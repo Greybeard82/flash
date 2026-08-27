@@ -24,6 +24,19 @@ const int kFetchArticleLimit = 100;
 /// only cost space.
 const int kTombstoneDayLimit = kFetchDayLimit + 1;
 
+/// Master switch for retirement-on-scroll.
+///
+/// DISABLED in pass 07. Scroll retirement was deleting articles that were
+/// still on screen: heights were guessed at 120px for every row the ListView
+/// had disposed, so the computed frontier drifted into the visible region and
+/// the drift grew the further the user scrolled. Programmatic scrolls fired
+/// it too, and it re-entered through its own offset correction.
+///
+/// With this off, marking read on scroll still works and articles still dim;
+/// with Show read off they are retired at the next refresh instead of during
+/// the scroll. Degraded, not broken.
+const bool kEnableScrollRetirement = false;
+
 /// How many articles sit between the top of the viewport and the point at
 /// which an article is retired.
 ///

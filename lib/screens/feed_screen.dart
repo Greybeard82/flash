@@ -730,6 +730,10 @@ class _FeedScreenState extends State<FeedScreen>
   /// land in the same synchronous turn, so the frame the user sees already has
   /// both applied. Nothing moves.
   void _retireScrolledPast() {
+    // DISABLED — pass 07. Scroll retirement was deleting articles still on
+    // screen. Re-enabled at the end of this pass once the three root causes
+    // are fixed and the structural guard makes a recurrence impossible.
+    if (!kEnableScrollRetirement) return;
     if (!_markReadOnScroll || _showRead) return;
     if (!_scrollController.hasClients) return;
     if (_booting || _refreshing || _backgroundFetching) return;
