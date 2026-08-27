@@ -244,6 +244,11 @@ class _FeedScreenState extends State<FeedScreen>
     // The list just changed length substantially; leaving the offset where it
     // was would land the user somewhere arbitrary.
     if (visibilityChanged) _resetScrollToTop();
+    // The counts are windowed by the same setting the list is, so moving the
+    // Article age slider changes both. Without this the list re-queries and
+    // the badge keeps its old number — the two disagreeing again, which is
+    // the whole thing this pass set out to stop.
+    unawaited(_refreshCountsFromDb());
   }
 
   static const _resumePolicy = ResumeRefreshPolicy();
