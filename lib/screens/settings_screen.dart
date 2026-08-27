@@ -9,6 +9,7 @@ import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/drive_backup_service.dart';
+import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
 import '../services/opml_service.dart';
@@ -588,6 +589,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await LoadingController.instance.run(() async {
       await ArticleRepository().clearAllTombstones();
       await RefreshService(_settingsRepo).refreshAll();
+      // The fetch above writes rows; it does not make the feed screen look at
+      // them. Without this the user runs recovery, returns to Flash, and sees
+      // the same empty list they started with — found on device, and it reads
+      // exactly like the action having failed.
+      FeedsChangedNotifier.instance.structureChanged();
     }, label: 'Recovering articles');
 
     if (mounted) {
