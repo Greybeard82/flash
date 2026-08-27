@@ -246,5 +246,25 @@
   "confirmMarkAllRead": "Confirm mark all as read",
   "@confirmMarkAllRead": {
     "description": "Quick Settings switch that re-enables the mark-all-read confirmation."
+  },
+  "recoverRemoved": "Recover recently removed articles",
+  "@recoverRemoved": {
+    "description": "Settings action that clears retirement tombstones."
+  },
+  "recoverRemovedSubtitle": "Let articles removed by scrolling reappear on the next refresh",
+  "@recoverRemovedSubtitle": {
+    "description": "Explains what the recovery action does."
+  },
+  "recoverRemovedConfirm": "Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.",
+  "@recoverRemovedConfirm": {
+    "description": "Confirmation body for the recovery action."
+  },
+  "recoverRemovedAction": "Recover",
+  "@recoverRemovedAction": {
+    "description": "Confirm button for the recovery action."
+  },
+  "recoverRemovedDone": "Recovery done — pull to refresh if anything is missing",
+  "@recoverRemovedDone": {
+    "description": "Snackbar shown after recovery completes."
   }
 }

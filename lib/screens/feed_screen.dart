@@ -105,6 +105,20 @@ class _FeedScreenState extends State<FeedScreen>
   /// it just fetched.
   final _markReadGate = MarkReadGate();
 
+  /// Last known rendered height per article id.
+  ///
+  /// ListView.builder disposes rows beyond cacheExtent, so a row that has
+  /// scrolled well above the viewport has no context and cannot be measured —
+  /// which is exactly the row whose height the frontier arithmetic depends on.
+  /// Every row was measurable while it was on screen, so remember it.
+  ///
+  /// Pruned alongside _cardKeys in _syncCardKeys; an unbounded map on a
+  /// scrolling list is its own bug.
+  final Map<int, double> _measuredHeights = {};
+
+  /// Guards against _retireScrolledPast re-entering through its own jumpTo.
+  bool _retiring = false;
+
   /// Drives the fade on every floating button while the list is moving. One
   /// controller for the whole cluster — a sixth button is a `ScrollFade`
   /// wrapper, not another copy of this.
@@ -560,6 +574,7 @@ class _FeedScreenState extends State<FeedScreen>
   void _syncCardKeys(List<Article> articles) {
     final activeIds = {for (final a in articles) if (a.id != null) a.id!};
     _cardKeys.removeWhere((id, _) => !activeIds.contains(id));
+    _measuredHeights.removeWhere((id, _) => !activeIds.contains(id));
     for (final a in articles) {
       if (a.id != null) _cardKeys.putIfAbsent(a.id!, GlobalKey.new);
     }
@@ -737,6 +752,18 @@ class _FeedScreenState extends State<FeedScreen>
     if (!_markReadOnScroll || _showRead) return;
     if (!_scrollController.hasClients) return;
     if (_booting || _refreshing || _backgroundFetching) return;
+    // jumpTo dispatches ScrollEndNotification via didEndScroll, so every
+    // programmatic scroll lands here: the offset restore on returning from an
+    // article, the reset after a refresh, a tab-switch restore. None of those
+    // are the user scrolling past anything. Verified: jumpTo raises
+    // ScrollStart and ScrollEnd but no UserScrollNotification, so the gate
+    // stays shut exactly when it should.
+    if (!_markReadGate.isOpen) return;
+    // Belt and braces against re-entry through this method's own jumpTo.
+    // Change 5 above mostly covers it, since the gate is closed before that
+    // jump — but relying on one guard for two jobs is how this regression
+    // happened.
+    if (_retiring) return;
 
     final offset = _scrollController.offset;
     final plan = planRetirement(
@@ -746,6 +773,15 @@ class _FeedScreenState extends State<FeedScreen>
     );
     if (plan.isEmpty) return;
 
+    assert(() {
+      if (plan.clampedByBuiltRows) {
+        debugPrint('[retirement] frontier clamped by the built-row ceiling — '
+            'the buffer arithmetic is letting the frontier reach rows the '
+            'ListView still has built.');
+      }
+      return true;
+    }());
+
     final removed = plan.rowIndices.toSet();
     final keptRows = [
       for (var i = 0; i < _rows.length; i++)
@@ -753,18 +789,23 @@ class _FeedScreenState extends State<FeedScreen>
     ];
     final retiredIds = plan.articleIds.toSet();
 
-    _markReadGate.close();
-    setState(() {
-      _articles = [
-        for (final a in _articles)
-          if (!retiredIds.contains(a.id)) a,
-      ];
-      _rows = keptRows;
-      _syncCardKeys(_articles);
-    });
-    // Same turn as the setState above. Do not move this into a post-frame
-    // callback — that is exactly one frame of visible jump.
-    _scrollController.jumpTo(offset - plan.removedHeight);
+    _retiring = true;
+    try {
+      _markReadGate.close();
+      setState(() {
+        _articles = [
+          for (final a in _articles)
+            if (!retiredIds.contains(a.id)) a,
+        ];
+        _rows = keptRows;
+        _syncCardKeys(_articles);
+      });
+      // Same turn as the setState above. Do not move this into a post-frame
+      // callback — that is exactly one frame of visible jump.
+      _scrollController.jumpTo(offset - plan.removedHeight);
+    } finally {
+      _retiring = false;
+    }
 
     unawaited(_retireInBackground(plan.articleIds));
   }
@@ -782,26 +823,42 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
-  /// Measures the current rows for the frontier calculation. Heights come from
-  /// the same GlobalKeys _onScroll uses, so the two agree by construction.
+  /// Measures the current rows for the frontier calculation.
+  ///
+  /// Height comes from three places, in order: the live render box while the
+  /// row is built, the remembered height from when it last was, and only then
+  /// the constant. The constant is the one that caused this regression — real
+  /// cards measure 96.8dp and 121.9dp on a Pixel 11 Pro against a hardcoded
+  /// 120, so guessing was wrong in both directions and the error accumulated
+  /// down the list.
   List<RowMetric> _rowMetrics() {
     return [
       for (final row in _rows)
         if (row is DayHeaderRow)
+          // Fixed by construction and enforced by a SizedBox, so this one is
+          // not a guess.
           const RowMetric(height: kDayHeaderHeight)
         else
           () {
             final article = (row as ArticleRow).article;
-            final key = article.id != null ? _cardKeys[article.id!] : null;
-            var h = 120.0;
-            if (key?.currentContext != null) {
-              final box = key!.currentContext!.findRenderObject() as RenderBox?;
-              if (box != null && box.hasSize) h = box.size.height;
+            final id = article.id;
+            final key = id != null ? _cardKeys[id] : null;
+            final context = key?.currentContext;
+
+            double? measured;
+            if (context != null) {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box != null && box.hasSize) {
+                measured = box.size.height;
+                if (id != null) _measuredHeights[id] = measured;
+              }
             }
+
             return RowMetric(
-              height: h,
-              articleId: article.id,
+              height: measured ?? (id != null ? _measuredHeights[id] : null) ?? 120.0,
+              articleId: id,
               isSaved: article.isSaved,
+              isBuilt: context != null,
             );
           }(),
     ];

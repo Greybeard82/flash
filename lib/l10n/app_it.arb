@@ -184,5 +184,10 @@
   "dayToday": "Oggi",
   "dayYesterday": "Ieri",
   "dontShowAgain": "Non mostrare più",
-  "confirmMarkAllRead": "Conferma segna tutto come letto"
+  "confirmMarkAllRead": "Conferma segna tutto come letto",
+  "recoverRemoved": "Recupera gli articoli rimossi di recente",
+  "recoverRemovedSubtitle": "Permette agli articoli rimossi scorrendo di riapparire al prossimo aggiornamento",
+  "recoverRemovedConfirm": "Gli articoli che hai superato scorrendo di norma spariscono per sempre. Questo permette a quelli che i tuoi feed offrono ancora di tornare al prossimo aggiornamento di Flash. Quelli più vecchi non possono essere recuperati.",
+  "recoverRemovedAction": "Recupera",
+  "recoverRemovedDone": "Recupero completato — trascina per aggiornare se manca qualcosa"
 }

@@ -184,5 +184,10 @@
   "dayToday": "Aujourd'hui",
   "dayYesterday": "Hier",
   "dontShowAgain": "Ne plus afficher",
-  "confirmMarkAllRead": "Confirmer tout marquer comme lu"
+  "confirmMarkAllRead": "Confirmer tout marquer comme lu",
+  "recoverRemoved": "Récupérer les articles récemment supprimés",
+  "recoverRemovedSubtitle": "Permet aux articles supprimés en faisant défiler de réapparaître à la prochaine actualisation",
+  "recoverRemovedConfirm": "Les articles que vous avez dépassés en faisant défiler sont normalement perdus. Ceci permet à ceux que vos flux proposent encore de revenir à la prochaine actualisation de Flash. Les plus anciens ne peuvent pas être récupérés.",
+  "recoverRemovedAction": "Récupérer",
+  "recoverRemovedDone": "Récupération terminée — tirez pour actualiser si quelque chose manque"
 }

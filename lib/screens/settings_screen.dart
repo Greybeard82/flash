@@ -380,6 +380,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
+          ListTile(
+            leading: const Icon(Icons.restore_from_trash_outlined),
+            title: Text(l10n.recoverRemoved),
+            subtitle: Text(l10n.recoverRemovedSubtitle),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: _recoverRemovedArticles,
+          ),
+
           // ── OPML ──
           _sectionHeader(l10n.opml),
           Padding(
@@ -545,6 +554,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _formatDate(DateTime dt) {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  /// Clears every tombstone so retired articles the feeds still carry can
+  /// come back on the next fetch.
+  ///
+  /// Retirement is irreversible by design, so this is the only way back for a
+  /// user who scrolled faster than they meant to. It is deliberately a manual
+  /// action rather than anything automatic: clearing tombstones means the next
+  /// refresh re-inserts everything still inside the fetch window, which is
+  /// only what you want if you actually lost something.
+  Future<void> _recoverRemovedArticles() async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.recoverRemoved),
+        content: Text(l10n.recoverRemovedConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.recoverRemovedAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await LoadingController.instance.run(() async {
+      await ArticleRepository().clearAllTombstones();
+      await RefreshService(_settingsRepo).refreshAll();
+    }, label: 'Recovering articles');
+
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(l10n.recoverRemovedDone)));
+    }
   }
 
   Widget _sectionHeader(String title) {

@@ -1,10 +1,10 @@
 # Product Requirements Document
 ## Flash — Android RSS Reader
 
-**Version:** 2.8
+**Version:** 2.9
 **Status:** Active — reflecting shipped state
 **Author:** David
-**Last Updated:** 27 August 2026 (pass 06)
+**Last Updated:** 27 August 2026 (pass 07)
 
 ---
 
@@ -191,7 +191,16 @@ why the visibility query keeps them even with Show read off — hiding a
 bookmark from the feed while it still sits in Bookmarks would be a lie about
 where the user's data is.
 
-Retirement is **permanent and has no undo**. It is not the cleanup window
+**Recovering from retirement.** Settings → *Recover recently removed
+articles* clears the tombstone table, so anything the feeds still carry is
+re-inserted by the next fetch. It is the only route back, and it is
+deliberately manual and confirmed rather than automatic. It cannot resurrect
+an article the feed has stopped offering — nothing outside the seven-day fetch
+window comes back — and it touches nothing else: feeds, folders, keywords,
+bookmarks and surviving articles are all left alone. It exists because a user
+who scrolls faster than they meant to otherwise has no recourse at all.
+
+Retirement is **permanent and has no undo** without that action. It is not the cleanup window
 (§4.8), which is age-based and only touches read, unsaved articles; the two
 rules never consult each other.
 
@@ -659,6 +668,9 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Feed and category changes reach the article list on return to the Flash tab, via `FeedsChangedNotifier` pinged from the repository writes
 - Categories collapsed by default on the Categories screen
 - Mark-all-read confirmation dialog (the strings existed, translated, in all five locales; nothing ever showed them)
+
+### Regressions Worth Remembering
+- **Retirement-on-scroll deleted articles that were still on screen** (shipped in pass 05, disabled in pass 07). Three compounding causes: row heights were guessed at a hardcoded 120px for every row `ListView.builder` had disposed — real cards measure **96.8dp and 121.9dp** on a Pixel 11 Pro, so the guess was wrong in both directions and the error accumulated down the list; `jumpTo` dispatches `ScrollEndNotification`, so every programmatic scroll ran retirement; and retirement re-entered itself through its own offset correction. Fixed by caching measured heights, gating on `MarkReadGate`, a re-entrancy flag, and — the part that matters — a hard ceiling that confines retirement to rows the ListView has **disposed**, so no future arithmetic error can delete something visible.
 
 ### Tried and Removed
 - **Retirement on keyword block** was specified into pass 05 and deliberately not shipped. `is_blocked` already hides the article everywhere, so deletion would add nothing except making `unblockByKeyword` a no-op, emptying the Blocked Articles audit view, and turning one mistyped keyword into irreversible library loss with no confirmation. See §4.6.

@@ -583,4 +583,22 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Confirmer tout marquer comme lu';
+
+  @override
+  String get recoverRemoved => 'Récupérer les articles récemment supprimés';
+
+  @override
+  String get recoverRemovedSubtitle =>
+      'Permet aux articles supprimés en faisant défiler de réapparaître à la prochaine actualisation';
+
+  @override
+  String get recoverRemovedConfirm =>
+      'Les articles que vous avez dépassés en faisant défiler sont normalement perdus. Ceci permet à ceux que vos flux proposent encore de revenir à la prochaine actualisation de Flash. Les plus anciens ne peuvent pas être récupérés.';
+
+  @override
+  String get recoverRemovedAction => 'Récupérer';
+
+  @override
+  String get recoverRemovedDone =>
+      'Récupération terminée — tirez pour actualiser si quelque chose manque';
 }

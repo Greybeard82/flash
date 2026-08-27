@@ -184,5 +184,10 @@
   "dayToday": "Hoy",
   "dayYesterday": "Ayer",
   "dontShowAgain": "No volver a mostrar",
-  "confirmMarkAllRead": "Confirmar marcar todo como leído"
+  "confirmMarkAllRead": "Confirmar marcar todo como leído",
+  "recoverRemoved": "Recuperar artículos eliminados recientemente",
+  "recoverRemovedSubtitle": "Permite que los artículos eliminados al desplazarte reaparezcan en la próxima actualización",
+  "recoverRemovedConfirm": "Los artículos que has dejado atrás al desplazarte normalmente desaparecen para siempre. Esto permite que vuelvan los que tus feeds aún incluyan la próxima vez que Flash se actualice. Los más antiguos no se pueden recuperar.",
+  "recoverRemovedAction": "Recuperar",
+  "recoverRemovedDone": "Recuperación completada: desliza para actualizar si falta algo"
 }

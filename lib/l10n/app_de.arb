@@ -184,5 +184,10 @@
   "dayToday": "Heute",
   "dayYesterday": "Gestern",
   "dontShowAgain": "Nicht mehr anzeigen",
-  "confirmMarkAllRead": "Alle als gelesen bestätigen"
+  "confirmMarkAllRead": "Alle als gelesen bestätigen",
+  "recoverRemoved": "Kürzlich entfernte Artikel wiederherstellen",
+  "recoverRemovedSubtitle": "Lässt beim Scrollen entfernte Artikel bei der nächsten Aktualisierung wieder erscheinen",
+  "recoverRemovedConfirm": "Artikel, an denen du vorbeigescrollt bist, sind normalerweise endgültig weg. Dies lässt alle, die deine Feeds noch anbieten, bei der nächsten Aktualisierung zurückkehren. Ältere können nicht wiederhergestellt werden.",
+  "recoverRemovedAction": "Wiederherstellen",
+  "recoverRemovedDone": "Wiederherstellung abgeschlossen — zum Aktualisieren ziehen, falls etwas fehlt"
 }

@@ -16,7 +16,21 @@ class RetirementPlan {
   /// be reduced by precisely this much in the same turn as the removal.
   final double removedHeight;
 
-  const RetirementPlan(this.rowIndices, this.articleIds, this.removedHeight);
+  /// True when the built-row ceiling, not the buffer, is what stopped the
+  /// frontier.
+  ///
+  /// The buffer should already keep the frontier well clear of anything the
+  /// ListView still has built. If this is ever true the buffer arithmetic is
+  /// wrong somewhere upstream and the clamp is carrying it — worth knowing
+  /// before it becomes a bug report.
+  final bool clampedByBuiltRows;
+
+  const RetirementPlan(
+    this.rowIndices,
+    this.articleIds,
+    this.removedHeight, {
+    this.clampedByBuiltRows = false,
+  });
 
   bool get isEmpty => rowIndices.isEmpty;
 
@@ -32,12 +46,20 @@ class RowMetric {
   /// exempt from removal.
   final bool isSaved;
 
+  /// Whether this row is currently built by the ListView.
+  ///
+  /// A built row may be visible, or within cacheExtent of visible. A disposed
+  /// row is neither. Retirement is confined to disposed rows, so no arithmetic
+  /// error anywhere else in this file can delete something on screen.
+  final bool isBuilt;
+
   final double height;
 
   const RowMetric({
     required this.height,
     this.articleId,
     this.isSaved = false,
+    this.isBuilt = false,
   });
 
   bool get isHeader => articleId == null;
@@ -90,6 +112,24 @@ RetirementPlan planRetirement({
   }
   if (frontier < 0) return RetirementPlan.empty;
 
+  // Hard ceiling: never touch a row the ListView still has built. This is a
+  // safety net, not the primary mechanism — the buffer above should already
+  // keep the frontier well clear. If this clamp is ever what stops a removal,
+  // something upstream is wrong and the caller should be told.
+  var clampedByBuiltRows = false;
+  var firstBuilt = rows.length;
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].isBuilt) {
+      firstBuilt = i;
+      break;
+    }
+  }
+  if (frontier >= firstBuilt) {
+    clampedByBuiltRows = true;
+    frontier = firstBuilt - 1;
+  }
+  if (frontier < 0) return RetirementPlan.empty;
+
   // Everything from 0..frontier is a candidate, but a saved article truncates
   // the block: nothing at or above it may be removed.
   for (var i = 0; i <= frontier; i++) {
@@ -127,5 +167,6 @@ RetirementPlan planRetirement({
   }
 
   if (ids.isEmpty) return RetirementPlan.empty;
-  return RetirementPlan(indices, ids, height);
+  return RetirementPlan(indices, ids, height,
+      clampedByBuiltRows: clampedByBuiltRows);
 }

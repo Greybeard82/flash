@@ -1123,6 +1123,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm mark all as read'**
   String get confirmMarkAllRead;
+
+  /// Settings action that clears retirement tombstones.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover recently removed articles'**
+  String get recoverRemoved;
+
+  /// Explains what the recovery action does.
+  ///
+  /// In en, this message translates to:
+  /// **'Let articles removed by scrolling reappear on the next refresh'**
+  String get recoverRemovedSubtitle;
+
+  /// Confirmation body for the recovery action.
+  ///
+  /// In en, this message translates to:
+  /// **'Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.'**
+  String get recoverRemovedConfirm;
+
+  /// Confirm button for the recovery action.
+  ///
+  /// In en, this message translates to:
+  /// **'Recover'**
+  String get recoverRemovedAction;
+
+  /// Snackbar shown after recovery completes.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery done — pull to refresh if anything is missing'**
+  String get recoverRemovedDone;
 }
 
 class _AppLocalizationsDelegate

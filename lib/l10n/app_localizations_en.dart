@@ -576,4 +576,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Confirm mark all as read';
+
+  @override
+  String get recoverRemoved => 'Recover recently removed articles';
+
+  @override
+  String get recoverRemovedSubtitle =>
+      'Let articles removed by scrolling reappear on the next refresh';
+
+  @override
+  String get recoverRemovedConfirm =>
+      'Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.';
+
+  @override
+  String get recoverRemovedAction => 'Recover';
+
+  @override
+  String get recoverRemovedDone =>
+      'Recovery done — pull to refresh if anything is missing';
 }

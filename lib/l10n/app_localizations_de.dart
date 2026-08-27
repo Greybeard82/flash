@@ -582,4 +582,22 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Alle als gelesen bestätigen';
+
+  @override
+  String get recoverRemoved => 'Kürzlich entfernte Artikel wiederherstellen';
+
+  @override
+  String get recoverRemovedSubtitle =>
+      'Lässt beim Scrollen entfernte Artikel bei der nächsten Aktualisierung wieder erscheinen';
+
+  @override
+  String get recoverRemovedConfirm =>
+      'Artikel, an denen du vorbeigescrollt bist, sind normalerweise endgültig weg. Dies lässt alle, die deine Feeds noch anbieten, bei der nächsten Aktualisierung zurückkehren. Ältere können nicht wiederhergestellt werden.';
+
+  @override
+  String get recoverRemovedAction => 'Wiederherstellen';
+
+  @override
+  String get recoverRemovedDone =>
+      'Wiederherstellung abgeschlossen — zum Aktualisieren ziehen, falls etwas fehlt';
 }

@@ -581,4 +581,22 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Confirmar marcar todo como leído';
+
+  @override
+  String get recoverRemoved => 'Recuperar artículos eliminados recientemente';
+
+  @override
+  String get recoverRemovedSubtitle =>
+      'Permite que los artículos eliminados al desplazarte reaparezcan en la próxima actualización';
+
+  @override
+  String get recoverRemovedConfirm =>
+      'Los artículos que has dejado atrás al desplazarte normalmente desaparecen para siempre. Esto permite que vuelvan los que tus feeds aún incluyan la próxima vez que Flash se actualice. Los más antiguos no se pueden recuperar.';
+
+  @override
+  String get recoverRemovedAction => 'Recuperar';
+
+  @override
+  String get recoverRemovedDone =>
+      'Recuperación completada: desliza para actualizar si falta algo';
 }

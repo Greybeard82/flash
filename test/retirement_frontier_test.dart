@@ -12,8 +12,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/utils/retirement_frontier.dart';
 
-RowMetric _article(int id, double h, {bool saved = false}) =>
-    RowMetric(height: h, articleId: id, isSaved: saved);
+RowMetric _article(int id, double h, {bool saved = false, bool built = false}) =>
+    RowMetric(height: h, articleId: id, isSaved: saved, isBuilt: built);
 
 const RowMetric _header = RowMetric(height: 36);
 
@@ -278,6 +278,100 @@ void main() {
       expect(plan.articleIds, [1, 2],
           reason: 'the saved row is inside the buffer, not the removed block');
       expect(plan.removedHeight, 210.0);
+    });
+  });
+
+  group('the built-row ceiling', () {
+    test('nothing built: everything below the buffer is eligible', () {
+      final rows = [for (var i = 1; i <= 10; i++) _article(i, 100)];
+      final plan = planRetirement(rows: rows, scrollOffset: 600, bufferCards: 2);
+
+      expect(plan.articleIds, [1, 2, 3, 4]);
+      expect(plan.clampedByBuiltRows, isFalse,
+          reason: 'the buffer, not the ceiling, is doing the work here');
+    });
+
+    test('the first built row caps the frontier', () {
+      // Rows 5..9 are built; without the ceiling the frontier would be 8.
+      final rows = [
+        for (var i = 0; i < 10; i++) _article(i + 1, 100, built: i >= 5),
+      ];
+      final plan =
+          planRetirement(rows: rows, scrollOffset: 1100, bufferCards: 0);
+
+      expect(plan.rowIndices.every((i) => i < 5), isTrue,
+          reason: 'nothing at or after the first built row may be removed');
+      expect(plan.rowIndices, [0, 1, 2, 3, 4]);
+      expect(plan.clampedByBuiltRows, isTrue);
+    });
+
+    test('every row built: the plan is empty', () {
+      final rows = [for (var i = 1; i <= 6; i++) _article(i, 100, built: true)];
+      final plan =
+          planRetirement(rows: rows, scrollOffset: 500, bufferCards: 0);
+
+      expect(plan.isEmpty, isTrue,
+          reason: 'a short fully-built list retires nothing at all');
+    });
+
+    test('a built header does not raise the ceiling', () {
+      // Headers are isBuilt:false by construction, so a header sitting among
+      // disposed rows must not act as the boundary — the article after it
+      // does.
+      final rows = [
+        _article(1, 100),
+        _article(2, 100),
+        _header,
+        _article(3, 100, built: true),
+        _article(4, 100, built: true),
+      ];
+      final plan =
+          planRetirement(rows: rows, scrollOffset: 500, bufferCards: 0);
+
+      expect(plan.rowIndices, [0, 1],
+          reason: 'the ceiling is article 3 at index 3; the header at index 2 '
+              'is dropped anyway because articles below it survive');
+      expect(plan.clampedByBuiltRows, isTrue);
+    });
+
+    test('height drift cannot reach a built row', () {
+      // THE REGRESSION COVER FOR PASS 07. Disposed rows are given heights far
+      // smaller than reality, exactly as the 120.0 fallback did against real
+      // 96.8dp and 121.9dp cards. The naive frontier therefore runs way past
+      // the visible region. The ceiling must stop it dead — a height bug
+      // anywhere in this file must never be able to delete something the user
+      // can see.
+      final rows = [
+        for (var i = 0; i < 20; i++) _article(i + 1, 10, built: i >= 12),
+      ];
+      final plan =
+          planRetirement(rows: rows, scrollOffset: 100000, bufferCards: 2);
+
+      expect(plan.rowIndices.every((i) => i < 12), isTrue,
+          reason: 'THE regression cover: with heights wrong by an order of '
+              'magnitude the arithmetic wants to retire the entire list, '
+              'including rows on screen. Only the built-row ceiling stops it.');
+      expect(plan.clampedByBuiltRows, isTrue);
+    });
+
+    test('removedHeight is still exact after clamping', () {
+      final rows = [
+        _article(1, 101),
+        _article(2, 137),
+        _article(3, 88),
+        _article(4, 212, built: true),
+        _article(5, 96, built: true),
+      ];
+      final plan =
+          planRetirement(rows: rows, scrollOffset: 5000, bufferCards: 0);
+
+      var expected = 0.0;
+      for (final i in plan.rowIndices) {
+        expected += rows[i].height;
+      }
+      expect(plan.removedHeight, expected);
+      expect(plan.removedHeight, 326.0, reason: '101 + 137 + 88');
+      expect(plan.clampedByBuiltRows, isTrue);
     });
   });
 

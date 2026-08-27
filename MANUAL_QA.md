@@ -391,3 +391,22 @@ must never move by a single pixel while you are looking at it.
 | Tap Mark all as read once more | The dialog is back |
 
 ---
+
+---
+
+## 30. Recovering Recently Removed Articles
+
+Retirement is irreversible by design, so this is the only way back for a user
+who scrolled faster than they meant to. It cannot recover anything the feeds
+have stopped offering.
+
+| Step | Expected |
+|------|----------|
+| Show read **off**. Note six article titles, then scroll past them | They are retired and gone |
+| Pull to refresh | They stay gone — tombstones are doing their job |
+| Settings → **Recover recently removed articles** | A confirmation explaining that removed articles may reappear, and that older ones cannot be recovered |
+| Tap **Cancel** | Nothing changes; the articles are still gone |
+| Tap it again and confirm | A refresh runs |
+| Check the list | The articles the feeds still carry are back, as **unread** |
+| Check your bookmarks, categories, feeds and keyword blocklist | All completely unchanged — recovery clears tombstones and nothing else |
+| Scroll past an article older than seven days, then recover | It does **not** come back. Outside the fetch window there is nothing to re-insert |
