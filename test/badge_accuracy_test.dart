@@ -23,6 +23,7 @@ import 'package:flash/db/schema.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/repositories/article_repository.dart';
 import 'package:flash/utils/constants.dart';
+import 'package:flash/widgets/filter_bubble.dart';
 
 late ArticleRepository _repo;
 late int _gamingId;
@@ -217,6 +218,18 @@ void main() {
         reason: 'but it is read, so it is not *unread*. The badge counts '
             'unread articles, not visible ones, and this is the one case '
             'where those legitimately differ');
+  });
+
+  test('the retention floor is never below the widest window the user can pick',
+      () {
+    expect(kUnreadRetentionDays, greaterThanOrEqualTo(FilterBubble.maxDays),
+        reason: 'kUnreadRetentionDays and FilterBubble.maxDays are '
+            'independent literals that currently happen to both be 15. The '
+            'entire safety argument for deleting unread articles is that they '
+            'are past the widest window the slider can reach. Raise the '
+            'slider to 30 without raising this and every unread article '
+            'between 15 and 30 days old is deleted before it could ever be '
+            'displayed — silently, and with no way back.');
   });
 
   group('cleanup removes unread articles nothing can reach', () {

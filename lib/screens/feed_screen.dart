@@ -563,10 +563,12 @@ class _FeedScreenState extends State<FeedScreen>
     return _applySortOrder(_applyDisplayFilters(articles));
   }
 
-  /// The only place `_articles` is assigned. Keeps `_rows` and the card keys
-  /// in step with it — there are seven assignment sites, and any one of them
-  /// forgetting to regroup would show stale headers or throw off `_onScroll`'s
-  /// height accounting.
+  /// Assigns `_articles` and keeps `_rows` and the card keys in step with it.
+  /// A dozen sites change the list, and any one of them forgetting to regroup
+  /// would show stale headers or throw off `_onScroll`'s height accounting.
+  ///
+  /// **One deliberate exception**: `_retireScrolledPast` assigns `_articles`
+  /// directly. It must not regroup — see the comment there before changing it.
   ///
   /// Safe to call inside a `setState` closure; it only assigns fields.
   void _setArticles(List<Article> articles) {
@@ -796,12 +798,21 @@ class _FeedScreenState extends State<FeedScreen>
     _retiring = true;
     try {
       _markReadGate.close();
+      // Deliberately NOT _setArticles. That regroups through groupByDay,
+      // rebuilding `_rows` from scratch — which would discard the exact row
+      // set `planRetirement` measured and hand back a list whose total height
+      // no longer matches `plan.removedHeight`. The jumpTo below would then
+      // correct by the wrong amount and the list would visibly move, which is
+      // the one thing retirement may never do. `keptRows` is the measured row
+      // set minus exactly the removed indices, so headers and heights stay as
+      // planned.
       setState(() {
         _articles = [
           for (final a in _articles)
             if (!retiredIds.contains(a.id)) a,
         ];
         _rows = keptRows;
+        // The rest of what _setArticles would have done, minus the regroup.
         _syncCardKeys(_articles);
       });
       // Same turn as the setState above. Do not move this into a post-frame
