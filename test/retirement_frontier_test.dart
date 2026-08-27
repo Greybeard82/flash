@@ -10,6 +10,7 @@
 // off-by-one errors, because the wrong row has the right height.
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flash/utils/constants.dart';
 import 'package:flash/utils/retirement_frontier.dart';
 
 RowMetric _article(int id, double h, {bool saved = false, bool built = false}) =>
@@ -372,6 +373,69 @@ void main() {
       expect(plan.removedHeight, expected);
       expect(plan.removedHeight, 326.0, reason: '101 + 137 + 88');
       expect(plan.clampedByBuiltRows, isTrue);
+    });
+  });
+
+  group('the effective buffer is max(card buffer, built rows)', () {
+    /// Builds a list where the rows within [cacheExtent] of the viewport top
+    /// are marked built, exactly as ListView.builder would leave them.
+    List<RowMetric> listFor({
+      required double cardHeight,
+      required double cacheExtent,
+      required double scrollOffset,
+      int count = 40,
+    }) {
+      final builtFrom = ((scrollOffset - cacheExtent) / cardHeight).floor();
+      return [
+        for (var i = 0; i < count; i++)
+          _article(i + 1, cardHeight, built: i >= builtFrom),
+      ];
+    }
+
+    int effectiveBuffer({
+      required double cardHeight,
+      required double cacheExtent,
+    }) {
+      const offset = 4000.0;
+      final rows = listFor(
+          cardHeight: cardHeight, cacheExtent: cacheExtent, scrollOffset: offset);
+      final plan =
+          planRetirement(rows: rows, scrollOffset: offset, bufferCards: 2);
+      // How many rows sit between the last removed row and the viewport top.
+      final lastRemoved = plan.rowIndices.isEmpty ? -1 : plan.rowIndices.last;
+      final atViewport = (offset / cardHeight).floor();
+      return atViewport - lastRemoved - 1;
+    }
+
+    test('the production setup is governed by the ceiling, not the buffer', () {
+      // cacheExtent 500, ~110dp cards -> ~4.5 built rows above the fold.
+      final buffer = effectiveBuffer(cardHeight: 110, cacheExtent: 500);
+
+      expect(buffer, greaterThan(kRetirementBufferCards),
+          reason: 'this is the coupling: with the shipped cacheExtent the '
+              'built-row ceiling keeps articles further from the viewport '
+              'than the card buffer does, so cacheExtent is what actually '
+              'sets the retirement distance');
+      expect(buffer, 5, reason: '500 / 110 rounded up, plus the boundary row');
+    });
+
+    test('a small cacheExtent falls back to the card buffer', () {
+      // If someone tunes cacheExtent down for scroll performance, the buffer
+      // is what stops retirement reaching the viewport.
+      final buffer = effectiveBuffer(cardHeight: 110, cacheExtent: 50);
+
+      expect(buffer, greaterThanOrEqualTo(kRetirementBufferCards),
+          reason: 'the floor has to hold when the ceiling stops binding — '
+              'this is the case kRetirementBufferCards exists for');
+    });
+
+    test('tall cards reduce the built-row count toward the buffer', () {
+      // A large text scale makes cards taller, so fewer fit in cacheExtent.
+      final tall = effectiveBuffer(cardHeight: 300, cacheExtent: 500);
+
+      expect(tall, greaterThanOrEqualTo(kRetirementBufferCards),
+          reason: 'whichever of the two is larger must win; neither may let '
+              'the frontier reach a row that is on screen');
     });
   });
 

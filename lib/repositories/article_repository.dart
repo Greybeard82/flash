@@ -150,39 +150,57 @@ class ArticleRepository {
   // ── Counts ─────────────────────────────────────────────────────────────────
 
   /// Total unread count across all folders.
-  Future<int> getTotalUnreadCount() async {
+  /// Unread articles the list would actually show, across every folder.
+  ///
+  /// [windowDays] is the display window — `cleanup_age_days`, the same value
+  /// the Filter bubble's Article age slider sets and `_applyDisplayFilters`
+  /// applies. Without it the badge counted every unread row in the database,
+  /// including ones aged out of the display window and therefore unreachable:
+  /// 428 against a visible list of 5, permanently, and widening as the
+  /// database aged.
+  ///
+  /// A null `published_at` is counted, matching the list, which shows such an
+  /// article rather than hiding it silently.
+  Future<int> getTotalUnreadCount({int windowDays = kFetchDayLimit}) async {
     final db = await _db;
     final result = await db.rawQuery('''
       SELECT COUNT(*) AS cnt
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_read = 0 AND a.is_blocked = 0
-    ''');
+        AND (a.published_at IS NULL OR a.published_at >= ?)
+    ''', [displayCutoffMs(windowDays)]);
     return result.first['cnt'] as int;
   }
 
   /// Unread count for a single folder.
-  Future<int> getUnreadCount(int folderId) async {
+  /// As [getTotalUnreadCount], scoped to one folder.
+  Future<int> getUnreadCount(int folderId,
+      {int windowDays = kFetchDayLimit}) async {
     final db = await _db;
     final result = await db.rawQuery('''
       SELECT COUNT(*) AS cnt
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE f.folder_id = ? AND a.is_read = 0 AND a.is_blocked = 0
-    ''', [folderId]);
+        AND (a.published_at IS NULL OR a.published_at >= ?)
+    ''', [folderId, displayCutoffMs(windowDays)]);
     return result.first['cnt'] as int;
   }
 
   /// Unread counts for every folder in one query, keyed by folder_id.
-  Future<Map<int, int>> getAllFolderUnreadCounts() async {
+  /// Per-folder unread counts, filtered exactly as [getTotalUnreadCount] is.
+  Future<Map<int, int>> getAllFolderUnreadCounts(
+      {int windowDays = kFetchDayLimit}) async {
     final db = await _db;
     final rows = await db.rawQuery('''
       SELECT f.folder_id, COUNT(*) AS cnt
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_read = 0 AND a.is_blocked = 0
+        AND (a.published_at IS NULL OR a.published_at >= ?)
       GROUP BY f.folder_id
-    ''');
+    ''', [displayCutoffMs(windowDays)]);
     return {for (final row in rows) row['folder_id'] as int: row['cnt'] as int};
   }
 
@@ -386,15 +404,32 @@ class ArticleRepository {
     final cutoffMs = DateTime.now()
         .subtract(Duration(days: clampedDays))
         .millisecondsSinceEpoch;
+    // Unread articles past the *widest* window the user can select. Cleanup
+    // used to touch read articles only, so unread ones aged out of the display
+    // window and then stayed in the database for ever — invisible to the list,
+    // but still counted by the badge. The floor is deliberately
+    // kUnreadRetentionDays rather than [days]: an article dropped under a
+    // 2-day setting could still have been recovered by widening the Article
+    // age slider, and only past 15 days is it unreachable by any setting.
+    final unreadCutoffMs = displayCutoffMs(kUnreadRetentionDays);
+
     if (folderId == null) {
-      return db.rawDelete('''
+      final read = await db.rawDelete('''
         DELETE FROM ${TableNames.articles}
         WHERE is_read = 1
           AND is_saved = 0
           AND published_at < ?
       ''', [cutoffMs]);
+      final unread = await db.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE is_read = 0
+          AND is_saved = 0
+          AND published_at IS NOT NULL
+          AND published_at < ?
+      ''', [unreadCutoffMs]);
+      return read + unread;
     } else {
-      return db.rawDelete('''
+      final read = await db.rawDelete('''
         DELETE FROM ${TableNames.articles}
         WHERE is_read = 1
           AND is_saved = 0
@@ -403,6 +438,17 @@ class ArticleRepository {
             SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
           )
       ''', [cutoffMs, folderId]);
+      final unread = await db.rawDelete('''
+        DELETE FROM ${TableNames.articles}
+        WHERE is_read = 0
+          AND is_saved = 0
+          AND published_at IS NOT NULL
+          AND published_at < ?
+          AND feed_id IN (
+            SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?
+          )
+      ''', [unreadCutoffMs, folderId]);
+      return read + unread;
     }
   }
 

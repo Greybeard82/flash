@@ -57,18 +57,28 @@ Future<void> _pump(WidgetTester tester, {required bool isRead}) async {
     ],
     supportedLocales: const [Locale('en')],
     home: Scaffold(
-      body: Align(
-        alignment: Alignment.topCenter,
-        // Width pinned so both states wrap against identical constraints;
-        // height unconstrained so the card reports its intrinsic size.
-        child: SizedBox(width: 400, child: ArticleCard(
-          article: _article(isRead: isRead),
-          onTap: () {},
-          onMarkRead: () {},
-          onMarkUnread: () {},
-          onShare: () {},
-          onBookmark: () {},
-        )),
+      // Width pinned so both states wrap against identical constraints; the
+      // ListView gives the card genuinely unbounded height so it reports its
+      // intrinsic size.
+      //
+      // This used to be an Align, which passes a *bounded* height — the card's
+      // Column is mainAxisSize.max, so it expanded to fill the viewport and
+      // every measurement came back as 900.0. The height assertion below was
+      // comparing 900 to 900 and had proven nothing since pass 04.
+      body: SizedBox(
+        width: 400,
+        child: ListView(
+          children: [
+            ArticleCard(
+              article: _article(isRead: isRead),
+              onTap: () {},
+              onMarkRead: () {},
+              onMarkUnread: () {},
+              onShare: () {},
+              onBookmark: () {},
+            ),
+          ],
+        ),
       ),
     ),
   ));
@@ -134,6 +144,16 @@ void main() {
 
     await _pump(tester, isRead: true);
     final readHeight = tester.getSize(find.byType(ArticleCard)).height;
+
+    // Sanity bound first: if the harness ever lets the card expand to the
+    // viewport again, both numbers become identical and the equality below
+    // passes while measuring nothing. Real cards are 96.8dp and 121.9dp on a
+    // Pixel 11 Pro, so this range is generous and still catches that.
+    expect(unreadHeight, inInclusiveRange(60, 300),
+        reason: 'a card outside this range means the harness is measuring the '
+            'viewport, not the card — the failure mode that hid this '
+            'assertion for four passes');
+    expect(readHeight, inInclusiveRange(60, 300));
 
     expect(readHeight, unreadHeight,
         reason: 'padding, maxLines or a conditional widget varying on '

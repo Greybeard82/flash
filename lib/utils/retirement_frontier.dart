@@ -72,6 +72,17 @@ class RowMetric {
 /// the top, accumulating height, so "above the viewport" means cumulative
 /// bottom edge <= scrollOffset.
 ///
+/// **The built-row ceiling below is the operative safety rule**, not
+/// [bufferCards]. A row `ListView` still has built may be visible; a disposed
+/// one cannot be. With the feed's `cacheExtent: 500` and ~110dp cards, about
+/// 4.5 rows above the viewport stay built, so the ceiling stops the frontier
+/// before a 2-card buffer would. The buffer is the floor for the cases where
+/// that is not true — a smaller `cacheExtent`, taller cards, a large text
+/// scale — and the effective distance is the larger of the two.
+///
+/// This couples retirement distance to a rendering knob, which is worth
+/// knowing before tuning `cacheExtent` for scroll smoothness.
+///
 /// A saved article is never eligible and, crucially, **blocks everything above
 /// it from being removed too**. Removing rows either side of a row that stays
 /// would leave the survivor in the wrong place, and the arithmetic that keeps

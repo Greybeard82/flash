@@ -43,10 +43,39 @@ const int kTombstoneDayLimit = kFetchDayLimit + 1;
 /// something the user can see.
 const bool kEnableScrollRetirement = true;
 
-/// How many articles sit between the top of the viewport and the point at
-/// which an article is retired.
+/// Unread articles are deleted only once they are past the widest window the
+/// user can select, not the window currently set.
 ///
-/// Zero would retire the article the instant its last pixel left the screen,
+/// The Filter bubble ranges to 15 days, so an article dropped under a 2-day
+/// setting could still have been recovered by widening the slider. Past 15 it
+/// is unreachable by any setting, and keeping it only inflates a badge that
+/// counts rows the list is guaranteed not to show.
+const int kUnreadRetentionDays = 15;
+
+/// The `published_at` floor for a display window of [days].
+///
+/// The single source of this arithmetic. The unread badge and the visible list
+/// must agree about what "too old to show" means — when they each computed it
+/// their own way the badge counted 428 articles against a list of 5.
+int displayCutoffMs(int days) =>
+    DateTime.now().subtract(Duration(days: days)).millisecondsSinceEpoch;
+
+/// Minimum articles between the top of the viewport and the retirement point.
+///
+/// A **floor**, not the operative rule. The real mechanism is the built-row
+/// ceiling in `planRetirement`: retirement is confined to rows `ListView`
+/// has disposed, and with the feed's `cacheExtent: 500` and ~110dp cards that
+/// keeps roughly 4.5 rows above the viewport alive — more than this buffer.
+/// So in normal operation the ceiling binds first and this constant does
+/// nothing.
+///
+/// It still earns its place for the cases where the ceiling is *not* the
+/// larger of the two: a small `cacheExtent`, very tall cards, or a large
+/// text scale. The effective distance is
+/// `max(kRetirementBufferCards, builtRowsAboveViewport)`, which
+/// retirement_frontier_test.dart pins.
+///
+/// Zero would retire an article the instant its last pixel left the screen,
 /// which makes a small overscroll or a bounce feel like the list is eating
-/// itself. Two is enough that no ordinary gesture reaches the frontier.
+/// itself.
 const int kRetirementBufferCards = 2;

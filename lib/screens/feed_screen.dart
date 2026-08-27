@@ -180,9 +180,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// name and keeping the All tab the union of every feed's allowance rather
   /// than a single pool that one busy feed could fill on its own.
   List<Article> _applyDisplayFilters(List<Article> newestFirst) {
-    final cutoffMs = DateTime.now()
-        .subtract(Duration(days: _displayAgeDays))
-        .millisecondsSinceEpoch;
+    // Shared with the unread counts so the badge and the list cannot drift.
+    final cutoffMs = displayCutoffMs(_displayAgeDays);
 
     final perFeed = <int, int>{};
     final kept = <Article>[];
@@ -461,8 +460,8 @@ class _FeedScreenState extends State<FeedScreen>
 
     final (articles, folderCounts, allCount) = await (
       _articlesForTab(safeTab, folders),
-      _articleRepo.getAllFolderUnreadCounts(),
-      _articleRepo.getTotalUnreadCount(),
+      _articleRepo.getAllFolderUnreadCounts(windowDays: _displayAgeDays),
+      _articleRepo.getTotalUnreadCount(windowDays: _displayAgeDays),
     ).wait;
 
     if (!mounted) return;
@@ -518,8 +517,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// arrives for the scope the set is cleared and the true count returns.
   Future<void> _refreshCountsFromDb() async {
     final (folderCounts, allCount) = await (
-      _articleRepo.getAllFolderUnreadCounts(),
-      _articleRepo.getTotalUnreadCount(),
+      _articleRepo.getAllFolderUnreadCounts(windowDays: _displayAgeDays),
+      _articleRepo.getTotalUnreadCount(windowDays: _displayAgeDays),
     ).wait;
     if (!mounted) return;
     final suppressed =
@@ -1166,8 +1165,8 @@ class _FeedScreenState extends State<FeedScreen>
       }
 
       final (folderCounts, allCount) = await (
-        _articleRepo.getAllFolderUnreadCounts(),
-        _articleRepo.getTotalUnreadCount(),
+        _articleRepo.getAllFolderUnreadCounts(windowDays: _displayAgeDays),
+        _articleRepo.getTotalUnreadCount(windowDays: _displayAgeDays),
       ).wait;
 
       if (!mounted) return;
@@ -1433,6 +1432,13 @@ class _FeedScreenState extends State<FeedScreen>
           child: ListView.builder(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
+            // Also sets how far above the viewport articles are retired.
+            // planRetirement confines retirement to rows this ListView has
+            // *disposed*, and at ~110dp per card this keeps roughly 4.5 rows
+            // alive above the fold — more than kRetirementBufferCards, so this
+            // number is what actually decides the retirement distance. Lower
+            // it for scroll performance and articles start being deleted
+            // closer to the viewport.
             cacheExtent: 500,
             itemCount: _rows.length,
             itemBuilder: (context, i) {
