@@ -26,16 +26,22 @@ const int kTombstoneDayLimit = kFetchDayLimit + 1;
 
 /// Master switch for retirement-on-scroll.
 ///
-/// DISABLED in pass 07. Scroll retirement was deleting articles that were
-/// still on screen: heights were guessed at 120px for every row the ListView
-/// had disposed, so the computed frontier drifted into the visible region and
-/// the drift grew the further the user scrolled. Programmatic scrolls fired
-/// it too, and it re-entered through its own offset correction.
+/// Re-enabled at the end of pass 07, after the three causes of the regression
+/// were fixed and a structural guard was added.
 ///
-/// With this off, marking read on scroll still works and articles still dim;
-/// with Show read off they are retired at the next refresh instead of during
-/// the scroll. Degraded, not broken.
-const bool kEnableScrollRetirement = false;
+/// It was disabled because retirement deleted articles that were still on
+/// screen: row heights were guessed at 120px for every row the ListView had
+/// disposed (real cards measure 96.8dp and 121.9dp, so the guess was wrong in
+/// both directions and the error accumulated); `jumpTo` dispatches
+/// ScrollEndNotification, so every programmatic scroll ran retirement; and it
+/// re-entered through its own offset correction.
+///
+/// Heights are now measured and remembered, retirement consults
+/// [MarkReadGate], a flag blocks re-entry, and — the part that makes a
+/// recurrence impossible rather than merely unlikely — retirement is confined
+/// to rows the ListView has *disposed*, so no arithmetic error here can reach
+/// something the user can see.
+const bool kEnableScrollRetirement = true;
 
 /// How many articles sit between the top of the viewport and the point at
 /// which an article is retired.
