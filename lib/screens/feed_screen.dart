@@ -26,6 +26,9 @@ import '../utils/mark_read_gate.dart';
 import '../utils/retirement_frontier.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
+import '../reading/read_gate.dart';
+import '../reading/scroll_anchor.dart';
+import '../utils/diag_log.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
@@ -70,7 +73,27 @@ class _FeedScreenState extends State<FeedScreen>
 
   // ── Scroll ─────────────────────────────────────────────────────────────────
   final ScrollController _scrollController = ScrollController();
-  final Map<int, double> _tabScrollPositions = {};
+  /// Where each tab was, remembered as *an article* rather than a pixel
+  /// offset.
+  ///
+  /// Keyed by scope id — the folder id, or kAllScope for the All tab — so
+  /// reordering or adding a folder cannot hand a tab someone else's position.
+  /// The map it replaced was keyed by tab index and had exactly that bug.
+  ///
+  /// A pixel offset is only meaningful against the list that produced it, and
+  /// by restore time that list has usually lost its read rows, lost retired
+  /// rows, and gained fetched ones. See [ScrollAnchor].
+  final Map<int, ScrollAnchor> _tabAnchors = {};
+
+  /// When the app last reached `resumed`, for [ReadGate]'s grace window.
+  ///
+  /// Starts at the epoch so a cold start is never inside the window — there
+  /// is nothing to protect against before the first background/foreground
+  /// cycle, and a fresh launch that blocked reads would be its own bug.
+  DateTime _lastResumeAt = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Debounces retirement behind the end of scrolling. See [_onScrollEnd].
+  Timer? _retireDebounce;
 
   // ── Banner ─────────────────────────────────────────────────────────────────
   final _bannerKey = GlobalKey<NotificationBannerState>();
@@ -118,6 +141,31 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// Guards against _retireScrolledPast re-entering through its own jumpTo.
   bool _retiring = false;
+
+  // -- Pass 10 instrumentation (debug only) --
+  /// Best available answer to "why did the offset just change", maintained
+  /// from the notification stream. A ScrollController listener cannot tell
+  /// you this, which is the whole reason this investigation needs it.
+  String _scrollSource = 'unknown';
+
+  /// Set around every programmatic jump so _onScroll can attribute the
+  /// resulting callback honestly rather than guessing from the delta.
+  bool _programmaticScroll = false;
+
+  /// Previous offset, for the delta column.
+  double _lastLoggedOffset = 0.0;
+
+  /// Runs [jump] with the scroll source pinned for the duration, including
+  /// the synchronous _onScroll callbacks it triggers.
+  void _asProgrammatic(String label, void Function() jump) {
+    _programmaticScroll = true;
+    _scrollSource = label;
+    try {
+      jump();
+    } finally {
+      _programmaticScroll = false;
+    }
+  }
 
   /// Drives the fade on every floating button while the list is moving. One
   /// controller for the whole cluster — a sixth button is a `ScrollFade`
@@ -319,6 +367,7 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     _scrollDebounce?.cancel();
+    _retireDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _fabFade.dispose();
     if (_openBubble?.mounted ?? false) _openBubble!.remove();
@@ -328,6 +377,26 @@ class _FeedScreenState extends State<FeedScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    DiagLog.lifecycleState = state.name;
+    DiagLog.lifecycle(
+      state: state.name,
+      restoredOffset:
+          _scrollController.hasClients ? _scrollController.offset : null,
+      anchorId: null,
+    );
+    if (state == AppLifecycleState.resumed) {
+      _lastResumeAt = DateTime.now();
+      DiagLog.lastResumeAt = _lastResumeAt;
+    }
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // Captured on the way out, while the list is still laid out and every
+      // visible row can be measured. `inactive` is included because it is the
+      // first transition of both the lock and the app-switch sequences, and
+      // it is the last moment the position is definitely trustworthy.
+      _captureAnchor();
+    }
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
       _pausedAt = DateTime.now();
       // Don't complete a bulk mark-as-read the user didn't witness while
@@ -535,7 +604,6 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _reloadArticles() async {
     await LoadingController.instance.run(() async {
-      final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
       // Pick up anything changed in Settings while we were away.
       final settings = await _settingsRepo.getAll();
       if (mounted) {
@@ -545,7 +613,10 @@ class _FeedScreenState extends State<FeedScreen>
         });
       }
       await _loadArticles();
-      _restoreScrollOffset(offset);
+      // Anchor, not `offset`: _loadArticles has just re-queried, so read rows
+      // are gone and fetched rows may have been inserted above. The pixel
+      // number that was correct a moment ago now points somewhere else.
+      _restoreAnchor();
     }, label: 'Loading');
   }
 
@@ -596,23 +667,108 @@ class _FeedScreenState extends State<FeedScreen>
   /// past". This replaces the scroll-restoration half of PRD §4.3 for
   /// refresh paths only; returning from the browser and switching tabs both
   /// still restore position.
+  /// Records the article at the viewport top, so the position can be found
+  /// again in a list that has changed underneath it.
+  ///
+  /// Stores the two articles below it as fallbacks: the anchor itself is the
+  /// most likely row to disappear, because it is exactly the row the user was
+  /// looking at when they opened something.
+  void _captureAnchor() {
+    if (!_scrollController.hasClients || _rows.isEmpty) return;
+    final offset = _scrollController.offset;
+
+    var cumulative = 0.0;
+    for (var i = 0; i < _rows.length; i++) {
+      final row = _rows[i];
+      final h = _rowHeight(row);
+      if (cumulative + h > offset && row is ArticleRow) {
+        final id = row.article.id;
+        if (id == null) return;
+        final fallbacks = <int>[];
+        for (var j = i + 1; j < _rows.length && fallbacks.length < 3; j++) {
+          final r = _rows[j];
+          if (r is ArticleRow && r.article.id != null) {
+            fallbacks.add(r.article.id!);
+          }
+        }
+        _tabAnchors[_currentScope] = ScrollAnchor(
+          articleId: id,
+          fallbackIds: fallbacks,
+          pixelsIntoItem: offset - cumulative,
+        );
+        DiagLog.lifecycle(
+            state: 'anchorCaptured', restoredOffset: offset, anchorId: id);
+        return;
+      }
+      cumulative += h;
+    }
+  }
+
+  /// One row's height, from the same three-tier source the read walk and the
+  /// retirement planner use, so all three agree by construction.
+  double _rowHeight(FeedRow row) {
+    if (row is DayHeaderRow) return kDayHeaderHeight;
+    final id = (row as ArticleRow).article.id;
+    final ctx = id != null ? _cardKeys[id]?.currentContext : null;
+    if (ctx != null) {
+      final box = ctx.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        if (id != null) _measuredHeights[id] = box.size.height;
+        return box.size.height;
+      }
+    }
+    return (id != null ? _measuredHeights[id] : null) ?? 120.0;
+  }
+
+  /// Puts the anchored article back at the viewport top.
+  ///
+  /// Runs as a programmatic scroll, so [ReadGate] sees `userInitiated: false`
+  /// and nothing this moves past can be marked read. That single relationship
+  /// is what makes restoration incapable of corrupting read state.
+  void _restoreAnchor() {
+    final anchor = _tabAnchors[_currentScope];
+    if (anchor == null) return _resetScrollToTop();
+
+    _markReadGate.close();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients || _rows.isEmpty) return;
+
+      final ids = <int>[];
+      for (final row in _rows) {
+        if (row is ArticleRow && row.article.id != null) {
+          ids.add(row.article.id!);
+        }
+      }
+      final target = ScrollAnchorResolver.resolve(anchor, ids);
+      if (ids.isEmpty) return;
+      final targetId = ids[target.index.clamp(0, ids.length - 1)];
+
+      // Sum the rows above the target. Every row above a position the user
+      // was just looking at has been on screen, so its height is in
+      // _measuredHeights — this is measurement, not estimation.
+      var offset = 0.0;
+      for (final row in _rows) {
+        if (row is ArticleRow && row.article.id == targetId) break;
+        offset += _rowHeight(row);
+      }
+      offset += target.pixelsIntoItem;
+
+      final max = _scrollController.position.maxScrollExtent;
+      DiagLog.lifecycle(
+          state: target.exact ? 'anchorRestoreExact' : 'anchorRestoreFallback',
+          restoredOffset: offset,
+          anchorId: targetId);
+      _asProgrammatic('programmatic:anchorRestore',
+          () => _scrollController.jumpTo(offset.clamp(0.0, max)));
+    });
+  }
+
   void _resetScrollToTop() {
     _markReadGate.close();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
-      _scrollController.jumpTo(0);
-    });
-  }
-
-  void _restoreScrollOffset(double offset) {
-    // Same hazard as _resetScrollToTop, for the same reason: the jump below
-    // fires _onScroll.
-    _markReadGate.close();
-    if (offset <= 0) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      final max = _scrollController.position.maxScrollExtent;
-      if (max > 0) _scrollController.jumpTo(offset.clamp(0.0, max));
+      _asProgrammatic(
+          'programmatic:resetTop', () => _scrollController.jumpTo(0));
     });
   }
 
@@ -688,9 +844,7 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _onTabSelectedBody(int index) async {
     _bottomDwellTimer.cancel();
-    if (_scrollController.hasClients) {
-      _tabScrollPositions[_selectedTabIndex] = _scrollController.offset;
-    }
+    _captureAnchor();
 
     final gen = ++_tabGeneration;
     setState(() {
@@ -704,22 +858,9 @@ class _FeedScreenState extends State<FeedScreen>
       _loading = false;
     });
 
-    final savedOffset = _tabScrollPositions[index] ?? 0.0;
-    // The jump below is programmatic like any other, and restoring a saved
-    // offset would otherwise have _onScroll mark everything above it as read
-    // in a tab the user has only just arrived at. The saved offsets
-    // themselves are untouched — only the mark-read pass is held off until
-    // the user actually scrolls.
-    _markReadGate.close();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
-      if (savedOffset > 0) {
-        final max = _scrollController.position.maxScrollExtent;
-        _scrollController.jumpTo(savedOffset.clamp(0.0, max));
-      } else {
-        _scrollController.jumpTo(0);
-      }
-    });
+    // Programmatic like any other restore, so ReadGate blocks the mark-read
+    // pass until the user actually scrolls in the tab they arrived at.
+    _restoreAnchor();
   }
 
   // ── Mark as read on scroll ─────────────────────────────────────────────────
@@ -740,7 +881,14 @@ class _FeedScreenState extends State<FeedScreen>
       }
     }
 
-    _retireScrolledPast();
+    // A short debounce after the end of scrolling. ScrollEndNotification on
+    // its own was not enough: with continuous scrolling the next gesture has
+    // already begun by the time the handler runs, which is how retirement
+    // ended up compensating mid-fling and yanking the list upward.
+    _retireDebounce?.cancel();
+    _retireDebounce = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) _retireScrolledPast();
+    });
   }
 
   /// Removes rows that have scrolled past the retirement frontier, holding the
@@ -776,6 +924,9 @@ class _FeedScreenState extends State<FeedScreen>
       rows: _rowMetrics(),
       scrollOffset: offset,
       bufferCards: kRetirementBufferCards,
+      // Structural, not arithmetic: if anything is still moving there is no
+      // plan to apply, so no correction can land on a live gesture.
+      scrollActive: _scrollController.position.isScrollingNotifier.value,
     );
     if (plan.isEmpty) return;
 
@@ -817,7 +968,15 @@ class _FeedScreenState extends State<FeedScreen>
       });
       // Same turn as the setState above. Do not move this into a post-frame
       // callback — that is exactly one frame of visible jump.
-      _scrollController.jumpTo(offset - plan.removedHeight);
+      DiagLog.retire(
+        ids: plan.articleIds.length,
+        removedExtent: plan.removedHeight,
+        offsetBefore: offset,
+        offsetAfter: offset - plan.removedHeight,
+        scrollActive: _scrollController.position.isScrollingNotifier.value,
+      );
+      _asProgrammatic('programmatic:retireCompensation',
+          () => _scrollController.jumpTo(offset - plan.removedHeight));
     } finally {
       _retiring = false;
     }
@@ -869,29 +1028,43 @@ class _FeedScreenState extends State<FeedScreen>
               }
             }
 
+            final known = measured ?? (id != null ? _measuredHeights[id] : null);
             return RowMetric(
-              height: measured ?? (id != null ? _measuredHeights[id] : null) ?? 120.0,
+              height: known ?? 120.0,
               articleId: id,
               isSaved: article.isSaved,
               isBuilt: context != null,
+              // A guessed height would be applied verbatim as the scroll
+              // correction, so say so and let the planner cancel the cycle.
+              measured: known != null,
             );
           }(),
     ];
   }
 
   void _onScroll() {
+    if (_scrollController.hasClients) {
+      final o = _scrollController.offset;
+      DiagLog.scroll(
+        offset: o,
+        delta: o - _lastLoggedOffset,
+        maxExtent: _scrollController.position.maxScrollExtent,
+        source: _scrollSource,
+      );
+      _lastLoggedOffset = o;
+    }
     // Before the early return below: the fade has to work whether or not
     // mark-read-on-scroll is switched on.
     _fabFade.onScroll();
     _updateBottomDwellTimer();
     if (!_markReadOnScroll || _articles.isEmpty) return;
-    // A programmatic jump moved the list, not the user. Marking here would
-    // read articles nobody has looked at.
-    if (!_markReadGate.isOpen) return;
     final offset = _scrollController.offset;
     double cumulative = 0.0;
     final toWrite = <int>[];
     final readFolderIds = <int?>[];
+    // Set false the moment the walk has to guess a height. A guessed row puts
+    // the viewport top at the wrong article, which marks the wrong set read.
+    var extentsStable = true;
     for (final row in _rows) {
       // Headers contribute height but never decide the break — an article is
       // what marks read, and a header sitting just above the cutoff must not
@@ -901,12 +1074,19 @@ class _FeedScreenState extends State<FeedScreen>
         continue;
       }
       final article = (row as ArticleRow).article;
-      final key = article.id != null ? _cardKeys[article.id!] : null;
-      double h = 120.0;
-      if (key?.currentContext != null) {
-        final box = key!.currentContext!.findRenderObject() as RenderBox?;
-        if (box != null && box.hasSize) h = box.size.height;
+      final id = article.id;
+      final ctx = id != null ? _cardKeys[id]?.currentContext : null;
+      double? measured;
+      if (ctx != null) {
+        final box = ctx.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize) {
+          measured = box.size.height;
+          if (id != null) _measuredHeights[id] = measured;
+        }
       }
+      measured ??= id != null ? _measuredHeights[id] : null;
+      if (measured == null) extentsStable = false;
+      final h = measured ?? 120.0;
       if (cumulative + h / 2 < offset) {
         if (!article.isRead && article.id != null) {
           toWrite.add(article.id!);
@@ -919,8 +1099,32 @@ class _FeedScreenState extends State<FeedScreen>
       cumulative += h;
     }
 
+    // One gate in front of the write, evaluated once with everything the walk
+    // learned. `pastMidpoint` is the walk's own result: it collected exactly
+    // the articles whose midpoint cleared the viewport top, so an empty list
+    // means nothing earned a read.
+    //
+    // This replaces the bare `_markReadGate.isOpen` check that used to sit
+    // above the walk. The gate is still the source of `userInitiated`; what
+    // is new is that a settling layout or a just-resumed app can no longer
+    // ride in behind a legitimately open gate.
+    final allowed = ReadGate.allows(ReadGateInput(
+      userInitiated: _markReadGate.isOpen,
+      extentsStable: extentsStable,
+      sinceResume: DateTime.now().difference(_lastResumeAt),
+      pastMidpoint: toWrite.isNotEmpty,
+      resumeGrace: kResumeReadGrace,
+    ));
+    if (!allowed) {
+      _pendingMarkReadUI.removeAll(toWrite);
+      return;
+    }
+
     // DB write is immediate.
     if (toWrite.isNotEmpty) {
+      for (final id in toWrite) {
+        DiagLog.read(id: id, trigger: 'scroll', offset: offset);
+      }
       _articleRepo.markManyRead(toWrite);
       _counts = _counts.applyManyRead(readFolderIds);
       AppBadgePlus.updateBadge(_counts.all);
@@ -966,6 +1170,11 @@ class _FeedScreenState extends State<FeedScreen>
     // user is parked at the bottom with the whole feed above them, and
     // removing rows would collapse the list while they watch. The next
     // refresh retires them.
+    DiagLog.read(
+      id: -1,
+      trigger: 'bottomDwell',
+      offset: _scrollController.hasClients ? _scrollController.offset : -1,
+    );
     if (_selectedTabIndex == 0) {
       await _articleRepo.markAllAsRead();
     } else {
@@ -991,6 +1200,7 @@ class _FeedScreenState extends State<FeedScreen>
 
     // Mark read immediately and dim in-place.
     if (wasUnread) {
+      DiagLog.read(id: article.id!, trigger: 'tap', offset: scrollOffset);
       await _articleRepo.markAsRead(article.id!);
 
       if (mounted) {
@@ -1009,14 +1219,22 @@ class _FeedScreenState extends State<FeedScreen>
     final uri = Uri.tryParse(article.url);
     if (uri == null) return;
 
+    _captureAnchor();
     await launchUrl(uri, mode: LaunchMode.externalApplication);
 
-    // Restore scroll — list is unchanged except the tapped card is grey.
-    if (mounted) _restoreScrollOffset(scrollOffset);
+    // Restore by anchor. The list is *not* unchanged: with Show read off the
+    // article just opened has been filtered out of it, so every row below it
+    // has shifted up by that card's height.
+    if (mounted) _restoreAnchor();
   }
 
   Future<void> _markRead(Article article) async {
     if (article.id == null || article.isRead) return;
+    DiagLog.read(
+      id: article.id!,
+      trigger: 'swipe',
+      offset: _scrollController.hasClients ? _scrollController.offset : -1,
+    );
     await _articleRepo.markAsRead(article.id!);
 
     HapticFeedback.lightImpact();
@@ -1433,6 +1651,17 @@ class _FeedScreenState extends State<FeedScreen>
         // Returns false either way so the notification keeps bubbling: the
         // RefreshIndicator above is an ancestor and depends on seeing it.
         onNotification: (notification) {
+          if (!_programmaticScroll) {
+            if (notification is ScrollStartNotification) {
+              _scrollSource =
+                  notification.dragDetails != null ? 'drag' : 'programmatic';
+            } else if (notification is ScrollUpdateNotification) {
+              _scrollSource =
+                  notification.dragDetails != null ? 'drag' : 'fling';
+            } else if (notification is ScrollEndNotification) {
+              _scrollSource = 'idle';
+            }
+          }
           if (notification is UserScrollNotification &&
               notification.direction != ScrollDirection.idle) {
             _markReadGate.open();

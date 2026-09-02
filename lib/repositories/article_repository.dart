@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import '../utils/diag_log.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/article.dart';
@@ -302,11 +303,15 @@ class ArticleRepository {
     final ph = List.filled(articleIds.length, '?').join(',');
 
     return db.transaction((txn) async {
-      await txn.rawUpdate('''
+      final savedMarked = await txn.rawUpdate('''
         UPDATE ${TableNames.articles}
         SET is_read = 1
         WHERE id IN ($ph) AND is_saved = 1
       ''', articleIds);
+      if (savedMarked > 0) {
+        DiagLog.read(
+            id: -savedMarked, trigger: 'retirement:saved', offset: -1);
+      }
 
       await txn.rawInsert('''
         INSERT OR IGNORE INTO ${TableNames.deletedArticles}

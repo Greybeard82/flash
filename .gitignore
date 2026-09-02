@@ -53,3 +53,4 @@ app.*.map.json
 files/
 files2/
 graphify-out/
+.p10/

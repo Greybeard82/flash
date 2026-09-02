@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/diag_log.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
@@ -66,7 +67,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _openArticle(Article article) async {
     if (article.id != null) {
-      await _articleRepo.markAsRead(article.id!);
+      DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
+    await _articleRepo.markAsRead(article.id!);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -100,6 +102,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
 
   Future<void> _markRead(Article article) async {
     if (article.id == null) return;
+    DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
     await _articleRepo.markAsRead(article.id!);
     ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();

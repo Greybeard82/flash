@@ -53,6 +53,16 @@ class RowMetric {
   /// error anywhere else in this file can delete something on screen.
   final bool isBuilt;
 
+  /// Whether [height] is a real measurement or a fallback guess.
+  ///
+  /// The offset correction is exactly the sum of the removed rows' heights, so
+  /// a guessed height moves the list by the size of the guess. Pass 10
+  /// measured real cards at 96.8dp and 121.9dp against a hardcoded 120, so the
+  /// guess is wrong in both directions and the error accumulates down the
+  /// list. A row that could not be measured therefore cancels the cycle
+  /// instead of being estimated.
+  final bool measured;
+
   final double height;
 
   const RowMetric({
@@ -60,6 +70,7 @@ class RowMetric {
     this.articleId,
     this.isSaved = false,
     this.isBuilt = false,
+    this.measured = true,
   });
 
   bool get isHeader => articleId == null;
@@ -94,7 +105,22 @@ RetirementPlan planRetirement({
   required List<RowMetric> rows,
   required double scrollOffset,
   int bufferCards = 2,
+  bool scrollActive = false,
 }) {
+  // Quiescence. Retirement corrects the scroll offset in the same turn as the
+  // removal, and a correction applied while a gesture is live either fights
+  // the ballistic simulation or yanks the list out from under the finger.
+  //
+  // This is not a theoretical guard. Pass 10 logged five consecutive
+  // retirements during sustained scrolling, every one of them with
+  // scrollActive=true, each pulling the offset back between 240px and 861px:
+  //
+  //   [RETIRE] ids=7 removedExtent=861.0 offsetBefore=1417.0 offsetAfter=556.0
+  //
+  // That is the reported "list jumps upward" bug, in full. Being called from
+  // ScrollEndNotification was not sufficient: with continuous scrolling the
+  // *next* gesture has already started by the time this runs.
+  if (scrollActive) return RetirementPlan.empty;
   if (rows.isEmpty || scrollOffset <= 0) return RetirementPlan.empty;
 
   // Walk down accumulating height; find the last row whose bottom edge is at
@@ -145,6 +171,14 @@ RetirementPlan planRetirement({
   // the block: nothing at or above it may be removed.
   for (var i = 0; i <= frontier; i++) {
     if (rows[i].isSaved) return RetirementPlan.empty;
+  }
+
+  // Every row being removed must have a real measured extent, because
+  // removedHeight *is* the scroll correction. One guessed row and the list
+  // moves by the error. Skipping a cycle costs nothing — the rows are still
+  // there and the next settled scroll retires them.
+  for (var i = 0; i <= frontier; i++) {
+    if (!rows[i].measured) return RetirementPlan.empty;
   }
 
   final indices = <int>[];

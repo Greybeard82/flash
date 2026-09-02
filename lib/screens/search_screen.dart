@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../utils/diag_log.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
@@ -55,6 +56,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _open(Article article) async {
     if (!article.isRead && article.id != null) {
+      DiagLog.read(id: article.id!, trigger: 'tap:search', offset: -1);
       await _repo.markAsRead(article.id!);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {

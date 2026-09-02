@@ -13,8 +13,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/utils/constants.dart';
 import 'package:flash/utils/retirement_frontier.dart';
 
-RowMetric _article(int id, double h, {bool saved = false, bool built = false}) =>
-    RowMetric(height: h, articleId: id, isSaved: saved, isBuilt: built);
+RowMetric _article(int id, double h,
+        {bool saved = false, bool built = false, bool measured = true}) =>
+    RowMetric(
+        height: h,
+        articleId: id,
+        isSaved: saved,
+        isBuilt: built,
+        measured: measured);
 
 const RowMetric _header = RowMetric(height: 36);
 
@@ -459,5 +465,96 @@ void main() {
     }
     expect(plan.removedHeight, expected);
     expect(plan.removedHeight, greaterThan(0));
+  });
+
+  // ── Pass 10: quiescence and measured compensation ───────────────────────
+  //
+  // Bug C was the list jumping upward mid-scroll. Two properties have to hold
+  // for that to be impossible rather than merely unlikely: retirement must not
+  // run at all while the list is moving, and when it does run the offset
+  // correction must equal the real extent of what was removed. An estimate
+  // that is close is still wrong — the error is exactly the visible jump.
+  group('retirement is quiescent while the list is moving', () {
+    List<RowMetric> longList() => [
+          for (var i = 0; i < 40; i++) _article(i, 100 + (i % 7) * 11.0),
+        ];
+
+    test('an active drag or fling plans nothing', () {
+      final plan = planRetirement(
+          rows: longList(), scrollOffset: 3000, scrollActive: true);
+      expect(plan.isEmpty, isTrue,
+          reason: 'a correction applied mid-gesture either fights the '
+              'ballistic simulation or yanks the list under the finger');
+    });
+
+    test('the same list at rest does plan something', () {
+      final plan = planRetirement(
+          rows: longList(), scrollOffset: 3000, scrollActive: false);
+      expect(plan.isEmpty, isFalse,
+          reason: 'otherwise the previous test passes for the wrong reason');
+    });
+
+    test('scrollActive defaults to false so existing callers are unchanged', () {
+      final a = planRetirement(rows: longList(), scrollOffset: 3000);
+      final b = planRetirement(
+          rows: longList(), scrollOffset: 3000, scrollActive: false);
+      expect(a.rowIndices, b.rowIndices);
+      expect(a.removedHeight, b.removedHeight);
+    });
+  });
+
+  group('compensation equals the measured extent of what was removed', () {
+    test('removedHeight is the exact sum, not an average or a count', () {
+      // Deliberately lumpy: an average-row-height estimate would be close
+      // enough to look right and wrong enough to be visible.
+      final rows = [
+        _header,
+        _article(1, 41),
+        _article(2, 233),
+        _article(3, 89),
+        _article(4, 307),
+        _article(5, 55),
+        _article(6, 178),
+        _article(7, 96),
+        _article(8, 144),
+        for (var i = 9; i < 30; i++) _article(i, 120),
+      ];
+      final plan = planRetirement(rows: rows, scrollOffset: 1200);
+      expect(plan.isEmpty, isFalse);
+
+      var summed = 0.0;
+      for (final i in plan.rowIndices) {
+        summed += rows[i].height;
+      }
+      expect(plan.removedHeight, summed,
+          reason: 'THE assertion: the scroll correction is this number, so '
+              'any divergence from the real extent is the jump the user sees');
+
+      final average = summed / plan.rowIndices.length;
+      final estimate = average * plan.rowIndices.length;
+      expect(plan.removedHeight, estimate,
+          reason: 'trivially equal here, but the next one is the real check');
+      expect(plan.removedHeight, isNot(120.0 * plan.rowIndices.length),
+          reason: 'a constant-height estimate must not accidentally agree, '
+              'or this group proves nothing');
+    });
+
+    test('a row whose extent could not be measured cancels the whole cycle', () {
+      final rows = [
+        _article(1, 120),
+        _article(2, 120, measured: false),
+        _article(3, 120),
+        for (var i = 4; i < 30; i++) _article(i, 120),
+      ];
+      final plan = planRetirement(rows: rows, scrollOffset: 1500);
+      expect(plan.isEmpty, isTrue,
+          reason: 'retiring on a guessed height moves the list by the size of '
+              'the guess; skipping one cycle costs nothing');
+    });
+
+    test('all-measured rows are unaffected by the measured flag', () {
+      final rows = [for (var i = 0; i < 30; i++) _article(i, 120, measured: true)];
+      expect(planRetirement(rows: rows, scrollOffset: 1500).isEmpty, isFalse);
+    });
   });
 }
