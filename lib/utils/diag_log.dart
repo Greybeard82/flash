@@ -11,6 +11,10 @@ import 'package:flutter/foundation.dart';
 /// that cannot be answered by reading the code: what actually moves the scroll
 /// offset, what actually writes `is_read`, and in what order relative to the
 /// lifecycle transitions.
+/// Prints via [debugPrintSynchronously] rather than [debugPrint]: the latter
+/// throttles to roughly 1KB/s, and a scroll flood pushes later lines minutes
+/// behind the events they describe — which made [retire] lines look absent
+/// when the flush had in fact run.
 class DiagLog {
   static final DateTime _epoch = DateTime.now();
 
@@ -38,7 +42,7 @@ class DiagLog {
     required String source,
   }) {
     if (!kDebugMode) return;
-    debugPrint('[SCROLL] t=$_t offset=${offset.toStringAsFixed(1)} '
+    debugPrintSynchronously('[SCROLL] t=$_t offset=${offset.toStringAsFixed(1)} '
         'delta=${delta.toStringAsFixed(1)} '
         'maxExtent=${maxExtent.toStringAsFixed(1)} '
         'source=$source lifecycle=$lifecycleState');
@@ -50,23 +54,16 @@ class DiagLog {
     required double offset,
   }) {
     if (!kDebugMode) return;
-    debugPrint('[READ]   t=$_t id=$id trigger=$trigger '
+    debugPrintSynchronously('[READ]   t=$_t id=$id trigger=$trigger '
         'offset=${offset.toStringAsFixed(1)} sinceResume=$sinceResumeMs');
   }
 
-  static void retire({
-    required int ids,
-    required double removedExtent,
-    required double offsetBefore,
-    required double offsetAfter,
-    required bool scrollActive,
-  }) {
+  /// Logged at each flush. [ids] is the drained queue length, which is the
+  /// only way to observe how large the queue grows in real use — it is
+  /// deliberately uncapped, so this number is worth watching.
+  static void retire({required int ids, required String trigger}) {
     if (!kDebugMode) return;
-    debugPrint('[RETIRE] t=$_t ids=$ids '
-        'removedExtent=${removedExtent.toStringAsFixed(1)} '
-        'offsetBefore=${offsetBefore.toStringAsFixed(1)} '
-        'offsetAfter=${offsetAfter.toStringAsFixed(1)} '
-        'scrollActive=$scrollActive');
+    debugPrintSynchronously('[RETIRE] t=$_t ids=$ids trigger=$trigger');
   }
 
   static void lifecycle({
@@ -75,7 +72,7 @@ class DiagLog {
     int? anchorId,
   }) {
     if (!kDebugMode) return;
-    debugPrint('[LIFECY] t=$_t state=$state '
+    debugPrintSynchronously('[LIFECY] t=$_t state=$state '
         'restoredOffset=${restoredOffset?.toStringAsFixed(1) ?? "null"} '
         'anchorId=${anchorId ?? "null"}');
   }

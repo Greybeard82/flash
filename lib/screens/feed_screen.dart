@@ -27,6 +27,7 @@ import '../utils/retirement_frontier.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../reading/read_gate.dart';
+import '../reading/retirement_queue.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
 import '../widgets/article_card.dart';
@@ -92,8 +93,10 @@ class _FeedScreenState extends State<FeedScreen>
   /// cycle, and a fresh launch that blocked reads would be its own bug.
   DateTime _lastResumeAt = DateTime.fromMillisecondsSinceEpoch(0);
 
-  /// Debounces retirement behind the end of scrolling. See [_onScrollEnd].
-  Timer? _retireDebounce;
+  /// Rows that have scrolled past the frontier and are waiting to be
+  /// deleted. Nothing here is removed from the list or the database until one
+  /// of the four flush points runs. See [RetirementQueue].
+  final RetirementQueue _retirementQueue = RetirementQueue();
 
   // ── Banner ─────────────────────────────────────────────────────────────────
   final _bannerKey = GlobalKey<NotificationBannerState>();
@@ -138,9 +141,6 @@ class _FeedScreenState extends State<FeedScreen>
   /// Pruned alongside _cardKeys in _syncCardKeys; an unbounded map on a
   /// scrolling list is its own bug.
   final Map<int, double> _measuredHeights = {};
-
-  /// Guards against _retireScrolledPast re-entering through its own jumpTo.
-  bool _retiring = false;
 
   // -- Pass 10 instrumentation (debug only) --
   /// Best available answer to "why did the offset just change", maintained
@@ -367,7 +367,6 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     _scrollDebounce?.cancel();
-    _retireDebounce?.cancel();
     _bottomDwellTimer.cancel();
     _fabFade.dispose();
     if (_openBubble?.mounted ?? false) _openBubble!.remove();
@@ -573,6 +572,9 @@ class _FeedScreenState extends State<FeedScreen>
     if (id == null) return;
     final saved = SavedStateNotifier.instance.saved;
 
+    // Bookmarked from another screen: same exemption as _toggleSaved.
+    if (saved) _retirementQueue.release(id);
+
     final current = _articles.indexWhere((a) => a.id == id);
     if (current < 0 || _articles[current].isSaved == saved) return;
 
@@ -638,8 +640,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// A dozen sites change the list, and any one of them forgetting to regroup
   /// would show stale headers or throw off `_onScroll`'s height accounting.
   ///
-  /// **One deliberate exception**: `_retireScrolledPast` assigns `_articles`
-  /// directly. It must not regroup — see the comment there before changing it.
+  /// Since pass 12 there is no exception: retirement no longer mutates the
+  /// list in place, it queues ids and lets the next rebuild drop them.
   ///
   /// Safe to call inside a `setState` closure; it only assigns fields.
   void _setArticles(List<Article> articles) {
@@ -798,6 +800,10 @@ class _FeedScreenState extends State<FeedScreen>
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
 
+    // Flush points 2 and 3 of 4. The refresh FAB and pull-to-refresh are
+    // separate gestures but the same code path, so one flush serves both.
+    await _flushRetirementQueue('refresh');
+
     await LoadingController.instance.run(() async {
       try {
         final beforeIds = _articles.map((a) => a.id).toSet();
@@ -845,6 +851,9 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _onTabSelectedBody(int index) async {
     _bottomDwellTimer.cancel();
     _captureAnchor();
+    // Flush point 4 of 4. Before the articles for the new tab are queried, so
+    // the rows retired here never reach the list being built.
+    await _flushRetirementQueue('tabSwitch');
 
     final gen = ++_tabGeneration;
     setState(() {
@@ -881,119 +890,59 @@ class _FeedScreenState extends State<FeedScreen>
       }
     }
 
-    // A short debounce after the end of scrolling. ScrollEndNotification on
-    // its own was not enough: with continuous scrolling the next gesture has
-    // already begun by the time the handler runs, which is how retirement
-    // ended up compensating mid-fling and yanking the list upward.
-    _retireDebounce?.cancel();
-    _retireDebounce = Timer(const Duration(milliseconds: 150), () {
-      if (mounted) _retireScrolledPast();
-    });
+    _enqueueScrolledPast();
   }
 
-  /// Removes rows that have scrolled past the retirement frontier, holding the
-  /// visual position exactly.
+  /// Queues rows that have scrolled past the retirement frontier.
   ///
-  /// Only ever called from ScrollEndNotification. The position is idle there,
-  /// so jumpTo cannot cancel a gesture — and the removal and the correction
-  /// land in the same synchronous turn, so the frame the user sees already has
-  /// both applied. Nothing moves.
-  void _retireScrolledPast() {
-    // DISABLED — pass 07. Scroll retirement was deleting articles still on
-    // screen. Re-enabled at the end of this pass once the three root causes
-    // are fixed and the structural guard makes a recurrence impossible.
+  /// Phase one of two, and the half that must never move anything. It adds
+  /// ids to [_retirementQueue] and stops: no deletion, no tombstone, no row
+  /// leaves the list, and the scroll offset is not touched. Because it cannot
+  /// move the list it needs no quiescence guard and is safe to run while a
+  /// gesture is live.
+  ///
+  /// The deletion happens in [_flushRetirementQueue], at moments when the
+  /// scroll position is being rebuilt anyway.
+  void _enqueueScrolledPast() {
     if (!kEnableScrollRetirement) return;
     if (!_markReadOnScroll || _showRead) return;
     if (!_scrollController.hasClients) return;
     if (_booting || _refreshing || _backgroundFetching) return;
-    // jumpTo dispatches ScrollEndNotification via didEndScroll, so every
-    // programmatic scroll lands here: the offset restore on returning from an
-    // article, the reset after a refresh, a tab-switch restore. None of those
-    // are the user scrolling past anything. Verified: jumpTo raises
-    // ScrollStart and ScrollEnd but no UserScrollNotification, so the gate
-    // stays shut exactly when it should.
+    // Same evidence-of-a-person rule as the mark-read pass: a programmatic
+    // jump is not the user scrolling past anything.
     if (!_markReadGate.isOpen) return;
-    // Belt and braces against re-entry through this method's own jumpTo.
-    // Change 5 above mostly covers it, since the gate is closed before that
-    // jump — but relying on one guard for two jobs is how this regression
-    // happened.
-    if (_retiring) return;
 
-    final offset = _scrollController.offset;
     final plan = planRetirement(
       rows: _rowMetrics(),
-      scrollOffset: offset,
+      scrollOffset: _scrollController.offset,
       bufferCards: kRetirementBufferCards,
-      // Structural, not arithmetic: if anything is still moving there is no
-      // plan to apply, so no correction can land on a live gesture.
-      scrollActive: _scrollController.position.isScrollingNotifier.value,
     );
     if (plan.isEmpty) return;
 
-    assert(() {
-      if (plan.clampedByBuiltRows) {
-        debugPrint('[retirement] frontier clamped by the built-row ceiling — '
-            'the buffer arithmetic is letting the frontier reach rows the '
-            'ListView still has built.');
-      }
-      return true;
-    }());
-
-    final removed = plan.rowIndices.toSet();
-    final keptRows = [
-      for (var i = 0; i < _rows.length; i++)
-        if (!removed.contains(i)) _rows[i],
-    ];
-    final retiredIds = plan.articleIds.toSet();
-
-    _retiring = true;
-    try {
-      _markReadGate.close();
-      // Deliberately NOT _setArticles. That regroups through groupByDay,
-      // rebuilding `_rows` from scratch — which would discard the exact row
-      // set `planRetirement` measured and hand back a list whose total height
-      // no longer matches `plan.removedHeight`. The jumpTo below would then
-      // correct by the wrong amount and the list would visibly move, which is
-      // the one thing retirement may never do. `keptRows` is the measured row
-      // set minus exactly the removed indices, so headers and heights stay as
-      // planned.
-      setState(() {
-        _articles = [
-          for (final a in _articles)
-            if (!retiredIds.contains(a.id)) a,
-        ];
-        _rows = keptRows;
-        // The rest of what _setArticles would have done, minus the regroup.
-        _syncCardKeys(_articles);
-      });
-      // Same turn as the setState above. Do not move this into a post-frame
-      // callback — that is exactly one frame of visible jump.
-      DiagLog.retire(
-        ids: plan.articleIds.length,
-        removedExtent: plan.removedHeight,
-        offsetBefore: offset,
-        offsetAfter: offset - plan.removedHeight,
-        scrollActive: _scrollController.position.isScrollingNotifier.value,
-      );
-      _asProgrammatic('programmatic:retireCompensation',
-          () => _scrollController.jumpTo(offset - plan.removedHeight));
-    } finally {
-      _retiring = false;
-    }
-
-    unawaited(_retireInBackground(plan.articleIds));
+    _retirementQueue.enqueue(plan.articleIds);
   }
 
-  /// The database half. Unawaited on purpose: the list has already moved on,
-  /// and a failed write is self-healing — the row survives and reappears at
-  /// the next rebuild rather than being lost.
-  Future<void> _retireInBackground(List<int> ids) async {
+  /// Phase two: delete everything the queue has collected.
+  ///
+  /// Called from exactly four places — mark all as read, the refresh FAB,
+  /// pull-to-refresh and a category tab switch. Each is a moment where the
+  /// scroll position is already being reset or the user is already at the top,
+  /// so removing rows produces no visible movement and there is no offset
+  /// arithmetic left to get wrong.
+  ///
+  /// Awaited before the caller rebuilds, so the list is built once from the
+  /// post-flush state rather than built and then rebuilt.
+  Future<void> _flushRetirementQueue(String trigger) async {
+    if (_retirementQueue.isEmpty) return;
+    final ids = _retirementQueue.drain();
+    DiagLog.retire(ids: ids.length, trigger: trigger);
     try {
       await _articleRepo.retireArticles(ids);
       await _refreshCountsFromDb();
       ReadStateNotifier.instance.articleReadStateChanged();
     } catch (_) {
-      // Self-healing, as above.
+      // Self-healing: a failed write leaves the rows in place, and they are
+      // re-queued the next time the user scrolls past them.
     }
   }
 
@@ -1028,15 +977,10 @@ class _FeedScreenState extends State<FeedScreen>
               }
             }
 
-            final known = measured ?? (id != null ? _measuredHeights[id] : null);
             return RowMetric(
-              height: known ?? 120.0,
+              height: measured ?? (id != null ? _measuredHeights[id] : null) ?? 120.0,
               articleId: id,
               isSaved: article.isSaved,
-              isBuilt: context != null,
-              // A guessed height would be applied verbatim as the scroll
-              // correction, so say so and let the planner cancel the cycle.
-              measured: known != null,
             );
           }(),
     ];
@@ -1251,6 +1195,9 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
+    // Unread means the user has not finished with it, so it must not be
+    // retired at the next flush.
+    _retirementQueue.release(article.id!);
     await _articleRepo.markAsUnread(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
@@ -1267,6 +1214,11 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _toggleSaved(Article article) async {
     if (article.id == null) return;
     final nowSaved = !article.isSaved;
+    // PRD 4.9: a saved article is never deleted, whatever its read state or
+    // age. Releasing here is belt and braces — retireArticles also scopes its
+    // delete to is_saved = 0 — but it keeps the queue honest about what it
+    // will actually retire.
+    if (nowSaved) _retirementQueue.release(article.id!);
     await _articleRepo.setSaved(article.id!, saved: nowSaved);
     HapticFeedback.lightImpact();
     if (mounted) {
@@ -1354,6 +1306,8 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<void> _markAllReadBody() async {
+    // Flush point 1 of 4. Before the rebuild below, so the list is built once.
+    await _flushRetirementQueue('markAllRead');
     final settings = await _settingsRepo.getAll();
     final cleanupDays = settings.cleanupAgeDays;
 
@@ -1677,13 +1631,11 @@ class _FeedScreenState extends State<FeedScreen>
           child: ListView.builder(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
-            // Also sets how far above the viewport articles are retired.
-            // planRetirement confines retirement to rows this ListView has
-            // *disposed*, and at ~110dp per card this keeps roughly 4.5 rows
-            // alive above the fold — more than kRetirementBufferCards, so this
-            // number is what actually decides the retirement distance. Lower
-            // it for scroll performance and articles start being deleted
-            // closer to the viewport.
+            // Pure scroll-performance tuning again. It used to double as the
+            // retirement distance, because retirement was confined to rows
+            // this ListView had disposed — that coupling went with the
+            // built-row ceiling in pass 12. kRetirementBufferCards alone now
+            // decides how far above the viewport a row is queued.
             cacheExtent: 500,
             itemCount: _rows.length,
             itemBuilder: (context, i) {
