@@ -44,8 +44,32 @@ class AppDatabase {
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
+      // Foreign keys are OFF for the duration of open, and switched back on in
+      // onOpen once any migration has finished.
+      //
+      // This is not a preference, it is the only place the pragma can be set.
+      // The v13 migration rebuilds `articles`, and `article_summaries` holds
+      // `article_id REFERENCES articles(id) ON DELETE CASCADE` — so dropping
+      // the old table with enforcement on would cascade every summary row
+      // away, and the later RENAME would repoint that clause at a table that
+      // is about to disappear. `PRAGMA foreign_keys` is a silent no-op inside
+      // a transaction, and sqflite runs onCreate/onUpgrade inside one, so
+      // issuing it there would appear to work and do nothing.
       onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = OFF');
+      },
+      onOpen: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
+        if (kDebugMode) {
+          // The device's SQLite version decides which DDL is even parseable.
+          // `DROP COLUMN` needs 3.35 and min SDK 26 ships ~3.18, and there is
+          // no other way to read this off a phone — sqlite3 is not on the
+          // device and the host's version says nothing about it.
+          final v = await db.rawQuery('SELECT sqlite_version() AS v');
+          final fk = await db.rawQuery('PRAGMA foreign_keys');
+          debugPrintSynchronously('[SQLITE] version=${v.first['v']} '
+              'foreign_keys=${fk.first.values.first}');
+        }
       },
     );
   }
@@ -193,9 +217,7 @@ class AppDatabase {
       await db.execute('DROP INDEX IF EXISTS idx_articles_read_at');
       final cols = await db.rawQuery('PRAGMA table_info(${TableNames.articles})');
       if (cols.any((c) => c['name'] == 'read_at')) {
-        await db.execute(
-          'ALTER TABLE ${TableNames.articles} DROP COLUMN read_at',
-        );
+        await _dropReadAtByRebuild(db, cols);
       }
 
       // Articles already marked read are deliberately NOT retired here. They
@@ -206,6 +228,73 @@ class AppDatabase {
       await db.execute(
         "INSERT OR IGNORE INTO settings (key, value, updated_at) "
         "VALUES ('mark_all_read_confirm', 'true', $now)",
+      );
+    }
+  }
+
+  /// Removes `read_at` by rebuilding the table.
+  ///
+  /// `ALTER TABLE ... DROP COLUMN` needs SQLite 3.35 (March 2021). Android 12
+  /// ships 3.32 and the PRD claims min SDK 26, whose SQLite is older still, so
+  /// the direct statement threw `near "DROP": syntax error` inside the
+  /// migration transaction — which failed the open, killed `main()`, and left
+  /// a permanently blank app with no recovery but clearing app data. Since the
+  /// backup format covers neither articles nor read state nor bookmarks, that
+  /// meant losing the library.
+  ///
+  /// The rebuild below is the pre-3.35 idiom and works on every version, so
+  /// there is deliberately no branch on `sqlite_version()`: one code path is
+  /// one path to test, and the version-specific one would be the path that
+  /// never ran on the maintainer's device.
+  ///
+  /// Foreign keys are already OFF here — see the `onConfigure` note in
+  /// [_initDatabase]. That is load-bearing, not hygiene.
+  Future<void> _dropReadAtByRebuild(
+      Database db, List<Map<String, Object?>> cols) async {
+    // Columns to carry over: everything the old table has except read_at,
+    // intersected with what the new table declares. Enumerated rather than
+    // `SELECT *` so the copy cannot silently depend on column order — and
+    // derived from the live table rather than hardcoded because a database
+    // upgrading from v1 may predate columns the v13 schema takes for granted.
+    const newColumns = {
+      'id', 'feed_id', 'guid', 'title', 'url', 'description', 'thumbnail_url',
+      'thumbnail_path', 'published_at', 'fetched_at', 'is_read', 'is_blocked',
+      'is_saved', 'blocked_keyword',
+    };
+    final carried = [
+      for (final c in cols)
+        if (c['name'] != 'read_at' && newColumns.contains(c['name']))
+          c['name'] as String,
+    ];
+    final list = carried.join(', ');
+
+    await db.execute(SchemaStatements.createArticlesRebuildV13);
+    await db.execute(
+      'INSERT INTO articles_new ($list) SELECT $list FROM ${TableNames.articles}',
+    );
+    await db.execute('DROP TABLE ${TableNames.articles}');
+    await db.execute('ALTER TABLE articles_new RENAME TO ${TableNames.articles}');
+
+    // DROP TABLE takes every index on it with it, silently. Nothing complains
+    // until a query is merely slow, or a duplicate article appears because the
+    // UNIQUE(feed_id, guid) index that dedup depends on is no longer there.
+    await db.execute(SchemaStatements.createArticlesGuidIndex);
+    await db.execute(SchemaStatements.createArticlesFeedIdIndex);
+    await db.execute(SchemaStatements.createArticlesIsReadIndex);
+    await db.execute(SchemaStatements.createArticlesIsBlockedIndex);
+    await db.execute(SchemaStatements.createArticlesPublishedAtIndex);
+    await db.execute(SchemaStatements.createArticlesReadPublishedIndex);
+    await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
+    // idx_articles_read_at is deliberately not recreated — its column is gone.
+
+    // Throwing here aborts the migration and rolls the whole transaction back,
+    // which is the right outcome: a database with dangling references is worse
+    // than one still on the old schema.
+    final violations = await db.rawQuery('PRAGMA foreign_key_check');
+    if (violations.isNotEmpty) {
+      throw StateError(
+        'v13 articles rebuild left ${violations.length} foreign key '
+        'violation(s); migration aborted and rolled back.',
       );
     }
   }

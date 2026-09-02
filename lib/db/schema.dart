@@ -61,6 +61,34 @@ class SchemaStatements {
     )
   ''';
 
+  /// The v13 `articles` table under a temporary name, for the v13 migration's
+  /// table rebuild.
+  ///
+  /// Deliberately spelled out rather than string-substituted from
+  /// [createArticles]: this is the statement that decides whether a user's
+  /// library survives an upgrade, and it should be readable on its own. The
+  /// two are pinned together by a test that compares the column set of a
+  /// migrated database against a freshly created one, so drift fails the
+  /// build rather than silently shipping.
+  static const String createArticlesRebuildV13 = '''
+    CREATE TABLE articles_new (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      feed_id        INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      guid           TEXT    NOT NULL,
+      title          TEXT    NOT NULL,
+      url            TEXT    NOT NULL,
+      description    TEXT,
+      thumbnail_url  TEXT,
+      thumbnail_path TEXT,
+      published_at   INTEGER,
+      fetched_at     INTEGER NOT NULL,
+      is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+      is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
+      is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
+      blocked_keyword TEXT
+    )
+  ''';
+
   static const String createArticlesGuidIndex = '''
     CREATE UNIQUE INDEX idx_articles_guid_feed ON articles(feed_id, guid)
   ''';
