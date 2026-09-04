@@ -543,4 +543,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Conferma segna tutto come letto';
+
+  @override
+  String get selectCategoryFirst => 'Scegli una categoria per continuare.';
 }

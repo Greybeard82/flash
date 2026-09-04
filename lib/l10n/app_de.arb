@@ -172,5 +172,6 @@
   "dayToday": "Heute",
   "dayYesterday": "Gestern",
   "dontShowAgain": "Nicht mehr anzeigen",
-  "confirmMarkAllRead": "Alle als gelesen bestätigen"
+  "confirmMarkAllRead": "Alle als gelesen bestätigen",
+  "selectCategoryFirst": "Wähle eine Kategorie, um fortzufahren."
 }

@@ -1057,6 +1057,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm mark all as read'**
   String get confirmMarkAllRead;
+
+  /// Inline message under the category chips in the add-feed sheet when the user tries to add a feed without choosing a category.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a category to continue.'**
+  String get selectCategoryFirst;
 }
 
 class _AppLocalizationsDelegate

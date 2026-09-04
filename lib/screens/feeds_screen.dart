@@ -180,24 +180,13 @@ class _FeedsScreenState extends State<FeedsScreen> {
         title: Text(l10n.categories),
         centerTitle: false,
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            heroTag: 'new_category',
-            onPressed: _showAddFolderSheet,
-            tooltip: l10n.newCategory,
-            child: const Icon(Icons.new_label_outlined),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'add_feed',
-            onPressed: _showAddFeedSheet,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addFeed),
-          ),
-        ],
+      // One entry point. Creating a category happens inside the add-feed
+      // sheet, where it is needed — a feed cannot be added without one.
+      floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'add_feed',
+        onPressed: _showAddFeedSheet,
+        icon: const Icon(Icons.add),
+        label: Text(l10n.addFeed),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -299,27 +288,6 @@ class _FeedsScreenState extends State<FeedsScreen> {
         articleRepo: ArticleRepository(),
         settingsRepo: SettingsRepository(),
         onFeedAdded: _load,
-      ),
-    );
-  }
-
-  // ── Add folder ──
-
-  void _showAddFolderSheet() {
-    final l10n = AppLocalizations.of(context)!;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _FolderNameSheet(
-        title: l10n.newCategory,
-        onSave: (name) => LoadingController.instance.run(() async {
-          final position = await _folderRepo.getNextPosition();
-          final now = DateTime.now().millisecondsSinceEpoch;
-          await _folderRepo.insert(
-            Folder(name: name, position: position, createdAt: now),
-          );
-          await _load();
-        }, label: 'Adding category'),
       ),
     );
   }
@@ -732,13 +700,76 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   bool _adding = false;
   String _error = '';
 
-  /// Intentionally starts null — the user must pick a category.
+  /// Intentionally starts null — the user must pick a category. Enforced in
+  /// [_addByUrl], the single point both the raw-URL path and a Feedly result
+  /// pass through, not at every keystroke: searching needs no category yet.
   Folder? _selectedFolder;
+
+  /// The sheet's own copy of the folder list. A category created inline has
+  /// to appear as a chip immediately, and the parent screen does not rebuild
+  /// this sheet while it is open, so `widget.folders` cannot be the source.
+  late final List<Folder> _localFolders;
+
+  /// Whether the inline "new category" row is showing under the chips.
+  bool _creatingCategory = false;
+  final _categoryController = TextEditingController();
+  final _categoryFocus = FocusNode();
+
+  /// Shown directly under the chip row when an add is attempted with no
+  /// category chosen. Cleared the moment one is picked or created.
+  String _categoryError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _localFolders = List<Folder>.of(widget.folders);
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _categoryController.dispose();
+    _categoryFocus.dispose();
     super.dispose();
+  }
+
+  void _openCategoryCreator() {
+    setState(() {
+      _creatingCategory = true;
+      _categoryError = '';
+    });
+    // The search field owns autofocus. Requesting focus after this frame is
+    // the reliable way to move the caret into the new row.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _categoryFocus.requestFocus();
+    });
+  }
+
+  void _closeCategoryCreator() {
+    _categoryController.clear();
+    setState(() => _creatingCategory = false);
+  }
+
+  /// Inserts the folder, shows it as a chip at once, and selects it — the
+  /// same insert as the old standalone sheet, minus the parent reload wait.
+  Future<void> _createCategory() async {
+    final name = _categoryController.text.trim();
+    if (name.isEmpty) return;
+    final created = await LoadingController.instance.run(() async {
+      final position = await widget.folderRepo.getNextPosition();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      return widget.folderRepo.insert(
+        Folder(name: name, position: position, createdAt: now),
+      );
+    }, label: 'Adding category');
+    if (!mounted) return;
+    _categoryController.clear();
+    setState(() {
+      _localFolders.add(created);
+      _selectedFolder = created;
+      _creatingCategory = false;
+      _categoryError = '';
+    });
   }
 
   Future<void> _search() async {
@@ -769,15 +800,23 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
 
   Future<void> _addByUrl(String url) async {
     final l10n = AppLocalizations.of(context)!;
+    if (_selectedFolder == null) {
+      // Not a SnackBar (easy to miss) and not the generic error under the
+      // search box: the thing that is missing is a chip, so say so beside
+      // the chips.
+      setState(() {
+        _categoryError = l10n.selectCategoryFirst;
+        _searching = false;
+      });
+      return;
+    }
     setState(() => _adding = true);
     await LoadingController.instance.run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
   }
 
   Future<void> _addByUrlBody(String url, AppLocalizations l10n) async {
     try {
-      // Ensure folder exists
-      final folderId = await _ensureFolder(context);
-      if (folderId == null) return;
+      final folderId = _ensureFolder();
 
       // Check duplicate
       final existing = await widget.feedRepo.getByUrl(url);
@@ -851,20 +890,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
     await _addByUrl(result.feedUrl);
   }
 
-  Future<int?> _ensureFolder(BuildContext context) async {
-    if (_selectedFolder != null) return _selectedFolder!.id!;
-    // Reuse an existing folder if one already exists
-    final existing = await widget.folderRepo.getAll();
-    if (existing.isNotEmpty) return existing.first.id!;
-    // Create a default folder only when there are none at all
-    if (!context.mounted) return null;
-    final l10n = AppLocalizations.of(context)!;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final folder = await widget.folderRepo.insert(
-      Folder(name: l10n.defaultFolderName, position: 0, createdAt: now),
-    );
-    return folder.id;
-  }
+  /// No fallback any more. This used to quietly pick the first existing
+  /// folder, or invent a default one, which is how feeds ended up in a
+  /// category the user never chose. [_addByUrl] guarantees a selection
+  /// before anything reaches here.
+  int _ensureFolder() => _selectedFolder!.id!;
 
   @override
   Widget build(BuildContext context) {
@@ -895,31 +925,84 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 16),
 
-          // Folder picker — chips keep the keyboard open
-          if (widget.folders.isNotEmpty) ...[
-            Text(l10n.addToCategory,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                    )),
-            const SizedBox(height: 6),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: widget.folders.map((f) {
-                final selected = _selectedFolder?.id == f.id;
-                return ChoiceChip(
+          // Category picker — always shown, even with no folders yet. With
+          // none, the row is just the "new category" chip, which makes the
+          // first-run flow "add a category and a feed" happen in one place.
+          // Chips rather than a dropdown so the keyboard stays open.
+          Text(l10n.addToCategory,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  )),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final f in _localFolders)
+                ChoiceChip(
                   label: Text(f.name),
-                  selected: selected,
-                  onSelected: (_) =>
-                      setState(() => _selectedFolder = selected ? null : f),
-                );
-              }).toList(),
+                  selected: _selectedFolder?.id == f.id,
+                  // Frozen while an add is in flight: _ensureFolder asserts a
+                  // selection, and deselecting during the await would turn
+                  // that into a crash.
+                  onSelected: _adding
+                      ? null
+                      : (_) => setState(() {
+                            _selectedFolder =
+                                _selectedFolder?.id == f.id ? null : f;
+                            _categoryError = '';
+                          }),
+                ),
+              // An ActionChip, not a ChoiceChip: it has no selected state, so
+              // it reads as something to do rather than a value to pick.
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 18),
+                label: Text(l10n.newCategory),
+                onPressed:
+                    (_creatingCategory || _adding) ? null : _openCategoryCreator,
+              ),
+            ],
+          ),
+          // Inline, not a nested sheet — two stacked modals is worth avoiding.
+          if (_creatingCategory) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _categoryController,
+                    focusNode: _categoryFocus,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _createCategory(),
+                    decoration: InputDecoration(
+                      hintText: l10n.categoryName,
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.check),
+                  tooltip: l10n.newCategory,
+                  onPressed: _createCategory,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _closeCategoryCreator,
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
           ],
+          if (_categoryError.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(_categoryError,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.error)),
+          ],
+          const SizedBox(height: 12),
 
           // Search field
           TextField(
