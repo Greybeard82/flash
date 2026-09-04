@@ -20,17 +20,49 @@ class ArticleRepository {
   /// NOT EXISTS check against [TableNames.deletedArticles] is what stops the
   /// next refresh resurrecting everything the user just cleared. Both are
   /// needed: the index guards within a fetch, the tombstone guards across one.
-  Future<void> insertArticles(int feedId, List<Article> articles) async {
-    if (articles.isEmpty) return;
+  ///
+  /// Returns the subset of [articles] that are genuinely new — not already in
+  /// the table for this feed, and not tombstoned — i.e. exactly the rows this
+  /// call is actually about to insert. RSS feeds re-serve the same last N
+  /// items on every fetch, so without this a caller has no way to tell "seen
+  /// again" from "new" apart from the row count, which `INSERT OR IGNORE`
+  /// alone can't answer: `last_insert_rowid()` is ambiguous when a row is
+  /// ignored, and doesn't say *which* rows were. A plain pre-check query
+  /// against the incoming guids is unambiguous and simple.
+  Future<List<Article>> insertArticles(int feedId, List<Article> articles) async {
+    if (articles.isEmpty) return [];
     final db = await _db;
+
+    final guids = articles.map((a) => a.guid).toList();
+    final placeholders = List.filled(guids.length, '?').join(',');
+    final existingGuids = (await db.rawQuery(
+      'SELECT guid FROM ${TableNames.articles} '
+      'WHERE feed_id = ? AND guid IN ($placeholders)',
+      [feedId, ...guids],
+    ))
+        .map((r) => r['guid'] as String)
+        .toSet();
+    final tombstonedGuids = (await db.rawQuery(
+      'SELECT guid FROM ${TableNames.deletedArticles} '
+      'WHERE feed_id = ? AND guid IN ($placeholders)',
+      [feedId, ...guids],
+    ))
+        .map((r) => r['guid'] as String)
+        .toSet();
+    final newArticles = articles
+        .where((a) =>
+            !existingGuids.contains(a.guid) && !tombstonedGuids.contains(a.guid))
+        .toList();
+
     final batch = db.batch();
     final fetchedAt = DateTime.now().millisecondsSinceEpoch;
     for (final a in articles) {
       batch.rawInsert('''
         INSERT OR IGNORE INTO ${TableNames.articles}
         (feed_id, guid, title, url, description, thumbnail_url, thumbnail_path,
-         published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?
+         published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword,
+         matched_alert_keyword)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?
         WHERE NOT EXISTS (
           SELECT 1 FROM ${TableNames.deletedArticles}
           WHERE feed_id = ? AND guid = ?
@@ -47,11 +79,14 @@ class ArticleRepository {
         fetchedAt,
         a.isBlocked ? 1 : 0,
         a.blockedKeyword,
+        a.matchedAlertKeyword,
         feedId,
         a.guid,
       ]);
     }
     await batch.commit(noResult: true);
+
+    return newArticles;
   }
 
   // ── Read queries ───────────────────────────────────────────────────────────
@@ -126,6 +161,20 @@ class ArticleRepository {
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
       WHERE a.is_blocked = 1
+      ORDER BY a.fetched_at DESC
+    ''');
+    return rows.map(Article.fromMap).toList();
+  }
+
+  /// Articles a keyword alert matched, for the Keyword Alerts panel — the
+  /// alert-side counterpart to [getBlocked].
+  Future<List<Article>> getAlertMatches() async {
+    final db = await _db;
+    final rows = await db.rawQuery('''
+      SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
+      FROM ${TableNames.articles} a
+      JOIN ${TableNames.feeds} f ON a.feed_id = f.id
+      WHERE a.matched_alert_keyword IS NOT NULL
       ORDER BY a.fetched_at DESC
     ''');
     return rows.map(Article.fromMap).toList();

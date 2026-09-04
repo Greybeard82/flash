@@ -69,6 +69,12 @@
   "themeSystem": "Système",
   "themeLight": "Clair",
   "themeDark": "Sombre",
+  "colorPalette": "Palette de couleurs",
+  "paletteGreen": "Vert",
+  "paletteBlue": "Bleu",
+  "paletteOrange": "Orange",
+  "paletteRed": "Rouge",
+  "paletteTealOrange": "Sarcelle et orange",
   "addKeyword": "Ajouter un mot",
   "noBlockedKeywords": "Aucun mot bloqué.",
   "keywordBlocklistEmpty": "Les articles contenant un mot bloqué\nseront masqués de votre flux.",
@@ -96,6 +102,13 @@
   "noBlockedArticles": "Aucun article bloqué pour l'instant.",
   "blockedByKeyword": "Bloqué par : {keyword}",
   "@blockedByKeyword": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "matchedArticles": "Articles correspondants",
+  "matchedByKeyword": "Correspond à : {keyword}",
+  "@matchedByKeyword": {
     "placeholders": {
       "keyword": { "type": "String" }
     }

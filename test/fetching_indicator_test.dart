@@ -12,7 +12,7 @@ import 'package:flash/widgets/fetching_indicator.dart';
 
 Future<void> _pump(WidgetTester tester) async {
   await tester.pumpWidget(MaterialApp(
-    theme: flashDarkTheme(),
+    theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark),
     home: const Scaffold(
       body: Center(child: FetchingIndicator(size: 24)),
     ),

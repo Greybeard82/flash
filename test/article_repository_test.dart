@@ -93,6 +93,71 @@ void main() {
       await _repo.insertArticles(1, [a]);
       expect(await _count(), 1);
     });
+
+    // The return value is what refresh_service.dart now bases the
+    // keyword-alert notification on: a repeat notification for an
+    // already-seen article was the entire reported bug, and it traced back to
+    // treating every re-parsed article as new rather than checking this.
+    group('the returned "genuinely new" set', () {
+      test('a first-time article comes back as new', () async {
+        final a = _art(1, published: _recent);
+        final result = await _repo.insertArticles(1, [a]);
+        expect(result.map((r) => r.guid), [a.guid]);
+      });
+
+      test('re-inserting the same article returns nothing the second time',
+          () async {
+        final a = _art(2, published: _recent);
+        await _repo.insertArticles(1, [a]);
+        final second = await _repo.insertArticles(1, [a]);
+        expect(second, isEmpty,
+            reason: 'a re-fetched article the feed is still serving must not '
+                'be reported as new — this is what used to fire a keyword '
+                'alert notification on every single refresh');
+      });
+
+      test('a mixed batch reports only the ones actually new this call',
+          () async {
+        final old = _art(3, published: _recent);
+        await _repo.insertArticles(1, [old]);
+
+        final fresh = _art(4, published: _recent);
+        final result = await _repo.insertArticles(1, [old, fresh]);
+
+        expect(result.map((r) => r.guid).toSet(), {fresh.guid});
+      });
+
+      test('a tombstoned guid is not reported as new even though it never '
+          'made it into the table', () async {
+        final db = await AppDatabase.instance.database;
+        await db.insert(TableNames.deletedArticles, {
+          'feed_id': 1,
+          'guid': 'guid-5',
+          'deleted_at': DateTime.now().millisecondsSinceEpoch,
+        });
+        final a = _art(5, published: _recent);
+
+        final result = await _repo.insertArticles(1, [a]);
+
+        expect(result, isEmpty);
+        expect(await _row('guid-5'), isNull,
+            reason: 'the tombstone must still block the insert itself, same '
+                'as before this change');
+      });
+    });
+
+    test('matched_alert_keyword is written and read back through the row',
+        () async {
+      final a = _art(6, published: _recent).copyWith(
+          matchedAlertKeyword: 'zelda');
+      await _repo.insertArticles(1, [a]);
+
+      final row = await _row('guid-6');
+      expect(row?['matched_alert_keyword'], 'zelda');
+
+      final matches = await _repo.getAlertMatches();
+      expect(matches.map((m) => m.guid), contains('guid-6'));
+    });
   });
 
   group('markAsRead / markAsUnread', () {

@@ -69,6 +69,12 @@
   "themeSystem": "System",
   "themeLight": "Hell",
   "themeDark": "Dunkel",
+  "colorPalette": "Farbpalette",
+  "paletteGreen": "Grün",
+  "paletteBlue": "Blau",
+  "paletteOrange": "Orange",
+  "paletteRed": "Rot",
+  "paletteTealOrange": "Petrol & Orange",
   "addKeyword": "Stichwort hinzufügen",
   "noBlockedKeywords": "Keine gesperrten Stichwörter.",
   "keywordBlocklistEmpty": "Artikel, die ein gesperrtes Stichwort enthalten,\nwerden aus deinem Feed ausgeblendet.",
@@ -96,6 +102,13 @@
   "noBlockedArticles": "Noch keine blockierten Artikel.",
   "blockedByKeyword": "Blockiert durch: {keyword}",
   "@blockedByKeyword": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "matchedArticles": "Passende Artikel",
+  "matchedByKeyword": "Passt zu: {keyword}",
+  "@matchedByKeyword": {
     "placeholders": {
       "keyword": { "type": "String" }
     }

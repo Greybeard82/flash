@@ -69,6 +69,12 @@
   "themeSystem": "Sistema",
   "themeLight": "Chiaro",
   "themeDark": "Scuro",
+  "colorPalette": "Tavolozza colori",
+  "paletteGreen": "Verde",
+  "paletteBlue": "Blu",
+  "paletteOrange": "Arancione",
+  "paletteRed": "Rosso",
+  "paletteTealOrange": "Verde acqua e arancione",
   "addKeyword": "Aggiungi parola",
   "noBlockedKeywords": "Nessuna parola bloccata.",
   "keywordBlocklistEmpty": "Gli articoli che contengono una parola bloccata\nverranno nascosti dal tuo feed.",
@@ -96,6 +102,13 @@
   "noBlockedArticles": "Nessun articolo bloccato ancora.",
   "blockedByKeyword": "Bloccato da: {keyword}",
   "@blockedByKeyword": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "matchedArticles": "Articoli corrispondenti",
+  "matchedByKeyword": "Corrisponde a: {keyword}",
+  "@matchedByKeyword": {
     "placeholders": {
       "keyword": { "type": "String" }
     }

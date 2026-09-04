@@ -1,19 +1,44 @@
 import 'package:flutter/material.dart';
 
-// Dark mode accent
-const Color darkAccent = Color(0xFFFFD60A);
-const Color darkAccentPressed = Color(0xFFFFF176);
+/// Seed colors for the five selectable palettes, keyed by the value stored
+/// under `color_palette` in settings. Each is fed to [ColorScheme.fromSeed],
+/// which derives a full tonal palette — including every "on-X" pairing — for
+/// both brightnesses from this one color, rather than ten hand-tuned
+/// [ThemeData]s that could each drift into a contrast bug nobody notices
+/// until a tester hits it.
+///
+/// 'orange' is closest to the gold this app already shipped with, and is the
+/// default (`AppSettings.colorPalette`) so nobody already using the app sees
+/// a surprise change in color identity.
+const Map<String, Color> kPaletteSeeds = {
+  'green': Color(0xFF2E7D32),
+  'blue': Color(0xFF1565C0),
+  'orange': Color(0xFFE07A1F),
+  'red': Color(0xFFC62828),
+  // Two-hue palette: teal is the seed fromSeed actually derives everything
+  // from; orange is applied as a secondary override below. This project's
+  // Flutter version's `ColorScheme.fromSeed` has no `secondaryKey` parameter
+  // to generate the second hue algorithmically, so it's grafted on afterward
+  // rather than hand-rolling the rest of the scheme to compensate.
+  'teal_orange': Color(0xFF00695C),
+};
 
-// ── Light palette ──────────────────────────────────────────────────────────
-// Sampled from the reference mockup. Hardcoded for now: a user-facing theme
-// colour editor is planned next, and these stay centralised here — one file,
-// named constants, referenced through the ColorScheme — so swapping them for
-// per-user values later is a change to this block, not a hunt through widgets.
-const Color lightAccent = Color(0xFFD9A860);        // warm gold
-const Color lightAccentPressed = Color(0xFFC0904A); // deeper gold, pressed
-const Color lightInk = Color(0xFF2E2B27);           // soft near-black text
-const Color lightMuted = Color(0xFF8B8A85);         // secondary text, idle icons
-const Color lightBorder = Color(0xFFDDD3C0);        // chip / card hairlines
+const String kDefaultPalette = 'orange';
+
+/// Applies the two-hue override for the `teal_orange` palette: `secondary`
+/// and `onSecondary` come from a full scheme generated off the orange seed,
+/// at the same brightness, rather than a hand-picked pair — so the override
+/// gets the same guaranteed on-color contrast as the primary hue did.
+ColorScheme _applyTealOrangeAccent(ColorScheme scheme, Brightness brightness) {
+  final accent = ColorScheme.fromSeed(
+    seedColor: kPaletteSeeds['orange']!,
+    brightness: brightness,
+  );
+  return scheme.copyWith(
+    secondary: accent.primary,
+    onSecondary: accent.onPrimary,
+  );
+}
 
 /// Android page transitions, at a snappier tempo than stock.
 ///
@@ -53,93 +78,108 @@ const PageTransitionsTheme kFlashPageTransitions = PageTransitionsTheme(
   },
 );
 
-// Dark mode backgrounds
-// NB: darkBg is mirrored in android/.../MainActivity.kt (DARK_BG) to paint the
-// native window before the first Flutter frame. Keep the two in sync.
+// Pre-first-frame native fallback only (android/.../MainActivity.kt DARK_BG,
+// styles.xml, colors.xml) — the window background painted before Flutter has
+// even read the persisted palette. Keep this in sync with those, but nothing
+// in this file uses it any more: every palette's actual scaffold background
+// is its generated `colorScheme.surface`, applied once the first frame lands.
 const Color darkBg = Color(0xFF0D1B2A);
-const Color darkSurface = Color(0xFF162338);
 
-// Light mode backgrounds
-const Color lightBg = Color(0xFFF5F1E8);      // warm cream: scaffold, app bar
-const Color lightSurface = Color(0xFFFBFAF6); // fractionally whiter: cards
+/// The generated [ColorScheme] for [palette] at [brightness], including the
+/// `teal_orange` two-hue override. Exposed separately from
+/// [flashPaletteTheme] so a caller that only needs the colors — like the
+/// Quick Settings palette picker's own preview swatches — isn't stuck
+/// building a whole [ThemeData] just to read them off it.
+ColorScheme paletteColorScheme({
+  required String palette,
+  required Brightness brightness,
+}) {
+  final seed = kPaletteSeeds[palette] ?? kPaletteSeeds[kDefaultPalette]!;
+  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+  return palette == 'teal_orange'
+      ? _applyTealOrangeAccent(scheme, brightness)
+      : scheme;
+}
 
-ThemeData flashLightTheme() {
-  const base = ColorScheme.light(
-    primary: lightAccent,
-    // Dark label on the gold, as in the mockup's selected chip.
-    onPrimary: lightInk,
-    primaryContainer: Color(0xFFF1E3C6),
-    onPrimaryContainer: lightInk,
-    secondary: lightAccentPressed,
-    onSecondary: lightInk,
-    surface: lightBg,
-    onSurface: lightInk,
-    surfaceContainerHighest: lightSurface,
-    outline: lightBorder,
-    error: Color(0xFFBA1A1A),
-    onError: Colors.white,
-  );
+/// Builds a palette's [ThemeData] for one brightness. Replaces the old
+/// separate `flashLightTheme()` / `flashDarkTheme()`: rather than ten
+/// hand-tuned color blocks (five palettes × two brightnesses), the
+/// [ColorScheme] comes entirely from [ColorScheme.fromSeed] — the same
+/// tonal-palette algorithm behind Android's own wallpaper-based Material You
+/// theming — and every structural block below (app bar, bottom nav, card
+/// radius, filled button, switch, snackbar, progress indicator) references
+/// its roles rather than a fixed hex, so the app's *shape* is identical
+/// across all ten combinations and only the colors change.
+///
+/// [palette] is a key into [kPaletteSeeds]; an unrecognised value falls back
+/// to [kDefaultPalette] rather than throwing, since it may be read back from
+/// a settings row written by a future version this one doesn't know about.
+ThemeData flashPaletteTheme({
+  required String palette,
+  required Brightness brightness,
+}) {
+  final scheme = paletteColorScheme(palette: palette, brightness: brightness);
 
   return ThemeData(
     useMaterial3: true,
     pageTransitionsTheme: kFlashPageTransitions,
-    colorScheme: base,
-    scaffoldBackgroundColor: lightBg,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: lightBg,
-      foregroundColor: lightInk,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: scheme.surface,
+    appBarTheme: AppBarTheme(
+      backgroundColor: scheme.surface,
+      foregroundColor: scheme.onSurface,
       elevation: 0,
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
     ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: lightBg,
-      selectedItemColor: lightAccent,
-      unselectedItemColor: lightMuted,
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: scheme.surface,
+      selectedItemColor: scheme.primary,
+      unselectedItemColor: scheme.onSurface.withValues(alpha: 0.6),
       type: BottomNavigationBarType.fixed,
       elevation: 0,
     ),
     cardTheme: CardThemeData(
-      color: lightSurface,
+      color: scheme.surfaceContainerHighest,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: lightBorder),
+        side: BorderSide(color: scheme.outline),
       ),
     ),
-    dividerTheme: const DividerThemeData(
-      color: lightBorder,
+    dividerTheme: DividerThemeData(
+      color: scheme.outlineVariant,
       thickness: 1,
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: lightAccent,
-        foregroundColor: lightInk,
+        backgroundColor: scheme.primary,
+        foregroundColor: scheme.onPrimary,
         minimumSize: const Size(88, 48),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return lightAccent;
+        if (states.contains(WidgetState.selected)) return scheme.primary;
         return null;
       }),
       trackColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return lightAccent.withValues(alpha: 0.4);
+          return scheme.primary.withValues(alpha: 0.4);
         }
         return null;
       }),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
-      backgroundColor: const Color(0xFF2D2D2D),
-      contentTextStyle: const TextStyle(color: Colors.white),
-      actionTextColor: darkAccent,
+      backgroundColor: scheme.inverseSurface,
+      contentTextStyle: TextStyle(color: scheme.onInverseSurface),
+      actionTextColor: scheme.inversePrimary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: lightAccent,
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: scheme.primary,
     ),
   );
 }
@@ -260,81 +300,3 @@ ThemeData flashNewspaperTheme() {
   );
 }
 
-ThemeData flashDarkTheme() {
-  const base = ColorScheme.dark(
-    primary: darkAccent,
-    onPrimary: Color(0xFF1A1500),
-    primaryContainer: Color(0xFF2A2200),
-    onPrimaryContainer: darkAccentPressed,
-    secondary: darkAccentPressed,
-    onSecondary: Color(0xFF1A1500),
-    surface: darkBg,
-    onSurface: Color(0xFFE8E8E8),
-    surfaceContainerHighest: darkSurface,
-    outline: Color(0xFF3A4A5A),
-    error: Color(0xFFFFB4AB),
-    onError: Color(0xFF690005),
-  );
-
-  return ThemeData(
-    useMaterial3: true,
-    pageTransitionsTheme: kFlashPageTransitions,
-    colorScheme: base,
-    scaffoldBackgroundColor: darkBg,
-    appBarTheme: const AppBarTheme(
-      backgroundColor: darkBg,
-      foregroundColor: Color(0xFFE8E8E8),
-      elevation: 0,
-      scrolledUnderElevation: 1,
-      surfaceTintColor: darkAccent,
-    ),
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: darkSurface,
-      selectedItemColor: darkAccent,
-      unselectedItemColor: Color(0xFF7A8A9A),
-      type: BottomNavigationBarType.fixed,
-      elevation: 8,
-    ),
-    cardTheme: CardThemeData(
-      color: darkSurface,
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    ),
-    dividerTheme: const DividerThemeData(
-      color: Color(0xFF253040),
-      thickness: 1,
-    ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: darkAccent,
-        foregroundColor: const Color(0xFF1A1500),
-        minimumSize: const Size(88, 48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    ),
-    switchTheme: SwitchThemeData(
-      thumbColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) return darkAccent;
-        return null;
-      }),
-      trackColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) {
-          return darkAccent.withValues(alpha: 0.4);
-        }
-        return null;
-      }),
-    ),
-    snackBarTheme: SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: const Color(0xFF2A3A4A),
-      contentTextStyle: const TextStyle(color: Colors.white),
-      actionTextColor: darkAccent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: darkAccent,
-    ),
-  );
-}

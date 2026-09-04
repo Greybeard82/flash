@@ -79,8 +79,14 @@ Future<void> _pump(WidgetTester tester,
 Color? _thumbBase(WidgetTester tester) {
   final boxes = tester.widgetList<ColoredBox>(find.byType(ColoredBox));
   for (final b in boxes) {
-    if (b.color == flashDarkTheme().colorScheme.surfaceContainerHighest ||
-        b.color == flashLightTheme().colorScheme.surfaceContainerHighest) {
+    if (b.color ==
+            flashPaletteTheme(palette: 'orange', brightness: Brightness.dark)
+                .colorScheme
+                .surfaceContainerHighest ||
+        b.color ==
+            flashPaletteTheme(palette: 'orange', brightness: Brightness.light)
+                .colorScheme
+                .surfaceContainerHighest) {
       return b.color;
     }
   }
@@ -89,8 +95,8 @@ Color? _thumbBase(WidgetTester tester) {
 
 void main() {
   for (final (name, theme) in [
-    ('dark', flashDarkTheme()),
-    ('light', flashLightTheme()),
+    ('dark', flashPaletteTheme(palette: 'orange', brightness: Brightness.dark)),
+    ('light', flashPaletteTheme(palette: 'orange', brightness: Brightness.light)),
   ]) {
     group('$name theme', () {
       testWidgets('an undecoded thumbnail sits on the theme surface colour, '
@@ -98,9 +104,9 @@ void main() {
         await _pump(tester, isRead: false, theme: theme);
 
         expect(_thumbBase(tester), theme.colorScheme.surfaceContainerHighest,
-            reason: 'the placeholder must come from the active theme — on the '
-                'dark theme this is #162338, which is what stops the '
-                'mid-scroll flash of bright rectangles');
+            reason: 'the placeholder must come from the active theme surface, '
+                'which is what stops the mid-scroll flash of bright '
+                'rectangles');
       });
 
       testWidgets('a read thumbnail is desaturated with a matrix filter, not a '
@@ -153,7 +159,7 @@ void main() {
   // asserted directly instead, which is the stronger claim.
   testWidgets('an unread thumbnail is not desaturated and not dimmed',
       (tester) async {
-    await _pump(tester, isRead: false, theme: flashDarkTheme());
+    await _pump(tester, isRead: false, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
 
     for (final f in tester.widgetList<ColorFiltered>(
         find.byType(ColorFiltered))) {
@@ -173,10 +179,10 @@ void main() {
     // the image never being torn down and re-resolved. Animating by swapping
     // between two separately-filtered subtrees would reintroduce exactly
     // that. Element identity is the direct test of it.
-    await _pump(tester, isRead: false, theme: flashDarkTheme());
+    await _pump(tester, isRead: false, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
     final before = tester.element(find.byType(CachedNetworkImage));
 
-    await _pump(tester, isRead: true, theme: flashDarkTheme());
+    await _pump(tester, isRead: true, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
     await tester.pump(const Duration(milliseconds: 90)); // mid-fade
     final midway = tester.element(find.byType(CachedNetworkImage));
     await tester.pumpAndSettle();
@@ -190,7 +196,7 @@ void main() {
 
   testWidgets('legacy guard: the greyscale filter is still a matrix, never a '
       'backdrop-mixing blend mode', (tester) async {
-    await _pump(tester, isRead: true, theme: flashDarkTheme());
+    await _pump(tester, isRead: true, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
     await tester.pumpAndSettle();
 
     final filters = tester.widgetList<ColorFiltered>(find.byType(ColorFiltered));

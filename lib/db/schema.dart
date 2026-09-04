@@ -57,7 +57,8 @@ class SchemaStatements {
       is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
       is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
       is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
-      blocked_keyword TEXT
+      blocked_keyword TEXT,
+      matched_alert_keyword TEXT
     )
   ''';
 
@@ -196,5 +197,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'newspaper_mode', 'value': 'false'},
   {'key': 'show_read', 'value': 'true'},
   {'key': 'mark_all_read_confirm', 'value': 'true'},
+  {'key': 'color_palette', 'value': 'orange'},
 ];
 

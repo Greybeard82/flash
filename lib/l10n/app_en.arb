@@ -105,6 +105,12 @@
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
+  "colorPalette": "Color palette",
+  "paletteGreen": "Green",
+  "paletteBlue": "Blue",
+  "paletteOrange": "Orange",
+  "paletteRed": "Red",
+  "paletteTealOrange": "Teal & Orange",
   "addKeyword": "Add keyword",
   "noBlockedKeywords": "No blocked keywords.",
   "keywordBlocklistEmpty": "Articles matching a blocked keyword\nwill be hidden from your feed.",
@@ -137,6 +143,13 @@
   "noBlockedArticles": "No blocked articles yet.",
   "blockedByKeyword": "Blocked by: {keyword}",
   "@blockedByKeyword": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "matchedArticles": "Matched Articles",
+  "matchedByKeyword": "Matched: {keyword}",
+  "@matchedByKeyword": {
     "placeholders": {
       "keyword": { "type": "String" }
     }

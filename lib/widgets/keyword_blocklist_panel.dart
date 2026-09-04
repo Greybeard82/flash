@@ -16,6 +16,13 @@ import 'notification_banner.dart';
 /// bubble the same way `FilterBubble` and `QuickSettingsBubble` do, rather
 /// than a `Navigator.push` away from the feed. All the actual list/add/
 /// remove logic is unchanged from the screen it replaces.
+///
+/// The add-keyword form is an inline expansion (`_addingKeyword`), not a
+/// second `showModalBottomSheet` stacked on top of this panel's own bubble —
+/// the bubble's backdrop blur (`bubble_panel.dart`) stays live under a
+/// stacked sheet, which put the very field being typed into in front of a
+/// layer that was still blurring what's behind it. Same "+ New category"
+/// inline-reveal pattern `feeds_screen.dart` already uses.
 class KeywordBlocklistPanel extends StatefulWidget {
   const KeywordBlocklistPanel({super.key});
 
@@ -31,10 +38,22 @@ class _KeywordBlocklistPanelState extends State<KeywordBlocklistPanel> {
   List<Article> _blockedArticles = [];
   bool _loading = true;
 
+  bool _addingKeyword = false;
+  final _keywordController = TextEditingController();
+  final _keywordFocus = FocusNode();
+  bool _wholeWord = false;
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    _keywordFocus.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -49,25 +68,40 @@ class _KeywordBlocklistPanelState extends State<KeywordBlocklistPanel> {
     }
   }
 
-  Future<void> _addKeyword() async {
-    final result = await showModalBottomSheet<({String keyword, bool wholeWord})>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => const AddKeywordSheet(),
-    );
-    if (result == null) return;
+  void _openAddKeyword() {
+    setState(() {
+      _addingKeyword = true;
+      _wholeWord = false;
+    });
+    // The list/empty-state above owns initial focus. Requesting it after this
+    // frame is the reliable way to move the caret into the new field.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keywordFocus.requestFocus();
+    });
+  }
 
+  void _closeAddKeyword() {
+    _keywordController.clear();
+    setState(() => _addingKeyword = false);
+  }
+
+  Future<void> _submitAddKeyword() async {
+    final text = _keywordController.text.trim();
+    if (text.isEmpty) return;
+    final wholeWord = _wholeWord;
     await LoadingController.instance.run(() async {
       final kw = await _keywordRepo.insert(KeywordBlock(
-        keyword: result.keyword,
-        wholeWord: result.wholeWord,
+        keyword: text,
+        wholeWord: wholeWord,
         createdAt: DateTime.now().millisecondsSinceEpoch,
       ));
       await _articleRepo.retroactivelyBlock(kw.keyword, kw.wholeWord);
       HapticFeedback.lightImpact();
       await _load();
     }, label: 'Adding keyword');
+    if (!mounted) return;
+    _keywordController.clear();
+    setState(() => _addingKeyword = false);
   }
 
   Future<void> _delete(KeywordBlock kw) async {
@@ -121,14 +155,17 @@ class _KeywordBlocklistPanelState extends State<KeywordBlocklistPanel> {
             ),
           ),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: _addKeyword,
-            icon: const Icon(Icons.add, size: 18),
-            label: Text(l10n.addKeyword),
+        if (_addingKeyword)
+          _buildAddForm(l10n, theme)
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _openAddKeyword,
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(l10n.addKeyword),
+            ),
           ),
-        ),
         if (_loading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
@@ -294,70 +331,28 @@ class _KeywordBlocklistPanelState extends State<KeywordBlocklistPanel> {
       ),
     );
   }
-}
 
-class AddKeywordSheet extends StatefulWidget {
-  const AddKeywordSheet({super.key});
-
-  @override
-  State<AddKeywordSheet> createState() => _AddKeywordSheetState();
-}
-
-class _AddKeywordSheetState extends State<AddKeywordSheet> {
-  final _controller = TextEditingController();
-  bool _wholeWord = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    Navigator.pop(context, (keyword: text, wholeWord: _wholeWord));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    final theme = Theme.of(context);
+  Widget _buildAddForm(AppLocalizations l10n, ThemeData theme) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(l10n.blockKeyword,
-              style:
-                  theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 16),
           TextField(
-            controller: _controller,
+            controller: _keywordController,
+            focusNode: _keywordFocus,
             autofocus: true,
             textCapitalization: TextCapitalization.none,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
+            onSubmitted: (_) => _submitAddKeyword(),
             decoration: InputDecoration(
               labelText: l10n.keywordOrPhrase,
               hintText: l10n.keywordHint,
+              isDense: true,
               border: const OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           CheckboxListTile(
             value: _wholeWord,
             onChanged: (v) => setState(() => _wholeWord = v ?? false),
@@ -366,10 +361,14 @@ class _AddKeywordSheetState extends State<AddKeywordSheet> {
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
           ),
-          const SizedBox(height: 8),
-          FilledButton(
-            onPressed: _submit,
-            child: Text(l10n.add),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: _closeAddKeyword, child: Text(l10n.cancel)),
+              const SizedBox(width: 8),
+              FilledButton(onPressed: _submitAddKeyword, child: Text(l10n.add)),
+            ],
           ),
         ],
       ),

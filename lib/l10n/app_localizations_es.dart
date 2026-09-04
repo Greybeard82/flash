@@ -233,6 +233,24 @@ class AppLocalizationsEs extends AppLocalizations {
   String get themeDark => 'Oscuro';
 
   @override
+  String get colorPalette => 'Paleta de colores';
+
+  @override
+  String get paletteGreen => 'Verde';
+
+  @override
+  String get paletteBlue => 'Azul';
+
+  @override
+  String get paletteOrange => 'Naranja';
+
+  @override
+  String get paletteRed => 'Rojo';
+
+  @override
+  String get paletteTealOrange => 'Verde azulado y naranja';
+
+  @override
   String get addKeyword => 'Añadir palabra';
 
   @override
@@ -317,6 +335,14 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String blockedByKeyword(String keyword) {
     return 'Bloqueado por: $keyword';
+  }
+
+  @override
+  String get matchedArticles => 'Artículos coincidentes';
+
+  @override
+  String matchedByKeyword(String keyword) {
+    return 'Coincide con: $keyword';
   }
 
   @override

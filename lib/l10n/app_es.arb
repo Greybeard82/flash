@@ -69,6 +69,12 @@
   "themeSystem": "Sistema",
   "themeLight": "Claro",
   "themeDark": "Oscuro",
+  "colorPalette": "Paleta de colores",
+  "paletteGreen": "Verde",
+  "paletteBlue": "Azul",
+  "paletteOrange": "Naranja",
+  "paletteRed": "Rojo",
+  "paletteTealOrange": "Verde azulado y naranja",
   "addKeyword": "Añadir palabra",
   "noBlockedKeywords": "Sin palabras bloqueadas.",
   "keywordBlocklistEmpty": "Los artículos que coincidan con una palabra bloqueada\nse ocultarán de tu fuente.",
@@ -96,6 +102,13 @@
   "noBlockedArticles": "Sin artículos bloqueados aún.",
   "blockedByKeyword": "Bloqueado por: {keyword}",
   "@blockedByKeyword": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "matchedArticles": "Artículos coincidentes",
+  "matchedByKeyword": "Coincide con: {keyword}",
+  "@matchedByKeyword": {
     "placeholders": {
       "keyword": { "type": "String" }
     }

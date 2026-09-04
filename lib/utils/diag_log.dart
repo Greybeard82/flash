@@ -85,17 +85,24 @@ class DiagLog {
   /// [source] distinguishes the background WorkManager isolate from the
   /// foreground app isolate, since flutter_local_notifications has to be
   /// initialized independently in each.
+  ///
+  /// Pass 21: [newCount] replaced what used to be a count of every unblocked
+  /// article the fetch re-parsed (the same number on every refresh, since RSS
+  /// feeds re-serve their last N items) with the count actually new this
+  /// pass -- the same set [hitCount] is now computed from, so a repeat
+  /// notification for an already-seen article shows up here as `hits=0`
+  /// rather than being silently indistinguishable from a real one.
   static void alert({
     required String source,
     required int alertCount,
-    required int unblockedCount,
+    required int newCount,
     required int hitCount,
     String? shown,
     String? error,
   }) {
     if (!kDebugMode) return;
     debugPrintSynchronously('[ALERT]  t=$_t source=$source '
-        'alerts=$alertCount unblocked=$unblockedCount hits=$hitCount '
+        'alerts=$alertCount new=$newCount hits=$hitCount '
         'shown=${shown ?? "n/a"} error=${error ?? "none"}');
   }
 }

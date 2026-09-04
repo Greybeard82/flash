@@ -31,22 +31,19 @@ class KeywordAlertRepository {
         where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Returns the keywords that match any article title/description in [articles].
-  /// [articles] is a list of (title, description?) pairs from newly fetched articles.
-  static List<String> findHits(
-    List<({String title, String? description})> articles,
-    List<KeywordAlert> alerts,
-  ) {
-    final hits = <String>{};
+  /// Checks title + description against a list of alerts.
+  /// Returns the first matching [KeywordAlert], or null. Mirrors
+  /// `KeywordRepository.findMatch` so the two systems never diverge on what
+  /// "matches" means.
+  static KeywordAlert? findMatch(
+      String title, String? description, List<KeywordAlert> alerts) {
+    if (alerts.isEmpty) return null;
+    final haystack = KeywordMatcher.buildHaystack(title, description);
     for (final alert in alerts) {
-      for (final article in articles) {
-        final haystack = KeywordMatcher.buildHaystack(article.title, article.description);
-        if (KeywordMatcher.matches(alert.keyword, haystack, wholeWord: alert.wholeWord)) {
-          hits.add(alert.keyword);
-          break;
-        }
+      if (KeywordMatcher.matches(alert.keyword, haystack, wholeWord: alert.wholeWord)) {
+        return alert;
       }
     }
-    return hits.toList();
+    return null;
   }
 }

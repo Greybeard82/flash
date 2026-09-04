@@ -79,78 +79,75 @@ Future<int> _doRefresh({
   final feedList = feeds ?? await feedRepo.getAll();
 
   int totalNew = 0;
-  final allUnblocked = <({String title, String? description})>[];
+  // Keywords matched by articles insertArticles actually wrote as new this
+  // pass -- not recomputed against the full re-parsed batch, which is what
+  // used to fire a notification for the same article on every refresh: RSS
+  // feeds re-serve their last N items, and only fetchAndStore's own dedup
+  // check knows which of those are genuinely new here.
+  final newlyMatchedKeywords = <String>{};
 
   await Future.wait(feedList.map((feed) async {
     final result = await rssService.fetchAndStore(
       feed,
       keywords: keywords,
+      alerts: alerts,
       articleLimit: settings.articleLimit,
     );
     totalNew += result.newCount;
-    allUnblocked.addAll(result.unblocked);
+    newlyMatchedKeywords.addAll(result.newlyMatchedAlertKeywords);
   }));
 
-  if (alerts.isEmpty || allUnblocked.isEmpty) {
+  if (newlyMatchedKeywords.isEmpty) {
     DiagLog.alert(
       source: source,
       alertCount: alerts.length,
-      unblockedCount: allUnblocked.length,
+      newCount: totalNew,
       hitCount: 0,
     );
   } else {
-    final hits = KeywordAlertRepository.findHits(allUnblocked, alerts);
-    if (hits.isEmpty) {
-      DiagLog.alert(
-        source: source,
-        alertCount: alerts.length,
-        unblockedCount: allUnblocked.length,
-        hitCount: 0,
-      );
-    } else {
-      String? shown;
-      String? error;
-      try {
-        // Checked, not just called: NotificationManager on Android drops a
-        // notification with no error when the app lacks posting permission,
-        // so a call that completes without throwing tells you nothing about
-        // whether anything actually reached the shade.
-        final plugin = await _initPlugin();
-        final enabled = await _notificationsEnabled(plugin);
-        final label = hits.length == 1
-            ? '"${hits.first}"'
-            : hits.map((k) => '"$k"').join(', ');
-        await plugin.show(
-          _kKeywordNotificationId,
-          'Flash — keyword alert',
-          'New articles matching $label',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              _kKeywordChannelId,
-              _kKeywordChannelName,
-              importance: Importance.defaultImportance,
-              priority: Priority.defaultPriority,
-              showWhen: true,
-            ),
+    String? shown;
+    String? error;
+    try {
+      // Checked, not just called: NotificationManager on Android drops a
+      // notification with no error when the app lacks posting permission,
+      // so a call that completes without throwing tells you nothing about
+      // whether anything actually reached the shade.
+      final plugin = await _initPlugin();
+      final enabled = await _notificationsEnabled(plugin);
+      final keywordsList = newlyMatchedKeywords.toList();
+      final label = keywordsList.length == 1
+          ? '"${keywordsList.first}"'
+          : keywordsList.map((k) => '"$k"').join(', ');
+      await plugin.show(
+        _kKeywordNotificationId,
+        'Flash — keyword alert',
+        'New articles matching $label',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _kKeywordChannelId,
+            _kKeywordChannelName,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            showWhen: true,
           ),
-        );
-        shown = 'plugin.show() completed, areNotificationsEnabled=$enabled';
-      } catch (e) {
-        // Deliberately caught here rather than left to bubble: callbackDispatcher
-        // wraps the whole background task in a silent try/catch, so an
-        // exception thrown from here on the background-isolate path would
-        // otherwise vanish with zero trace -- indistinguishable from working.
-        error = e.toString();
-      }
-      DiagLog.alert(
-        source: source,
-        alertCount: alerts.length,
-        unblockedCount: allUnblocked.length,
-        hitCount: hits.length,
-        shown: shown,
-        error: error,
+        ),
       );
+      shown = 'plugin.show() completed, areNotificationsEnabled=$enabled';
+    } catch (e) {
+      // Deliberately caught here rather than left to bubble: callbackDispatcher
+      // wraps the whole background task in a silent try/catch, so an
+      // exception thrown from here on the background-isolate path would
+      // otherwise vanish with zero trace -- indistinguishable from working.
+      error = e.toString();
     }
+    DiagLog.alert(
+      source: source,
+      alertCount: alerts.length,
+      newCount: totalNew,
+      hitCount: newlyMatchedKeywords.length,
+      shown: shown,
+      error: error,
+    );
   }
 
   return totalNew;

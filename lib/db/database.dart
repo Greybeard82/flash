@@ -40,7 +40,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 13,
+      version: 14,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -230,6 +230,23 @@ class AppDatabase {
         "VALUES ('mark_all_read_confirm', 'true', $now)",
       );
     }
+    if (oldVersion < 14) {
+      // Alerts get the same shape blocklist already has: a column recording
+      // which alert (if any) a genuinely-new article matched, so the Keyword
+      // Alerts panel has something to list and a repeat notification isn't
+      // possible for an article that already matched on a prior fetch.
+      final cols = await db.rawQuery('PRAGMA table_info(${TableNames.articles})');
+      if (!cols.any((c) => c['name'] == 'matched_alert_keyword')) {
+        await db.execute(
+          'ALTER TABLE ${TableNames.articles} ADD COLUMN matched_alert_keyword TEXT',
+        );
+      }
+      final now = DateTime.now().millisecondsSinceEpoch;
+      await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value, updated_at) "
+        "VALUES ('color_palette', 'orange', $now)",
+      );
+    }
   }
 
   /// Removes `read_at` by rebuilding the table.
@@ -307,7 +324,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 13);
+    await _onUpgrade(db, fromVersion, 14);
   }
 
   Future<void> close() async {

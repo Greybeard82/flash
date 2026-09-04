@@ -48,7 +48,7 @@ Article _article({required bool isRead}) => Article(
 
 Future<void> _pump(WidgetTester tester, {required bool isRead}) async {
   await tester.pumpWidget(MaterialApp(
-    theme: flashLightTheme(),
+    theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.light),
     localizationsDelegates: const [
       AppLocalizations.delegate,
       GlobalMaterialLocalizations.delegate,

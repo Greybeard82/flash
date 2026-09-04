@@ -38,6 +38,12 @@ class AppSettings {
   final int cleanupAgeDays; // [2, 20]
   final bool newspaperMode;
 
+  /// One of [kPaletteSeeds]' keys — which color palette drives the theme's
+  /// generated [ColorScheme] when Newspaper mode isn't overriding it.
+  /// Defaults to `'orange'`, the palette closest to the gold this app already
+  /// shipped with, so nobody already using the app sees a surprise change.
+  final String colorPalette;
+
   /// Whether read articles stay in the list until the next refresh.
   ///
   /// This no longer decides *whether* a read article survives — every read
@@ -68,6 +74,7 @@ class AppSettings {
     this.newspaperMode = false,
     this.showRead = true,
     this.markAllReadConfirm = true,
+    this.colorPalette = 'orange',
   });
 
   factory AppSettings.fromMap(Map<String, String> map) {
@@ -92,6 +99,7 @@ class AppSettings {
       showRead: (map['show_read'] ?? 'true') == 'true',
       markAllReadConfirm:
           (map['mark_all_read_confirm'] ?? 'true') == 'true',
+      colorPalette: map['color_palette'] ?? 'orange',
     );
   }
 
@@ -109,6 +117,7 @@ class AppSettings {
     bool? newspaperMode,
     bool? showRead,
     bool? markAllReadConfirm,
+    String? colorPalette,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -124,6 +133,7 @@ class AppSettings {
       newspaperMode: newspaperMode ?? this.newspaperMode,
       showRead: showRead ?? this.showRead,
       markAllReadConfirm: markAllReadConfirm ?? this.markAllReadConfirm,
+      colorPalette: colorPalette ?? this.colorPalette,
     );
   }
 }

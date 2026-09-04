@@ -3,9 +3,11 @@ import 'package:dart_rss/dart_rss.dart';
 import 'package:http/http.dart' as http;
 import '../models/article.dart';
 import '../models/feed.dart';
+import '../models/keyword_alert.dart';
 import '../models/keyword_block.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
+import '../repositories/keyword_alert_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../utils/constants.dart';
 import '../utils/html_utils.dart';
@@ -68,10 +70,11 @@ class RssService {
 
   // ── Fetch and store ────────────────────────────────────────────────────────
 
-  Future<({Feed feed, int newCount, List<({String title, String? description})> unblocked})>
+  Future<({Feed feed, int newCount, List<String> newlyMatchedAlertKeywords})>
       fetchAndStore(
     Feed feed, {
     List<KeywordBlock> keywords = const [],
+    List<KeywordAlert> alerts = const [],
     required int articleLimit,
   }) async {
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -97,7 +100,23 @@ class RssService {
         }).toList();
       }
 
-      await _articleRepo.insertArticles(feed.id!, articles);
+      if (alerts.isNotEmpty) {
+        articles = articles.map((a) {
+          // The blocklist wins: an alert firing on an article the user asked
+          // to have hidden would be confusing, not helpful.
+          if (a.isBlocked) return a;
+          final match = KeywordAlertRepository.findMatch(a.title, a.description, alerts);
+          if (match != null) return a.copyWith(matchedAlertKeyword: match.keyword);
+          return a;
+        }).toList();
+      }
+
+      // What insertArticles actually wrote as new this pass — not every
+      // parsed-and-thresholded article, most of which are the feed re-serving
+      // items it already offered on the last fetch. newCount and the alert
+      // keywords below both depend on this, which is what stops an alert
+      // re-firing on the same article every refresh forever.
+      final newArticles = await _articleRepo.insertArticles(feed.id!, articles);
 
       await _feedRepo.updateFetchResult(
         feedId: feed.id!,
@@ -107,9 +126,10 @@ class RssService {
         isDead: false,
       );
 
-      final unblocked = articles
-          .where((a) => !a.isBlocked)
-          .map((a) => (title: a.title, description: a.description))
+      final newlyMatchedAlertKeywords = newArticles
+          .where((a) => a.matchedAlertKeyword != null)
+          .map((a) => a.matchedAlertKeyword!)
+          .toSet()
           .toList();
 
       return (
@@ -119,8 +139,8 @@ class RssService {
           consecutiveFailures: 0,
           isDead: false,
         ),
-        newCount: articles.length,
-        unblocked: unblocked,
+        newCount: newArticles.length,
+        newlyMatchedAlertKeywords: newlyMatchedAlertKeywords,
       );
     } catch (e) {
       final failures = feed.consecutiveFailures + 1;
@@ -139,7 +159,7 @@ class RssService {
           isDead: isDead,
         ),
         newCount: 0,
-        unblocked: <({String title, String? description})>[],
+        newlyMatchedAlertKeywords: <String>[],
       );
     }
   }

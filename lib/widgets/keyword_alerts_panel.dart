@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
+import '../models/article.dart';
 import '../models/keyword_alert.dart';
+import '../repositories/article_repository.dart';
 import '../repositories/keyword_alert_repository.dart';
 import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
@@ -13,6 +16,14 @@ import 'notification_banner.dart';
 /// `FilterBubble` and `QuickSettingsBubble` do, rather than a
 /// `Navigator.push` away from the feed. All the actual list/add/remove logic
 /// is unchanged from the screen it replaces.
+///
+/// The add-keyword form is an inline expansion (`_addingKeyword`), not a
+/// second `showModalBottomSheet` stacked on top of this panel's own bubble —
+/// the bubble's backdrop blur (`bubble_panel.dart`) stays live under a
+/// stacked sheet, which put the very field being typed into in front of a
+/// layer that was still blurring what's behind it. Same fix as
+/// `KeywordBlocklistPanel`, same "+ New category" inline-reveal pattern
+/// `feeds_screen.dart` already uses.
 class KeywordAlertsPanel extends StatefulWidget {
   const KeywordAlertsPanel({super.key});
 
@@ -23,8 +34,15 @@ class KeywordAlertsPanel extends StatefulWidget {
 class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
   final _bannerKey = GlobalKey<NotificationBannerState>();
   final _repo = KeywordAlertRepository();
+  final _articleRepo = ArticleRepository();
   List<KeywordAlert> _keywords = [];
+  List<Article> _matchedArticles = [];
   bool _loading = true;
+
+  bool _addingKeyword = false;
+  final _keywordController = TextEditingController();
+  final _keywordFocus = FocusNode();
+  bool _wholeWord = false;
 
   @override
   void initState() {
@@ -32,28 +50,58 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     _load();
   }
 
-  Future<void> _load() async {
-    final keywords = await _repo.getAll();
-    if (mounted) setState(() { _keywords = keywords; _loading = false; });
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    _keywordFocus.dispose();
+    super.dispose();
   }
 
-  Future<void> _addKeyword() async {
-    final result = await showModalBottomSheet<({String keyword, bool wholeWord})>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => const AddAlertSheet(),
-    );
-    if (result == null) return;
+  Future<void> _load() async {
+    final keywords = await _repo.getAll();
+    final matched = await _articleRepo.getAlertMatches();
+    if (mounted) {
+      setState(() {
+        _keywords = keywords;
+        _matchedArticles = matched;
+        _loading = false;
+      });
+    }
+  }
+
+  void _openAddKeyword() {
+    setState(() {
+      _addingKeyword = true;
+      _wholeWord = false;
+    });
+    // The list/empty-state above owns initial focus. Requesting it after this
+    // frame is the reliable way to move the caret into the new field.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keywordFocus.requestFocus();
+    });
+  }
+
+  void _closeAddKeyword() {
+    _keywordController.clear();
+    setState(() => _addingKeyword = false);
+  }
+
+  Future<void> _submitAddKeyword() async {
+    final text = _keywordController.text.trim();
+    if (text.isEmpty) return;
+    final wholeWord = _wholeWord;
     await LoadingController.instance.run(() async {
       await _repo.insert(KeywordAlert(
-        keyword: result.keyword,
-        wholeWord: result.wholeWord,
+        keyword: text,
+        wholeWord: wholeWord,
         createdAt: DateTime.now().millisecondsSinceEpoch,
       ));
       HapticFeedback.lightImpact();
       await _load();
     }, label: 'Adding keyword');
+    if (!mounted) return;
+    _keywordController.clear();
+    setState(() => _addingKeyword = false);
   }
 
   Future<void> _delete(KeywordAlert kw) async {
@@ -73,6 +121,11 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
       await _repo.setWholeWord(kw.id!, !kw.wholeWord);
       await _load();
     }, label: 'Updating keyword');
+  }
+
+  Future<void> _openArticle(Article article) async {
+    final uri = Uri.tryParse(article.url);
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   @override
@@ -98,20 +151,23 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             ),
           ),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-            onPressed: _addKeyword,
-            icon: const Icon(Icons.add, size: 18),
-            label: Text(l10n.addKeyword),
+        if (_addingKeyword)
+          _buildAddForm(l10n, theme)
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _openAddKeyword,
+              icon: const Icon(Icons.add, size: 18),
+              label: Text(l10n.addKeyword),
+            ),
           ),
-        ),
         if (_loading)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(child: FetchingIndicator(size: 28)),
           )
-        else if (_keywords.isEmpty)
+        else if (_keywords.isEmpty && _matchedArticles.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16),
             child: Center(
@@ -146,136 +202,150 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           // the screen height), which is what actually scrolls a long list.
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(_keywords.length, (i) {
-              final kw = _keywords[i];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
-                  Dismissible(
-                    key: ValueKey(kw.id),
-                    direction: DismissDirection.endToStart,
-                    background: Container(
-                      alignment: Alignment.centerRight,
-                      padding: const EdgeInsets.only(right: 20),
-                      color: theme.colorScheme.error,
-                      child: Icon(Icons.delete_outline, color: theme.colorScheme.onError),
-                    ),
-                    onDismissed: (_) => _delete(kw),
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.notifications_active_outlined,
-                          color: theme.colorScheme.primary),
-                      title: Text(kw.keyword,
-                          style: theme.textTheme.bodyLarge
-                              ?.copyWith(fontWeight: FontWeight.w500)),
-                      subtitle: kw.wholeWord
-                          ? Text(l10n.wholeWordOnly,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.primary))
-                          : null,
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Tooltip(
-                            message: kw.wholeWord
-                                ? l10n.matchingWholeWord
-                                : l10n.matchingAnywhere,
-                            child: IconButton(
-                              icon: Icon(
-                                kw.wholeWord
-                                    ? Icons.text_fields_rounded
-                                    : Icons.format_quote_rounded,
-                                color: kw.wholeWord
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.4),
+            children: [
+              if (_keywords.isNotEmpty) ...[
+                _sectionHeader(l10n.keywordAlerts, theme),
+                ...List.generate(_keywords.length, (i) {
+                  final kw = _keywords[i];
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                      Dismissible(
+                        key: ValueKey(kw.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: theme.colorScheme.error,
+                          child: Icon(Icons.delete_outline, color: theme.colorScheme.onError),
+                        ),
+                        onDismissed: (_) => _delete(kw),
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.notifications_active_outlined,
+                              color: theme.colorScheme.primary),
+                          title: Text(kw.keyword,
+                              style: theme.textTheme.bodyLarge
+                                  ?.copyWith(fontWeight: FontWeight.w500)),
+                          subtitle: kw.wholeWord
+                              ? Text(l10n.wholeWordOnly,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.primary))
+                              : null,
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Tooltip(
+                                message: kw.wholeWord
+                                    ? l10n.matchingWholeWord
+                                    : l10n.matchingAnywhere,
+                                child: IconButton(
+                                  icon: Icon(
+                                    kw.wholeWord
+                                        ? Icons.text_fields_rounded
+                                        : Icons.format_quote_rounded,
+                                    color: kw.wholeWord
+                                        ? theme.colorScheme.primary
+                                        : theme.colorScheme.onSurface
+                                            .withValues(alpha: 0.4),
+                                  ),
+                                  onPressed: () => _toggleWholeWord(kw),
+                                ),
                               ),
-                              onPressed: () => _toggleWholeWord(kw),
-                            ),
+                              IconButton(
+                                icon: Icon(Icons.delete_outline,
+                                    color: theme.colorScheme.error),
+                                onPressed: () => _delete(kw),
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: Icon(Icons.delete_outline,
-                                color: theme.colorScheme.error),
-                            onPressed: () => _delete(kw),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              );
-            }),
+                    ],
+                  );
+                }),
+              ],
+              if (_matchedArticles.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                const Divider(height: 1),
+                _sectionHeader(
+                  '${l10n.matchedArticles}  (${_matchedArticles.length})',
+                  theme,
+                ),
+                ...List.generate(_matchedArticles.length, (i) {
+                  final article = _matchedArticles[i];
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (i > 0) const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.notifications_active_outlined,
+                          size: 20,
+                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                        title: Text(
+                          article.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium,
+                        ),
+                        subtitle: Text(
+                          '${article.feedTitle ?? ''}'
+                          '${article.matchedAlertKeyword != null ? "  ·  ${l10n.matchedByKeyword(article.matchedAlertKeyword!)}" : ""}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          ),
+                        ),
+                        onTap: () => _openArticle(article),
+                      ),
+                    ],
+                  );
+                }),
+              ],
+            ],
           ),
       ],
     );
   }
-}
 
-class AddAlertSheet extends StatefulWidget {
-  const AddAlertSheet({super.key});
-
-  @override
-  State<AddAlertSheet> createState() => _AddAlertSheetState();
-}
-
-class _AddAlertSheetState extends State<AddAlertSheet> {
-  final _controller = TextEditingController();
-  bool _wholeWord = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
-    Navigator.pop(context, (keyword: text, wholeWord: _wholeWord));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
-    final theme = Theme.of(context);
+  Widget _sectionHeader(String title, ThemeData theme) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomPadding),
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 4),
+      child: Text(
+        title.toUpperCase(),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.primary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddForm(AppLocalizations l10n, ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Center(
-            child: Container(
-              width: 40, height: 4,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(l10n.addAlertKeyword,
-              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(l10n.addAlertKeywordSubtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6))),
-          const SizedBox(height: 16),
           TextField(
-            controller: _controller,
+            controller: _keywordController,
+            focusNode: _keywordFocus,
             autofocus: true,
             textCapitalization: TextCapitalization.none,
             textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _submit(),
+            onSubmitted: (_) => _submitAddKeyword(),
             decoration: InputDecoration(
               labelText: l10n.keywordOrPhrase,
               hintText: l10n.alertKeywordHint,
+              isDense: true,
               border: const OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           CheckboxListTile(
             value: _wholeWord,
             onChanged: (v) => setState(() => _wholeWord = v ?? false),
@@ -284,8 +354,15 @@ class _AddAlertSheetState extends State<AddAlertSheet> {
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
           ),
-          const SizedBox(height: 8),
-          FilledButton(onPressed: _submit, child: Text(l10n.add)),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(onPressed: _closeAddKeyword, child: Text(l10n.cancel)),
+              const SizedBox(width: 8),
+              FilledButton(onPressed: _submitAddKeyword, child: Text(l10n.add)),
+            ],
+          ),
         ],
       ),
     );

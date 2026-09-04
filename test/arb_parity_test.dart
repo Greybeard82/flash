@@ -25,6 +25,8 @@ const Map<String, List<String>> _sameAsEnglishIsFine = {
   'themeSystem': ['de'],
   'articlesCount': ['fr'],
   'backup': ['it'],
+  // The color name "orange" is spelled identically in German and French.
+  'paletteOrange': ['de', 'fr'],
 };
 
 Map<String, String> _load(String locale) {
