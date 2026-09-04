@@ -20,7 +20,6 @@ const _locales = ['de', 'es', 'fr', 'it'];
 /// key -> locales in which sharing the English value is correct.
 const Map<String, List<String>> _sameAsEnglishIsFine = {
   'appTitle': ['de', 'es', 'fr', 'it'],
-  'opml': ['de', 'es', 'fr', 'it'],
   'feeds': ['de'],
   'filterBubbleTitle': ['de'],
   'themeSystem': ['de'],

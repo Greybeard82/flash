@@ -20,8 +20,6 @@ import 'radial_menu.dart';
 /// invisible against white, which is why it went unnoticed. A matrix filter
 /// has no backdrop term: an undecoded image stays transparent, and a decoded
 /// one becomes true greyscale.
-const ColorFilter kGreyscaleFilter = ColorFilter.matrix(kGreyscaleMatrix);
-
 const List<double> kGreyscaleMatrix = <double>[
   0.2126, 0.7152, 0.0722, 0, 0,
   0.2126, 0.7152, 0.0722, 0, 0,

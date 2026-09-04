@@ -10,10 +10,8 @@
 // Covered behaviours:
 //  1. Show read off: unread only, plus saved-and-read
 //  2. Show read on: everything unblocked
-//  3. retireArticles deletes unsaved, keeps and marks saved
-//  4. retireAllRead is scoped, and leaves unread alone
-//  5. Mixed saved/unsaved batches split correctly
-//  6. Read state is global across tabs
+//  3. retireAllRead is scoped, and leaves unread alone
+//  4. Read state is global across tabs
 //
 // Plain test(), not testWidgets() — this codebase never combines testWidgets()
 // with real sqflite FFI I/O (see feed_repository_test.dart).
@@ -152,49 +150,6 @@ void main() {
       final visible =
           await _repo.getArticlesByFolder(_gamingId, showRead: true);
       expect(_guids(visible), ['gaming']);
-    });
-  });
-
-  group('retireArticles', () {
-    test('deletes unsaved articles', () async {
-      final id = await _insert(_gamingFeedId, 'gone');
-      await _insert(_gamingFeedId, 'stays');
-
-      final deleted = await _repo.retireArticles([id]);
-
-      expect(deleted, 1);
-      expect(await _remaining(), ['stays']);
-    });
-
-    test('keeps saved articles and marks them read', () async {
-      final id = await _insert(_gamingFeedId, 'saved', saved: true);
-
-      final deleted = await _repo.retireArticles([id]);
-
-      expect(deleted, 0);
-      expect(await _remaining(), ['saved']);
-      final db = await AppDatabase.instance.database;
-      final row = (await db.query(TableNames.articles,
-              columns: ['is_read'], where: 'id = ?', whereArgs: [id]))
-          .first;
-      expect(row['is_read'], 1);
-    });
-
-    test('a mixed batch splits correctly', () async {
-      final a = await _insert(_gamingFeedId, 'a');
-      final b = await _insert(_gamingFeedId, 'b', saved: true);
-      final c = await _insert(_gamingFeedId, 'c');
-
-      final deleted = await _repo.retireArticles([a, b, c]);
-
-      expect(deleted, 2);
-      expect(await _remaining(), ['b']);
-    });
-
-    test('an empty list is a no-op', () async {
-      await _insert(_gamingFeedId, 'a');
-      expect(await _repo.retireArticles([]), 0);
-      expect(await _remaining(), ['a']);
     });
   });
 

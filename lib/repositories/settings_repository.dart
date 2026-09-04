@@ -37,18 +37,4 @@ class SettingsRepository {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
-
-  Future<void> setMany(Map<String, String> values) async {
-    final db = await _db;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final batch = db.batch();
-    for (final entry in values.entries) {
-      batch.insert(
-        TableNames.settings,
-        {'key': entry.key, 'value': entry.value, 'updated_at': now},
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-    }
-    await batch.commit(noResult: true);
-  }
 }

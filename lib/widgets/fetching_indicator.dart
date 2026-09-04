@@ -64,77 +64,19 @@ class _FetchingIndicatorState extends State<FetchingIndicator>
 
   @override
   Widget build(BuildContext context) {
+    // The same glyph as the bottom nav's "Flash" tab, so the spinner and the
+    // static icon are literally one shape. A real bolt is asymmetric and will
+    // orbit slightly under continuous rotation rather than spin dead-centre —
+    // the hand-drawn symmetric shape this replaced existed to avoid exactly
+    // that. Shipped as asked; if the wobble reads as cheap on device, that is
+    // the trade-off to revisit.
     return RotationTransition(
       turns: _turns,
-      child: CustomPaint(
-        size: Size.square(widget.size),
-        painter: _SymmetricBoltPainter(
-          color: Theme.of(context).colorScheme.primary,
-        ),
+      child: Icon(
+        Icons.bolt_outlined,
+        size: widget.size,
+        color: Theme.of(context).colorScheme.primary,
       ),
     );
   }
-}
-
-/// Right half of the bolt outline, top apex to bottom apex, in a coordinate
-/// space of -1..1 on both axes. The first and last points sit on the vertical
-/// axis (x == 0) and are shared with the mirrored half.
-///
-/// Only this half is authored anywhere. [buildSymmetricBoltPath] generates the
-/// left half by negating x, so the glyph's symmetry is a property of the
-/// construction rather than of carefully-typed coordinates.
-const List<Offset> kBoltRightHalf = <Offset>[
-  Offset(0.00, -1.00), // top apex, on the axis
-  Offset(0.46, -0.12), // upper spike
-  Offset(0.19, -0.12), // notch back toward the axis
-  Offset(0.46, 0.30), // lower spike
-  Offset(0.00, 1.00), // bottom apex, on the axis
-];
-
-/// Builds the mirror-symmetric bolt, filling [size].
-///
-/// The app's own logo is a standard asymmetric zigzag; this glyph is symmetric
-/// left-to-right so it stays legible while spinning — an asymmetric shape
-/// wobbles and reads as off-centre under rotation.
-Path buildSymmetricBoltPath(Size size) {
-  final halfW = size.width / 2;
-  final halfH = size.height / 2;
-  Offset toLocal(Offset p) => Offset(halfW + p.dx * halfW, halfH + p.dy * halfH);
-
-  final start = toLocal(kBoltRightHalf.first);
-  final path = Path()..moveTo(start.dx, start.dy);
-
-  for (var i = 1; i < kBoltRightHalf.length; i++) {
-    final p = toLocal(kBoltRightHalf[i]);
-    path.lineTo(p.dx, p.dy);
-  }
-  // Walk back up the mirrored side, skipping both axis points so they are not
-  // emitted twice.
-  for (var i = kBoltRightHalf.length - 2; i >= 1; i--) {
-    final p = toLocal(Offset(-kBoltRightHalf[i].dx, kBoltRightHalf[i].dy));
-    path.lineTo(p.dx, p.dy);
-  }
-
-  return path..close();
-}
-
-class _SymmetricBoltPainter extends CustomPainter {
-  final Color color;
-
-  const _SymmetricBoltPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawPath(
-      buildSymmetricBoltPath(size),
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.fill
-        ..isAntiAlias = true,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_SymmetricBoltPainter oldDelegate) =>
-      oldDelegate.color != color;
 }

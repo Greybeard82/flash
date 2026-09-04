@@ -92,24 +92,30 @@ void main() {
   tearDown(() async => AppDatabase.instance.close());
 
   test('a retired article is not resurrected by the next fetch', () async {
-    await _repo.insertArticles(_feedA, [_article('g1')]);
-    final id = await _idOf(_feedA, 'g1');
-
-    await _repo.retireArticles([id]);
-    expect(await _rows(_feedA), isEmpty);
+    // Represents an article that was already retired at some point in the
+    // past: the row is gone, the tombstone remains. Seeded directly rather
+    // than by retiring a live row here — the repository method that once
+    // did that (retireArticles) is gone; retireAllRead is exercised in
+    // read_visibility_test.dart, and what this file is actually pinning is
+    // the NOT EXISTS guard in insertArticles, which does not care how the
+    // tombstone got there.
+    final db = await AppDatabase.instance.database;
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'g1', 'deleted_at': _now});
 
     // The feed still offers it — this is the next refresh.
     await _repo.insertArticles(_feedA, [_article('g1')]);
 
     expect(await _rows(_feedA), isEmpty,
-        reason: 'the whole point of the tombstone table: the user cleared '
-            'this article and a re-fetch must not bring it back unread');
+        reason: 'the whole point of the tombstone table: once a guid is '
+            'tombstoned, a re-fetch must not bring it back unread');
   });
 
   test('a tombstone in one feed does not block the same guid in another',
       () async {
-    await _repo.insertArticles(_feedA, [_article('shared')]);
-    await _repo.retireArticles([await _idOf(_feedA, 'shared')]);
+    final db = await AppDatabase.instance.database;
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'shared', 'deleted_at': _now});
 
     await _repo.insertArticles(_feedB, [_article('shared')]);
 
@@ -118,45 +124,16 @@ void main() {
             'same item must stay independent');
   });
 
-  test('a saved article is never tombstoned and survives a re-fetch',
-      () async {
-    await _repo.insertArticles(_feedA, [_article('keep')]);
-    final id = await _idOf(_feedA, 'keep');
-    await _repo.setSaved(id, saved: true);
-
-    await _repo.retireArticles([id]);
-
-    final after = await _rows(_feedA);
-    expect(after.length, 1, reason: 'saved articles are exempt from retirement');
-    expect(after.first['is_saved'], 1);
-    expect(after.first['is_read'], 1,
-        reason: 'exempt from deletion, but still marked read');
-    expect(await _tombstoneCount(), 0);
-
-    await _repo.insertArticles(_feedA, [_article('keep')]);
-    expect((await _rows(_feedA)).length, 1,
-        reason: 'still exactly one row — the unique index handles this');
-  });
-
-  test('retiring twice writes one tombstone and does not throw', () async {
-    await _repo.insertArticles(_feedA, [_article('g1')]);
-    final id = await _idOf(_feedA, 'g1');
-
-    await _repo.retireArticles([id]);
-    await _repo.retireArticles([id]); // row already gone
-
-    expect(await _tombstoneCount(), 1);
-  });
-
   test('a never-retired article inserts normally', () async {
-    await _repo.insertArticles(_feedA, [_article('a'), _article('b')]);
-    await _repo.retireArticles([await _idOf(_feedA, 'a')]);
+    final db = await AppDatabase.instance.database;
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'a', 'deleted_at': _now});
 
-    await _repo.insertArticles(_feedA, [_article('c')]);
+    await _repo.insertArticles(_feedA, [_article('b'), _article('c')]);
 
     final guids = (await _rows(_feedA)).map((r) => r['guid']).toSet();
     expect(guids, {'b', 'c'},
-        reason: 'the NOT EXISTS guard must block only what was retired');
+        reason: 'the NOT EXISTS guard must block only what was tombstoned');
   });
 
   test('pruneTombstones drops rows past the window and keeps the rest',
@@ -195,11 +172,9 @@ void main() {
   });
 
   test('after pruning, the guid can insert again — intended', () async {
-    await _repo.insertArticles(_feedA, [_article('g1')]);
-    await _repo.retireArticles([await _idOf(_feedA, 'g1')]);
-
     final db = await AppDatabase.instance.database;
-    await db.update(TableNames.deletedArticles, {'deleted_at': 0});
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'g1', 'deleted_at': 0});
     await _repo.pruneTombstones();
 
     await _repo.insertArticles(_feedA, [_article('g1')]);
@@ -215,11 +190,12 @@ void main() {
     // The recovery action in Settings. Retirement is irreversible by design,
     // so this is the only route back for a user who scrolled faster than they
     // meant to.
-    await _repo.insertArticles(_feedA, [_article('g1'), _article('g2')]);
-    final ids = [await _idOf(_feedA, 'g1'), await _idOf(_feedA, 'g2')];
-    await _repo.retireArticles(ids);
+    final db = await AppDatabase.instance.database;
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'g1', 'deleted_at': _now});
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'g2', 'deleted_at': _now});
     expect(await _repo.tombstoneCount(), 2);
-    expect(await _rows(_feedA), isEmpty);
 
     final cleared = await _repo.clearAllTombstones();
 
@@ -237,13 +213,15 @@ void main() {
     final db = await AppDatabase.instance.database;
 
     // A library around the tombstones: a keyword, a saved article, a
-    // surviving unread article, plus the folders and feeds from setUp.
+    // surviving unread article, one tombstone, plus the folders and feeds
+    // from setUp. The tombstoned guid needs no article row of its own —
+    // clearAllTombstones only ever touches deleted_articles.
     await db.insert(TableNames.keywordBlocklist,
         {'keyword': 'sponsored', 'whole_word': 0, 'created_at': _now});
-    await _repo.insertArticles(
-        _feedA, [_article('keep'), _article('saved'), _article('doomed')]);
+    await _repo.insertArticles(_feedA, [_article('keep'), _article('saved')]);
     await _repo.setSaved(await _idOf(_feedA, 'saved'), saved: true);
-    await _repo.retireArticles([await _idOf(_feedA, 'doomed')]);
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'doomed', 'deleted_at': _now});
 
     final foldersBefore = await db.query(TableNames.folders);
     final feedsBefore = await db.query(TableNames.feeds);
@@ -264,94 +242,14 @@ void main() {
   });
 
   test('deleting a feed cascades its tombstones away', () async {
-    await _repo.insertArticles(_feedA, [_article('g1')]);
-    await _repo.retireArticles([await _idOf(_feedA, 'g1')]);
+    final db = await AppDatabase.instance.database;
+    await db.insert(TableNames.deletedArticles,
+        {'feed_id': _feedA, 'guid': 'g1', 'deleted_at': _now});
     expect(await _tombstoneCount(), 1);
 
-    final db = await AppDatabase.instance.database;
     await db.delete(TableNames.feeds, where: 'id = ?', whereArgs: [_feedA]);
 
     expect(await _tombstoneCount(), 0,
         reason: 'ON DELETE CASCADE, with foreign_keys ON');
-  });
-
-  test('retirement is atomic — never a deleted row with no tombstone',
-      () async {
-    await _repo.insertArticles(
-        _feedA, [_article('a'), _article('b'), _article('c')]);
-    final ids = [
-      await _idOf(_feedA, 'a'),
-      await _idOf(_feedA, 'b'),
-      await _idOf(_feedA, 'c'),
-    ];
-
-    final deleted = await _repo.retireArticles(ids);
-
-    expect(deleted, 3);
-    expect(await _tombstoneCount(), 3,
-        reason: 'one tombstone per deleted row, written in the same '
-            'transaction and before the delete');
-    expect(await _rows(_feedA), isEmpty);
-  });
-
-  test('1000 ids retire correctly across chunks, and the count is right',
-      () async {
-    // retireArticles chunks at 200, so this spans five transactions. The
-    // return value must be the total across all of them, not the last chunk.
-    final batch = [for (var i = 0; i < 1000; i++) _article('c$i')];
-    await _repo.insertArticles(_feedA, batch);
-
-    final db = await AppDatabase.instance.database;
-    final ids = (await db.query(TableNames.articles, columns: ['id']))
-        .map((r) => r['id'] as int)
-        .toList();
-    expect(ids.length, 1000);
-
-    final deleted = await _repo.retireArticles(ids);
-
-    expect(deleted, 1000, reason: 'summed across every chunk');
-    expect(await _tombstoneCount(), 1000);
-    expect(await _rows(_feedA), isEmpty);
-
-    // And the tombstones actually work across the chunk boundary.
-    await _repo.insertArticles(_feedA, batch);
-    expect(await _rows(_feedA), isEmpty,
-        reason: 'chunking must not leave a gap a re-fetch can slip through');
-  });
-
-  test('a mixed saved/unsaved batch across chunks counts only deletions',
-      () async {
-    final batch = [for (var i = 0; i < 250; i++) _article('m$i')];
-    await _repo.insertArticles(_feedA, batch);
-
-    final db = await AppDatabase.instance.database;
-    final ids = (await db.query(TableNames.articles, columns: ['id']))
-        .map((r) => r['id'] as int)
-        .toList();
-    // Save one in the first chunk and one in the second.
-    await _repo.setSaved(ids[10], saved: true);
-    await _repo.setSaved(ids[210], saved: true);
-
-    final deleted = await _repo.retireArticles(ids);
-
-    expect(deleted, 248, reason: 'the two saved articles are exempt');
-    expect((await _rows(_feedA)).length, 2);
-  });
-
-  test('a 500-id batch retires without hitting a variable limit', () async {
-    final batch = [for (var i = 0; i < 500; i++) _article('g$i')];
-    await _repo.insertArticles(_feedA, batch);
-
-    final db = await AppDatabase.instance.database;
-    final ids = (await db.query(TableNames.articles, columns: ['id']))
-        .map((r) => r['id'] as int)
-        .toList();
-    expect(ids.length, 500);
-
-    final deleted = await _repo.retireArticles(ids);
-
-    expect(deleted, 500);
-    expect(await _tombstoneCount(), 500);
-    expect(await _rows(_feedA), isEmpty);
   });
 }

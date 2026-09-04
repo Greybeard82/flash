@@ -122,9 +122,24 @@ class _FeedScreenState extends State<FeedScreen>
   int _selectedTabIndex = 0;
 
   /// One page per tab, in the tab strip's order. Only the selected page holds
-  /// the real list (and the one shared _scrollController); the rest render a
-  /// skeleton so a mid-swipe neighbour looks like content on its way in.
+  /// the live list (and the one shared _scrollController); every other page
+  /// renders from [_tabArticlesCache] so a swipe shows real content at once.
   final PageController _pageController = PageController();
+
+  /// Articles per tab index, warmed for every tab as soon as folders load and
+  /// refreshed at every deletion boundary. Swiping used to show a shimmer on
+  /// the incoming page until _onPageChanged had re-queried — for data that was
+  /// already on disk. With a handful of folders the whole thing is cheap to
+  /// keep hot. Keyed by tab index, so it is cleared whenever the folder list
+  /// itself changes.
+  final Map<int, List<Article>> _tabArticlesCache = {};
+
+  /// Top padding shared by the live list and every cached page. Zero now
+  /// that quick-settings/filter live in the app bar rather than overlaying
+  /// the list — kept as a getter, not deleted outright, since both call
+  /// sites read it and a future overlay would want the same single place to
+  /// change.
+  EdgeInsets get _listTopPadding => EdgeInsets.zero;
   bool _booting = true;
 
   /// A background feed fetch is in flight — drives the small app-bar bolt.
@@ -238,6 +253,8 @@ class _FeedScreenState extends State<FeedScreen>
   Future<int> _flushRead(String trigger, {int? folderId}) async {
     final deleted = await _articleRepo.retireAllRead(folderId: folderId);
     DiagLog.retire(ids: deleted, trigger: trigger);
+    // Rows left every tab, not just the visible one; keep the pages honest.
+    if (deleted > 0) unawaited(_warmTabCache(_folders));
     return deleted;
   }
 
@@ -578,6 +595,8 @@ class _FeedScreenState extends State<FeedScreen>
     ).wait;
 
     if (!mounted) return;
+    // Index-keyed, so a changed folder list invalidates every entry.
+    _tabArticlesCache.clear();
     setState(() {
       _folders = folders;
       _hasFeeds = feeds.isNotEmpty;
@@ -594,6 +613,7 @@ class _FeedScreenState extends State<FeedScreen>
       _loading = false;
     });
     AppBadgePlus.updateBadge(allCount);
+    unawaited(_warmTabCache(folders));
   }
 
   /// An article was read/unread from Bookmarks or Search. Only the counts
@@ -703,6 +723,22 @@ class _FeedScreenState extends State<FeedScreen>
     _articles = articles;
     _rows = groupByDay(articles, now: DateTime.now());
     _syncCardKeys(articles);
+    _tabArticlesCache[_selectedTabIndex] = articles;
+  }
+
+  /// Loads every tab's articles into [_tabArticlesCache]. Cheap for a
+  /// personal reader's folder count, and it is what lets a swipe land on real
+  /// content instead of a placeholder.
+  Future<void> _warmTabCache(List<Folder> folders) async {
+    for (var i = 0; i <= folders.length; i++) {
+      if (!mounted) return;
+      final articles = await _articlesForTab(i, folders);
+      if (!mounted) return;
+      // Never overwrite the live tab from a stale read.
+      if (i == _selectedTabIndex) continue;
+      _tabArticlesCache[i] = articles;
+    }
+    if (mounted) setState(() {});
   }
 
   void _syncCardKeys(List<Article> articles) {
@@ -925,18 +961,27 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _onTabSelectedBody(int index) async {
     _captureAnchor();
-    // Before the articles for the new tab are queried, so deleted rows never
-    // reach the list being built. App-wide, not folder-scoped: switching tabs
-    // is a lifecycle boundary for the whole library, not just the destination.
+    final gen = ++_tabGeneration;
+    // The page the user just landed on was already showing this tab's cached
+    // rows. Make them the live list now rather than dropping to a shimmer
+    // while the flush and re-query below run — that shimmer was the flash.
+    final cached = _tabArticlesCache[index];
+    setState(() {
+      _selectedTabIndex = index;
+      if (cached != null) {
+        _setArticles(cached);
+      } else {
+        _loading = true;
+      }
+    });
+
+    // Before the fresh query, so deleted rows never reach the list being
+    // built. App-wide, not folder-scoped: switching tabs is a lifecycle
+    // boundary for the whole library, not just the destination.
     await _flushRead('tabSwitch');
     await _refreshCountsFromDb();
     ReadStateNotifier.instance.articleReadStateChanged();
 
-    final gen = ++_tabGeneration;
-    setState(() {
-      _selectedTabIndex = index;
-      _loading = true;
-    });
     final articles = await _articlesForTab(index, _folders);
     if (!mounted || gen != _tabGeneration) return;
     setState(() {
@@ -1347,47 +1392,6 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// The two top buttons. Same mini-FAB styling and horizontal position as the
   /// bottom cluster, anchored to the top instead.
-  /// Height the top-right button cluster occupies: top padding + two mini
-  /// FABs + the gap between them. The list reserves this so the first card
-  /// starts below the buttons instead of under them.
-  static const double _topFabClusterHeight = 8 + 40 + 8 + 40;
-
-  Widget _topFabCluster(AppLocalizations l10n) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8, right: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ScrollFade(
-              controller: _fabFade,
-              child: FloatingActionButton(
-                key: _quickSettingsFabKey,
-                heroTag: 'quick_settings',
-                onPressed: _openQuickSettingsBubble,
-                tooltip: l10n.quickSettingsTooltip,
-                mini: true,
-                child: const Icon(Icons.tune_rounded),
-              ),
-            ),
-            const SizedBox(height: 8),
-            ScrollFade(
-              controller: _fabFade,
-              child: FloatingActionButton(
-                key: _filterFabKey,
-                heroTag: 'filter',
-                onPressed: _openFilterBubble,
-                tooltip: l10n.filterTooltip,
-                mini: true,
-                child: const Icon(Icons.filter_alt_outlined),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -1413,10 +1417,29 @@ class _FeedScreenState extends State<FeedScreen>
             opacity: _backgroundFetching ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
             child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: EdgeInsets.symmetric(horizontal: 8),
               child: Center(child: FetchingIndicator()),
             ),
           ),
+          // Quick settings and filter moved here from a floating cluster that
+          // overlaid the top-right of the list. That overlay reserved its own
+          // height out of the list's top padding, which is what produced the
+          // empty band above the first article — an app-bar action reserves
+          // nothing, because it isn't drawn over the content at all.
+          if (_hasFeeds && !_booting) ...[
+            IconButton(
+              key: _quickSettingsFabKey,
+              onPressed: _openQuickSettingsBubble,
+              tooltip: l10n.quickSettingsTooltip,
+              icon: const Icon(Icons.tune_rounded),
+            ),
+            IconButton(
+              key: _filterFabKey,
+              onPressed: _openFilterBubble,
+              tooltip: l10n.filterTooltip,
+              icon: const Icon(Icons.filter_alt_outlined),
+            ),
+          ],
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -1483,21 +1506,17 @@ class _FeedScreenState extends State<FeedScreen>
                       : const NeverScrollableScrollPhysics(),
                   onPageChanged: _onPageChanged,
                   itemCount: _hasFeeds ? 1 + _folders.length : 1,
-                  itemBuilder: (_, i) => i == _selectedTabIndex
-                      ? _buildContent()
-                      : _pagePlaceholder(),
+                  itemBuilder: (_, i) {
+                    if (i == _selectedTabIndex) return _buildContent();
+                    final cached = _tabArticlesCache[i];
+                    return cached == null
+                        ? _pagePlaceholder()
+                        : _cachedPage(cached);
+                  },
                 ),
               ),
             ],
           ),
-          // Top button cluster, aligned with the bottom one. In the body's
-          // Stack rather than `floatingActionButton:`, which only supports a
-          // single positioned child.
-          if (_hasFeeds && !_booting)
-            Align(
-              alignment: Alignment.topRight,
-              child: _topFabCluster(l10n),
-            ),
         ],
       ),
     );
@@ -1508,8 +1527,46 @@ class _FeedScreenState extends State<FeedScreen>
   /// loading instead of a blank sheet.
   Widget _pagePlaceholder() {
     return ListView.builder(
+      // Same top padding as the live list, or the rows jump the moment real
+      // content replaces the placeholder.
+      padding: _listTopPadding,
       itemCount: 6,
       itemBuilder: (_, __) => const ShimmerCard(),
+    );
+  }
+
+  /// A tab's rows drawn from [_tabArticlesCache] — what a page shows while it
+  /// is not the selected one. Read-mostly: no scroll controller, no card keys,
+  /// none of the mark-read bookkeeping; taps still work so a page that has
+  /// just been swiped to is not dead until _onPageChanged catches up.
+  Widget _cachedPage(List<Article> articles) {
+    final rows = groupByDay(articles, now: DateTime.now());
+    return ListView.builder(
+      padding: _listTopPadding,
+      cacheExtent: 500,
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+        if (row is DayHeaderRow) return DayHeader(row: row);
+        final article = (row as ArticleRow).article;
+        final needsDivider = i > 0 && rows[i - 1] is ArticleRow;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (needsDivider)
+              const Divider(height: 1, indent: 16, endIndent: 16),
+            ArticleCard(
+              article: article,
+              enableSwipeActions: false,
+              onTap: () => _openArticle(article),
+              onMarkRead: () => _markRead(article),
+              onMarkUnread: () => _markUnread(article),
+              onShare: () => _shareService.shareArticle(article),
+              onBookmark: () => _toggleSaved(article),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1596,14 +1653,10 @@ class _FeedScreenState extends State<FeedScreen>
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             // The quick-settings/filter cluster floats over the top-right of
-            // this list. Without this the first card rendered underneath it.
-            // The cluster is wrapped in a SafeArea, so it sits the viewport's
-            // top inset below the app bar as well; the list has to match that
-            // or the first row's box still tucks under the lower button.
-            padding: EdgeInsets.only(
-                top: _hasFeeds && !_booting
-                    ? _topFabClusterHeight + MediaQuery.paddingOf(context).top
-                    : 0),
+            // this list; reserve exactly its height so the first row starts
+            // beneath it. Nothing more — the body already sits below the app
+            // bar, so no inset belongs here.
+            padding: _listTopPadding,
             // Pure scroll-performance tuning. Nothing about deletion depends
             // on which rows are built any more.
             cacheExtent: 500,

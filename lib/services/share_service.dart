@@ -6,9 +6,4 @@ class ShareService {
     final text = '${article.title}\n${article.url}';
     await Share.share(text, subject: article.title);
   }
-
-  Future<void> shareUrl(String title, String url) async {
-    final text = '$title\n$url';
-    await Share.share(text, subject: title);
-  }
 }

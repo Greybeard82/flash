@@ -407,18 +407,6 @@ class ArticleRepository {
     );
   }
 
-  // ── Thumbnails ─────────────────────────────────────────────────────────────
-
-  Future<void> updateThumbnailPath(int articleId, String path) async {
-    final db = await _db;
-    await db.update(
-      TableNames.articles,
-      {'thumbnail_path': path},
-      where: 'id = ?',
-      whereArgs: [articleId],
-    );
-  }
-
   // ── Keyword blocking ───────────────────────────────────────────────────────
 
   Future<void> retroactivelyBlock(String keyword, bool wholeWord) async {

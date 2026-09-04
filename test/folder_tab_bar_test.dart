@@ -11,7 +11,7 @@
 //  2. Every tab meets the 48dp minimum on both axes, with headroom on height
 //  3. Short folder names still produce a wide-enough target
 //  4. Tapping a tab reports the right index
-//  5. Unread badges still render alongside the label
+//  5. Unread counts render inline with the label, and hide entirely at zero
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -144,8 +144,8 @@ void main() {
     });
   });
 
-  group('badges', () {
-    testWidgets('shows the unread count next to the folder label',
+  group('unread counts', () {
+    testWidgets('renders inline with the label, in parentheses',
         (tester) async {
       await tester.pumpWidget(_harness(
         folders: [_folder(1, 'Gaming')],
@@ -154,11 +154,16 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      expect(find.text('7'), findsOneWidget);
-      expect(find.text('12'), findsOneWidget);
+      // One Text widget per tab now, not a label plus a separate badge —
+      // the fixed-width slot that could re-skin without shifting anything is
+      // gone along with the badge; the count lives inside the label's own
+      // Text, in the label's own colour, so it can never lose contrast
+      // against its own chip fill the way a same-colour badge pill could.
+      expect(find.text('Gaming (7)'), findsOneWidget);
+      expect(find.text('All (12)'), findsOneWidget);
     });
 
-    testWidgets('hides the badge at zero', (tester) async {
+    testWidgets('hidden entirely at zero, not shown as "(0)"', (tester) async {
       await tester.pumpWidget(_harness(
         folders: [_folder(1, 'Gaming')],
         folderUnreadCounts: const {1: 0},
@@ -166,140 +171,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // The badge container stays mounted at count zero (see UnreadBadge:
-      // it self-manages visibility via AnimatedOpacity rather than being
-      // swapped out, so a later count update never has to destroy/recreate
-      // it) — so assert it's invisible rather than absent from the tree.
-      for (final opacity in tester.widgetList<AnimatedOpacity>(
-          find.byType(AnimatedOpacity))) {
-        expect(opacity.opacity, 0.0);
-      }
-    });
-  });
-
-  // A live-updating count (including from a tab the user isn't viewing)
-  // must never shift this tab's own label, or — since tabs share one Row —
-  // every tab laid out after it.
-  group('no layout shift on count change', () {
-    Offset labelPos(WidgetTester tester, String label) =>
-        tester.getTopLeft(find.text(label));
-
-    testWidgets('label position is identical at 1, 2, and 3 digits',
-        (tester) async {
-      final positions = <int, Offset>{};
-      for (final count in [1, 12, 123]) {
-        await tester.pumpWidget(_harness(
-          folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-          folderUnreadCounts: {1: count},
-        ));
-        await tester.pumpAndSettle();
-        positions[count] = labelPos(tester, 'Gaming');
-      }
-
-      expect(positions[12], positions[1],
-          reason: '1 → 2 digits must not move the label');
-      expect(positions[123], positions[1],
-          reason: '1 → 3 digits must not move the label');
-    });
-
-    testWidgets('a downstream sibling tab does not shift when an '
-        'earlier tab\'s digit count changes', (tester) async {
-      final positions = <int, Offset>{};
-      for (final count in [1, 12, 123]) {
-        await tester.pumpWidget(_harness(
-          folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-          folderUnreadCounts: {1: count},
-        ));
-        await tester.pumpAndSettle();
-        positions[count] = labelPos(tester, 'Tech');
-      }
-
-      expect(positions[12], positions[1],
-          reason: 'Gaming growing to 2 digits must not push Tech sideways');
-      expect(positions[123], positions[1],
-          reason: 'Gaming growing to 3 digits must not push Tech sideways');
-    });
-
-    testWidgets('no shift crossing the 9 → 10 digit-bucket boundary',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 9},
-      ));
-      await tester.pumpAndSettle();
-      final before = labelPos(tester, 'Tech');
-
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 10},
-      ));
-      await tester.pumpAndSettle();
-      final after = labelPos(tester, 'Tech');
-
-      expect(after, before);
-    });
-
-    testWidgets('no shift crossing the 99 → 100 digit-bucket boundary',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 99},
-      ));
-      await tester.pumpAndSettle();
-      final before = labelPos(tester, 'Tech');
-
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 100},
-      ));
-      await tester.pumpAndSettle();
-      final after = labelPos(tester, 'Tech');
-
-      expect(after, before);
-    });
-
-    testWidgets(
-        'no shift crossing the 999 → 1000 boundary into the "999+" cap',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 999},
-      ));
-      await tester.pumpAndSettle();
-      final before = labelPos(tester, 'Tech');
-      expect(find.text('999'), findsOneWidget);
-
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 1000},
-      ));
-      await tester.pumpAndSettle();
-      final after = labelPos(tester, 'Tech');
-      expect(find.text('999+'), findsOneWidget);
-
-      expect(after, before);
-    });
-
-    testWidgets(
-        'the slot is reserved even at zero — a badge appearing does not '
-        'shift the label', (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 0},
-      ));
-      await tester.pumpAndSettle();
-      final before = labelPos(tester, 'Tech');
-
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        folderUnreadCounts: const {1: 5},
-      ));
-      await tester.pumpAndSettle();
-      final after = labelPos(tester, 'Tech');
-
-      expect(after, before,
-          reason: 'The badge slot is reserved at zero specifically so it '
-              'appearing/disappearing never shifts sibling tabs.');
+      expect(find.text('Gaming'), findsOneWidget);
+      expect(find.text('All'), findsOneWidget);
+      expect(find.textContaining('(0)'), findsNothing);
     });
   });
 }

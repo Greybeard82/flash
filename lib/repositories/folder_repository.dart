@@ -16,18 +16,6 @@ class FolderRepository {
     return rows.map(Folder.fromMap).toList();
   }
 
-  Future<Folder?> getById(int id) async {
-    final db = await _db;
-    final rows = await db.query(
-      TableNames.folders,
-      where: 'id = ?',
-      whereArgs: [id],
-      limit: 1,
-    );
-    if (rows.isEmpty) return null;
-    return Folder.fromMap(rows.first);
-  }
-
   Future<Folder> insert(Folder folder) async {
     final db = await _db;
     final id = await db.insert(TableNames.folders, folder.toMap());

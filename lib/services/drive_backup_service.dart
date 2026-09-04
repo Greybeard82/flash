@@ -23,8 +23,6 @@ class DriveBackupService {
     await _signIn.disconnect();
   }
 
-  GoogleSignInAccount? get currentUser => _signIn.currentUser;
-
   Future<drive.DriveApi?> _getApi() async {
     final account = _signIn.currentUser ?? await _signIn.signInSilently();
     if (account == null) return null;

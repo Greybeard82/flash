@@ -124,20 +124,6 @@ class FeedRepository {
     };
   }
 
-  Future<void> reorder(List<Feed> feeds) async {
-    final db = await _db;
-    final batch = db.batch();
-    for (int i = 0; i < feeds.length; i++) {
-      batch.update(
-        TableNames.feeds,
-        {'position': i},
-        where: 'id = ?',
-        whereArgs: [feeds[i].id],
-      );
-    }
-    await batch.commit(noResult: true);
-    FeedsChangedNotifier.instance.structureChanged();
-  }
 
   /// Moves [feed] into [folderId] and renumbers positions for
   /// [destinationOrder] — the destination folder's full feed list, in its
@@ -169,13 +155,4 @@ class FeedRepository {
     FeedsChangedNotifier.instance.structureChanged();
   }
 
-  Future<int> getUnreadCountForFeed(int feedId) async {
-    final db = await _db;
-    final result = await db.rawQuery('''
-      SELECT COUNT(*) as count
-      FROM ${TableNames.articles}
-      WHERE feed_id = ? AND is_read = 0 AND is_blocked = 0
-    ''', [feedId]);
-    return result.first['count'] as int;
-  }
 }

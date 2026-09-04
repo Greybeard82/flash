@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/folder.dart';
-import 'unread_badge.dart';
 
 /// Category pills under the app bar title. Implements [PreferredSizeWidget]
 /// so it can sit in `AppBar.bottom`, where the mockup puts it.
@@ -156,7 +155,7 @@ class _FolderTab extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
-            constraints: const BoxConstraints(minHeight: 36),
+            constraints: const BoxConstraints(minWidth: 72, minHeight: 36),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
               color: isSelected ? accent : Colors.transparent,
@@ -166,36 +165,19 @@ class _FolderTab extends StatelessWidget {
                 width: 1,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: labelColor,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                // Fixed-width slot (sized for the widest "999+" badge) so
-                    // a live count update — even one from a tab the user
-                    // isn't viewing — never shifts this tab's own width, and
-                    // therefore never shifts every tab after it in the row.
-                    // Reserved even at zero so the badge appearing/
-                    // disappearing doesn't shift the label either.
-                    // UnreadBadge is always built here (never swapped for a
-                    // null/placeholder child) — it self-manages appearing/
-                    // disappearing via AnimatedOpacity, so this slot's
-                    // element is never destroyed and recreated by a count
-                    // update, which is what caused the badge to flicker.
-                SizedBox(
-                  width: UnreadBadge.maxWidth(small: true),
-                  child: Center(
-                    child: UnreadBadge(count: unreadCount, small: true),
-                  ),
-                ),
-              ],
+            // Count inline, in the label's own colour and weight, as the
+            // mockup shows: "World News (12)". The badge this replaced painted
+            // its own gold pill, which on a selected (gold) chip was
+            // gold-on-gold — present in the layout, invisible on screen. Text
+            // drawn in the label colour cannot lose contrast against its own
+            // background. The chip's width now follows the count; the old
+            // fixed-width slot is gone with the badge.
+            child: Text(
+              unreadCount > 0 ? '$label ($unreadCount)' : label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: labelColor,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ),
