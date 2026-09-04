@@ -5,7 +5,6 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
 import '../utils/form_factor.dart';
-import '../utils/reading_time.dart';
 import 'radial_menu.dart';
 
 /// Pure per-pixel desaturation (Rec. 709 luma weights), used to grey out the
@@ -107,6 +106,13 @@ class ArticleCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onBookmark;
 
+  /// Whether horizontal swipes mark the article read/unread.
+  ///
+  /// Off in the main feed, where a horizontal drag now pages between category
+  /// tabs and the two gestures would fight. Still on in Bookmarks, which has
+  /// no tabs and where swipe is the main way to toggle read state.
+  final bool enableSwipeActions;
+
   const ArticleCard({
     super.key,
     required this.article,
@@ -115,6 +121,7 @@ class ArticleCard extends StatelessWidget {
     required this.onMarkUnread,
     required this.onShare,
     required this.onBookmark,
+    this.enableSwipeActions = true,
   });
 
   @override
@@ -174,24 +181,6 @@ class ArticleCard extends StatelessWidget {
                             article.publishedAt, AppLocalizations.of(context)!),
                       ),
                     ),
-                    Builder(builder: (context) {
-                      final rt = readingTime(article.description);
-                      if (rt.isEmpty) return const SizedBox.shrink();
-                      return Row(children: [
-                        const SizedBox(width: 6),
-                        AnimatedDefaultTextStyle(
-                          duration: kReadDimDuration,
-                          curve: Curves.easeOut,
-                          style:
-                              (theme.textTheme.labelSmall ?? const TextStyle())
-                                  .copyWith(
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: isRead ? 0.2 : 0.38),
-                          ),
-                          child: Text('· $rt'),
-                        ),
-                      ]);
-                    }),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -238,6 +227,19 @@ class ArticleCard extends StatelessWidget {
       return InkWell(onTap: onTap, child: content);
     }
 
+    // Long-press radial menu (share / bookmark) is independent of swipe, so
+    // turning swipe off must not take bookmarking from the feed with it.
+    final tappable = GestureDetector(
+      onLongPress: () => showRadialMenu(
+        context: context,
+        onShare: onShare,
+        onBookmark: onBookmark,
+        article: article,
+      ),
+      child: InkWell(onTap: onTap, child: content),
+    );
+    if (!enableSwipeActions) return tappable;
+
     // Two gestures, two backgrounds. Flutter paints `background` behind a
     // startToEnd drag (finger moving left-to-right, revealing the left edge)
     // and `secondaryBackground` behind endToStart (right-to-left, revealing
@@ -274,15 +276,7 @@ class ArticleCard extends StatelessWidget {
         }
         return false;
       },
-      child: GestureDetector(
-        onLongPress: () => showRadialMenu(
-          context: context,
-          onShare: onShare,
-          onBookmark: onBookmark,
-          article: article,
-        ),
-        child: InkWell(onTap: onTap, child: content),
-      ),
+      child: tappable,
     );
   }
 

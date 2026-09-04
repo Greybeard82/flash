@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
+import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
@@ -22,6 +24,7 @@ class FeedsScreen extends StatefulWidget {
 }
 
 class _FeedsScreenState extends State<FeedsScreen> {
+  final _bannerKey = GlobalKey<NotificationBannerState>();
   final _feedRepo = FeedRepository();
   final _folderRepo = FolderRepository();
   final _feedlyService = FeedlyService();
@@ -130,9 +133,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.moveFeedFailed)),
-      );
+      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
       await _load();
     }
   }
@@ -188,11 +189,18 @@ class _FeedsScreenState extends State<FeedsScreen> {
         icon: const Icon(Icons.add),
         label: Text(l10n.addFeed),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
+      body: Column(
+        children: [
+          NotificationBanner(key: _bannerKey),
+          Expanded(
+            child: _loading
+          ? const Center(child: FetchingIndicator(size: 40))
           : _feedsByFolder.values.every((f) => f.isEmpty) && _folders.isEmpty
               ? _emptyFeedsState()
               : RefreshIndicator(onRefresh: _load, child: _buildList()),
+          ),
+        ],
+      ),
     );
   }
 
@@ -240,9 +248,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
           .run(() => _folderRepo.reorder(_folders), label: 'Reordering');
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.moveFeedFailed)),
-      );
+      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
       await _load();
     }
   }
@@ -363,9 +369,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       await LoadingController.instance.run(() async {
         await _feedRepo.delete(feed.id!);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.feedRemoved(feed.title))),
-          );
+          _bannerKey.currentState?.show(l10n.feedRemoved(feed.title));
         }
         await _load();
       }, label: 'Removing feed');
@@ -1030,7 +1034,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           if (_searching || _adding)
             const Padding(
               padding: EdgeInsets.only(top: 24),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: FetchingIndicator(size: 32)),
             ),
 
           if (_results.isNotEmpty)

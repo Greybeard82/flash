@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
+import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
@@ -16,6 +18,7 @@ class KeywordBlocklistScreen extends StatefulWidget {
 }
 
 class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
+  final _bannerKey = GlobalKey<NotificationBannerState>();
   final _keywordRepo = KeywordRepository();
   final _articleRepo = ArticleRepository();
   List<KeywordBlock> _keywords = [];
@@ -68,9 +71,7 @@ class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
       HapticFeedback.lightImpact();
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
-        );
+        _bannerKey.currentState?.show(l10n.keywordRemoved(kw.keyword));
       }
       await _load();
     }, label: 'Removing keyword');
@@ -99,7 +100,7 @@ class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.keywordBlocklist), centerTitle: false),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: FetchingIndicator(size: 40)),
       );
     }
 
@@ -115,7 +116,11 @@ class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
         icon: const Icon(Icons.add),
         label: Text(l10n.addKeyword),
       ),
-      body: isEmpty
+      body: Column(
+        children: [
+          NotificationBanner(key: _bannerKey),
+          Expanded(
+            child: isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -276,6 +281,9 @@ class _KeywordBlocklistScreenState extends State<KeywordBlocklistScreen> {
                   }),
               ],
             ),
+          ),
+        ],
+      ),
     );
   }
 

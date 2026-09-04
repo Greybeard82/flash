@@ -3,8 +3,13 @@ import '../l10n/app_localizations.dart';
 import '../models/folder.dart';
 import 'unread_badge.dart';
 
-class FolderTabBar extends StatefulWidget {
-  static const double barHeight = 60.0;
+/// Category pills under the app bar title. Implements [PreferredSizeWidget]
+/// so it can sit in `AppBar.bottom`, where the mockup puts it.
+class FolderTabBar extends StatefulWidget implements PreferredSizeWidget {
+  static const double barHeight = 56.0;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(barHeight);
 
   final List<Folder> folders;
   final int selectedIndex; // 0 = All, 1+ = folders[index-1]
@@ -61,7 +66,6 @@ class _FolderTabBarState extends State<FolderTabBar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
-    final surface = theme.colorScheme.surfaceContainerHighest;
 
     final tabs = <_TabItem>[
       _TabItem(
@@ -74,13 +78,14 @@ class _FolderTabBarState extends State<FolderTabBar> {
           )),
     ];
 
-    return Container(
+    // Transparent: this lives in AppBar.bottom now, and the app bar paints
+    // the background.
+    return SizedBox(
       height: FolderTabBar.barHeight,
-      color: surface,
       child: SingleChildScrollView(
         controller: _scrollController,
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: List.generate(tabs.length, (i) {
             final tab = tabs[i];
@@ -132,46 +137,48 @@ class _FolderTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    // Selected: solid accent with a dark label. Unselected: hairline outline,
+    // no fill, muted label.
     final labelColor = isSelected
-        ? accent
-        : theme.colorScheme.onSurface.withValues(alpha: 0.6);
+        ? scheme.onPrimary
+        : scheme.onSurface.withValues(alpha: 0.6);
 
-    return Container(
+    return Padding(
       key: tabKey,
-      constraints: const BoxConstraints(minWidth: 72, minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onTap,
           onLongPress: onLongPress,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          borderRadius: BorderRadius.circular(999),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            constraints: const BoxConstraints(minHeight: 36),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: isSelected ? accent : Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: isSelected ? accent : scheme.outline,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: 3,
-                  width: isSelected ? 24 : 0,
-                  decoration: BoxDecoration(
-                    color: accent,
-                    borderRadius: BorderRadius.circular(2),
+                Text(
+                  label,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: labelColor,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      style: theme.textTheme.labelLarge?.copyWith(
-                        color: labelColor,
-                        fontWeight:
-                            isSelected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    // Fixed-width slot (sized for the widest "999+" badge) so
+                const SizedBox(width: 4),
+                // Fixed-width slot (sized for the widest "999+" badge) so
                     // a live count update — even one from a tab the user
                     // isn't viewing — never shifts this tab's own width, and
                     // therefore never shifts every tab after it in the row.
@@ -182,13 +189,11 @@ class _FolderTab extends StatelessWidget {
                     // disappearing via AnimatedOpacity, so this slot's
                     // element is never destroyed and recreated by a count
                     // update, which is what caused the badge to flicker.
-                    SizedBox(
-                      width: UnreadBadge.maxWidth(small: true),
-                      child: Center(
-                        child: UnreadBadge(count: unreadCount, small: true),
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: UnreadBadge.maxWidth(small: true),
+                  child: Center(
+                    child: UnreadBadge(count: unreadCount, small: true),
+                  ),
                 ),
               ],
             ),

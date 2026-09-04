@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
 import '../utils/diag_log.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
@@ -104,7 +105,7 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: FetchingIndicator(size: 40))
           : _lastQuery.isEmpty
               ? const SizedBox.shrink()
               : _results.isEmpty

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
+import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/keyword_alert.dart';
@@ -13,6 +15,7 @@ class KeywordAlertsScreen extends StatefulWidget {
 }
 
 class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
+  final _bannerKey = GlobalKey<NotificationBannerState>();
   final _repo = KeywordAlertRepository();
   List<KeywordAlert> _keywords = [];
   bool _loading = true;
@@ -53,9 +56,7 @@ class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
       HapticFeedback.lightImpact();
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.keywordRemoved(kw.keyword))),
-        );
+        _bannerKey.currentState?.show(l10n.keywordRemoved(kw.keyword));
       }
       await _load();
     }, label: 'Removing keyword');
@@ -76,7 +77,7 @@ class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
     if (_loading) {
       return Scaffold(
         appBar: AppBar(title: Text(l10n.keywordAlerts), centerTitle: false),
-        body: const Center(child: CircularProgressIndicator()),
+        body: const Center(child: FetchingIndicator(size: 40)),
       );
     }
 
@@ -87,7 +88,11 @@ class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
         icon: const Icon(Icons.add),
         label: Text(l10n.addKeyword),
       ),
-      body: _keywords.isEmpty
+      body: Column(
+        children: [
+          NotificationBanner(key: _bannerKey),
+          Expanded(
+            child: _keywords.isEmpty
           ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -176,6 +181,9 @@ class _KeywordAlertsScreenState extends State<KeywordAlertsScreen> {
                 );
               },
             ),
+          ),
+        ],
+      ),
     );
   }
 }

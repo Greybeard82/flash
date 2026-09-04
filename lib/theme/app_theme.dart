@@ -4,9 +4,16 @@ import 'package:flutter/material.dart';
 const Color darkAccent = Color(0xFFFFD60A);
 const Color darkAccentPressed = Color(0xFFFFF176);
 
-// Light mode accent
-const Color lightAccent = Color(0xFFB8960A);
-const Color lightAccentPressed = Color(0xFFCC5500);
+// ── Light palette ──────────────────────────────────────────────────────────
+// Sampled from the reference mockup. Hardcoded for now: a user-facing theme
+// colour editor is planned next, and these stay centralised here — one file,
+// named constants, referenced through the ColorScheme — so swapping them for
+// per-user values later is a change to this block, not a hunt through widgets.
+const Color lightAccent = Color(0xFFD9A860);        // warm gold
+const Color lightAccentPressed = Color(0xFFC0904A); // deeper gold, pressed
+const Color lightInk = Color(0xFF2E2B27);           // soft near-black text
+const Color lightMuted = Color(0xFF8B8A85);         // secondary text, idle icons
+const Color lightBorder = Color(0xFFDDD3C0);        // chip / card hairlines
 
 /// Android page transitions, at a snappier tempo than stock.
 ///
@@ -53,21 +60,22 @@ const Color darkBg = Color(0xFF0D1B2A);
 const Color darkSurface = Color(0xFF162338);
 
 // Light mode backgrounds
-const Color lightBg = Color(0xFFFFFFFF);
-const Color lightSurface = Color(0xFFF4F4F8);
+const Color lightBg = Color(0xFFF5F1E8);      // warm cream: scaffold, app bar
+const Color lightSurface = Color(0xFFFBFAF6); // fractionally whiter: cards
 
 ThemeData flashLightTheme() {
   const base = ColorScheme.light(
     primary: lightAccent,
-    onPrimary: Colors.white,
-    primaryContainer: Color(0xFFF5E9C0),
-    onPrimaryContainer: Color(0xFF3A2800),
+    // Dark label on the gold, as in the mockup's selected chip.
+    onPrimary: lightInk,
+    primaryContainer: Color(0xFFF1E3C6),
+    onPrimaryContainer: lightInk,
     secondary: lightAccentPressed,
-    onSecondary: Colors.white,
+    onSecondary: lightInk,
     surface: lightBg,
-    onSurface: Color(0xFF1A1A1A),
+    onSurface: lightInk,
     surfaceContainerHighest: lightSurface,
-    outline: Color(0xFFD0D0D0),
+    outline: lightBorder,
     error: Color(0xFFBA1A1A),
     onError: Colors.white,
   );
@@ -79,35 +87,36 @@ ThemeData flashLightTheme() {
     scaffoldBackgroundColor: lightBg,
     appBarTheme: const AppBarTheme(
       backgroundColor: lightBg,
-      foregroundColor: Color(0xFF1A1A1A),
+      foregroundColor: lightInk,
       elevation: 0,
-      scrolledUnderElevation: 1,
-      surfaceTintColor: lightAccent,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
     ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: lightSurface,
+      backgroundColor: lightBg,
       selectedItemColor: lightAccent,
-      unselectedItemColor: Color(0xFF888888),
+      unselectedItemColor: lightMuted,
       type: BottomNavigationBarType.fixed,
-      elevation: 8,
+      elevation: 0,
     ),
     cardTheme: CardThemeData(
-      color: lightBg,
+      color: lightSurface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
+        side: const BorderSide(color: lightBorder),
       ),
     ),
     dividerTheme: const DividerThemeData(
-      color: Color(0xFFEEEEEE),
+      color: lightBorder,
       thickness: 1,
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: lightAccent,
-        foregroundColor: Colors.white,
+        foregroundColor: lightInk,
         minimumSize: const Size(88, 48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     ),
     switchTheme: SwitchThemeData(

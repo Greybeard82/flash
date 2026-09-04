@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
@@ -23,6 +24,7 @@ class ArticleSummarySheet extends StatefulWidget {
 }
 
 class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
+  final _bannerKey = GlobalKey<NotificationBannerState>();
   String? _summary;
   String _pending = ''; // chunks buffered here silently; never rendered
   bool _done = false;
@@ -156,6 +158,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            NotificationBanner(key: _bannerKey),
             // Handle
             Center(
               child: Container(
@@ -228,7 +231,9 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                             theme: theme,
                             l10n: l10n,
                             done: _done,
-                            teaserOnly: _teaserOnly),
+                            teaserOnly: _teaserOnly,
+                            onCopied: () => _bannerKey.currentState
+                                ?.show(l10n.summaryCopied)),
               ),
             ),
           ],
@@ -342,12 +347,17 @@ class _SummaryText extends StatelessWidget {
   final bool done;
   final bool teaserOnly;
 
+  /// Fired after the summary is copied. The confirmation belongs to the sheet
+  /// (a banner at its top), not to this leaf widget.
+  final VoidCallback onCopied;
+
   const _SummaryText(
       {super.key,
       required this.summary,
       required this.theme,
       required this.l10n,
       required this.done,
+      required this.onCopied,
       this.teaserOnly = false});
 
   @override
@@ -397,9 +407,7 @@ class _SummaryText extends StatelessWidget {
                 tooltip: l10n.copySummary,
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: summary));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.summaryCopied)),
-                  );
+                  onCopied();
                 },
               ),
             ],

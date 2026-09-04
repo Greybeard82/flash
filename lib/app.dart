@@ -396,19 +396,23 @@ class _AppShellState extends State<_AppShell> {
           onTap: _navigateTo,
           items: [
             BottomNavigationBarItem(
-              icon: const Icon(Icons.bolt_rounded),
+              icon: const Icon(Icons.bolt_outlined),
+              activeIcon: const Icon(Icons.bolt_rounded),
               label: l10n.appTitle,
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.rss_feed_rounded),
+              icon: const Icon(Icons.rss_feed_outlined),
+              activeIcon: const Icon(Icons.rss_feed_rounded),
               label: l10n.categories,
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.bookmark_border_rounded),
+              activeIcon: const Icon(Icons.bookmark_rounded),
               label: l10n.bookmarks,
             ),
             BottomNavigationBarItem(
               icon: const Icon(Icons.settings_outlined),
+              activeIcon: const Icon(Icons.settings_rounded),
               label: l10n.settings,
             ),
           ],

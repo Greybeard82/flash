@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
+import '../widgets/notification_banner.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
@@ -30,6 +32,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final _bannerKey = GlobalKey<NotificationBannerState>();
   final _settingsRepo = SettingsRepository();
   final _backupService = DriveBackupService();
   AppSettings? _settings;
@@ -103,16 +106,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'drive_last_backup_at', when.millisecondsSinceEpoch.toString());
         if (mounted) {
           setState(() => _lastBackupAt = when);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(AppLocalizations.of(context)!.backupSuccess),
-          ));
+          _bannerKey.currentState?.show(AppLocalizations.of(context)!.backupSuccess);
         }
       }, label: 'Backing up');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _bannerKey.currentState?.show(e.toString());
       }
     } finally {
       if (mounted) setState(() => _backupBusy = false);
@@ -135,9 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }, label: 'Exporting');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _bannerKey.currentState?.show(e.toString());
       }
     } finally {
       if (mounted) setState(() => _localBusy = false);
@@ -175,20 +172,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .run(() => LocalBackupService.importBackup(), label: 'Restoring');
       if (!mounted) return;
       if (count == -1) return; // user cancelled picker
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(l10n.restoreSuccess(count)),
-      ));
+      _bannerKey.currentState?.show(l10n.restoreSuccess(count));
     } on FormatException {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context)!.invalidBackupFile),
-        ));
+        _bannerKey.currentState?.show(AppLocalizations.of(context)!.invalidBackupFile);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _bannerKey.currentState?.show(e.toString());
       }
     } finally {
       if (mounted) setState(() => _localBusy = false);
@@ -225,15 +216,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final count = await LoadingController.instance
           .run(() => _backupService.restore(), label: 'Restoring');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(AppLocalizations.of(context)!.restoreSuccess(count)),
-        ));
+        _bannerKey.currentState?.show(AppLocalizations.of(context)!.restoreSuccess(count));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _bannerKey.currentState?.show(e.toString());
       }
     } finally {
       if (mounted) setState(() => _backupBusy = false);
@@ -245,7 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final s = _settings;
     if (s == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(body: Center(child: FetchingIndicator(size: 40)));
     }
 
     return Scaffold(
@@ -253,7 +240,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(l10n.settings),
         centerTitle: false,
       ),
-      body: ListView(
+      body: Column(
+        children: [
+          NotificationBanner(key: _bannerKey),
+          Expanded(
+            child: ListView(
         children: [
           // ── Refresh ──
           _sectionHeader(l10n.refresh),
@@ -312,6 +303,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
         ],
       ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -337,7 +331,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: FetchingIndicator(size: 16))
                       : const Icon(Icons.upload_file_outlined),
                   label: Text(l10n.exportBackup),
                 ),
@@ -407,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2))
+                                child: FetchingIndicator(size: 16))
                             : const Icon(Icons.cloud_upload_outlined),
                         label: Text(l10n.backupNow, textAlign: TextAlign.center),
                       ),

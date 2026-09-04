@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/fetching_indicator.dart';
 import '../utils/diag_log.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -143,7 +144,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         centerTitle: false,
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: FetchingIndicator(size: 40))
           : _articles.isEmpty
               ? Center(
                   child: Column(

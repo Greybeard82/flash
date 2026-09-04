@@ -120,6 +120,11 @@ class _FeedScreenState extends State<FeedScreen>
   UnreadCounts _counts = const UnreadCounts.empty();
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
+
+  /// One page per tab, in the tab strip's order. Only the selected page holds
+  /// the real list (and the one shared _scrollController); the rest render a
+  /// skeleton so a mid-swipe neighbour looks like content on its way in.
+  final PageController _pageController = PageController();
   bool _booting = true;
 
   /// A background feed fetch is in flight — drives the small app-bar bolt.
@@ -384,6 +389,7 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     _scrollDebounce?.cancel();
+    _pageController.dispose();
     _fabFade.dispose();
     if (_openBubble?.mounted ?? false) _openBubble!.remove();
     _scrollController.dispose();
@@ -577,6 +583,12 @@ class _FeedScreenState extends State<FeedScreen>
       _hasFeeds = feeds.isNotEmpty;
       _selectedTabIndex = safeTab;
       _setArticles(articles);
+      if (_pageController.hasClients &&
+          _pageController.page?.round() != safeTab) {
+        // jumpToPage fires onPageChanged, which early-returns because
+        // _selectedTabIndex already equals safeTab.
+        _pageController.jumpToPage(safeTab);
+      }
       _feedFolderId = {for (final f in feeds) f.id!: f.folderId};
       _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
@@ -888,7 +900,25 @@ class _FeedScreenState extends State<FeedScreen>
 
   // ── Tab switching ──────────────────────────────────────────────────────────
 
-  Future<void> _onTabSelected(int index) async {
+  /// Chip tap. Moves the PageView; [_onPageChanged] does the actual switch,
+  /// so a tap and a swipe run exactly the same code.
+  void _onTabSelected(int index) {
+    if (index == _selectedTabIndex) return;
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _onPageChanged(index);
+    }
+  }
+
+  /// Swipe landed on (or a tap animated to) a page. This is the tab-switch
+  /// lifecycle boundary — including the app-wide read flush — for both input
+  /// methods.
+  Future<void> _onPageChanged(int index) async {
     if (index == _selectedTabIndex) return;
     await LoadingController.instance.run(() => _onTabSelectedBody(index), label: 'Loading');
   }
@@ -1317,6 +1347,11 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// The two top buttons. Same mini-FAB styling and horizontal position as the
   /// bottom cluster, anchored to the top instead.
+  /// Height the top-right button cluster occupies: top padding + two mini
+  /// FABs + the gap between them. The list reserves this so the first card
+  /// starts below the buttons instead of under them.
+  static const double _topFabClusterHeight = 8 + 40 + 8 + 40;
+
   Widget _topFabCluster(AppLocalizations l10n) {
     return SafeArea(
       child: Padding(
@@ -1362,6 +1397,16 @@ class _FeedScreenState extends State<FeedScreen>
       appBar: AppBar(
         title: _newspaperMode ? _NewspaperMasthead() : Text(l10n.appTitle),
         centerTitle: false,
+        bottom: _hasFeeds && _folders.length > 1
+            ? FolderTabBar(
+                folders: _folders,
+                selectedIndex: _selectedTabIndex,
+                folderUnreadCounts: _counts.byFolder,
+                allUnreadCount: _counts.all,
+                onTabSelected: _onTabSelected,
+                onMarkAllRead: _markAllRead,
+              )
+            : null,
         actions: [
           // Background fetch lives here rather than over the content.
           AnimatedOpacity(
@@ -1377,8 +1422,7 @@ class _FeedScreenState extends State<FeedScreen>
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _hasFeeds && !_booting
           ? Padding(
-              padding: EdgeInsets.only(
-                  bottom: _folders.length > 1 ? FolderTabBar.barHeight : 0.0),
+              padding: EdgeInsets.zero,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1392,11 +1436,7 @@ class _FeedScreenState extends State<FeedScreen>
                       tooltip: l10n.refresh,
                       mini: true,
                       child: _refreshing
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
+                          ? const FetchingIndicator(size: 20)
                           : const Icon(Icons.refresh_rounded),
                     ),
                   ),
@@ -1434,16 +1474,20 @@ class _FeedScreenState extends State<FeedScreen>
           Column(
             children: [
               NotificationBanner(key: _bannerKey),
-              Expanded(child: _buildContent()),
-              if (_hasFeeds && _folders.length > 1)
-                FolderTabBar(
-                  folders: _folders,
-                  selectedIndex: _selectedTabIndex,
-                  folderUnreadCounts: _counts.byFolder,
-                  allUnreadCount: _counts.all,
-                  onTabSelected: _onTabSelected,
-                  onMarkAllRead: _markAllRead,
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  // With a single tab there is nothing to page to.
+                  physics: _hasFeeds && _folders.length > 1
+                      ? const PageScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  onPageChanged: _onPageChanged,
+                  itemCount: _hasFeeds ? 1 + _folders.length : 1,
+                  itemBuilder: (_, i) => i == _selectedTabIndex
+                      ? _buildContent()
+                      : _pagePlaceholder(),
                 ),
+              ),
             ],
           ),
           // Top button cluster, aligned with the bottom one. In the body's
@@ -1456,6 +1500,16 @@ class _FeedScreenState extends State<FeedScreen>
             ),
         ],
       ),
+    );
+  }
+
+  /// What a not-yet-selected page shows while it is being swiped into view.
+  /// A skeleton rather than nothing, so the incoming page reads as content
+  /// loading instead of a blank sheet.
+  Widget _pagePlaceholder() {
+    return ListView.builder(
+      itemCount: 6,
+      itemBuilder: (_, __) => const ShimmerCard(),
     );
   }
 
@@ -1541,6 +1595,15 @@ class _FeedScreenState extends State<FeedScreen>
           child: ListView.builder(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
+            // The quick-settings/filter cluster floats over the top-right of
+            // this list. Without this the first card rendered underneath it.
+            // The cluster is wrapped in a SafeArea, so it sits the viewport's
+            // top inset below the app bar as well; the list has to match that
+            // or the first row's box still tucks under the lower button.
+            padding: EdgeInsets.only(
+                top: _hasFeeds && !_booting
+                    ? _topFabClusterHeight + MediaQuery.paddingOf(context).top
+                    : 0),
             // Pure scroll-performance tuning. Nothing about deletion depends
             // on which rows are built any more.
             cacheExtent: 500,
@@ -1566,6 +1629,8 @@ class _FeedScreenState extends State<FeedScreen>
                       const Divider(height: 1, indent: 16, endIndent: 16),
                     ArticleCard(
                       article: article,
+                      // Horizontal drags page between category tabs here.
+                      enableSwipeActions: false,
                       onTap: () => _openArticle(article),
                       onMarkRead: () => _markRead(article),
                       onMarkUnread: () => _markUnread(article),
