@@ -176,13 +176,6 @@
   "addAlertKeywordSubtitle": "You'll get a notification when this word appears in a new article. Case-sensitive.",
   "alertKeywordHint": "e.g. Flutter, climate change…",
   "markUnread": "Mark as unread",
-  "opml": "OPML",
-  "opmlSubtitle": "Import or export your feeds in the universal OPML format, compatible with all RSS readers",
-  "opmlExport": "Export OPML",
-  "opmlImport": "Import OPML",
-  "opmlExportSuccess": "Feeds exported to OPML file",
-  "opmlImportSuccess": "{count} feeds imported",
-  "@opmlImportSuccess": { "placeholders": { "count": { "type": "int" } } },
   "timeJustNow": "just now",
   "timeMinAgo": "{n}m ago",
   "@timeMinAgo": { "placeholders": { "n": { "type": "int" } } },
@@ -202,12 +195,6 @@
   "newspaperModeOverridesTheme": "Appearance is set by Newspaper mode",
   "moveFeedFailed": "Couldn't save that change",
   "refreshFailed": "Couldn't refresh — check your connection",
-  "autoMarkReadAtBottom": "Mark all read at end of feed",
-  "autoMarkReadAtBottomSubtitle": "Reaching the bottom marks every article in this feed as read",
-  "autoMarkReadDelay": "Wait before marking",
-  "autoMarkReadImmediately": "Immediately",
-  "autoMarkReadAfterSeconds": "After {n}s",
-  "@autoMarkReadAfterSeconds": { "placeholders": { "n": { "type": "int" } } },
   "filterBubbleTitle": "Filter",
   "quickSettingsTitle": "Quick settings",
   "articleAgeFilter": "Article age",
@@ -246,25 +233,5 @@
   "confirmMarkAllRead": "Confirm mark all as read",
   "@confirmMarkAllRead": {
     "description": "Quick Settings switch that re-enables the mark-all-read confirmation."
-  },
-  "recoverRemoved": "Recover recently removed articles",
-  "@recoverRemoved": {
-    "description": "Settings action that clears retirement tombstones."
-  },
-  "recoverRemovedSubtitle": "Let articles removed by scrolling reappear on the next refresh",
-  "@recoverRemovedSubtitle": {
-    "description": "Explains what the recovery action does."
-  },
-  "recoverRemovedConfirm": "Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.",
-  "@recoverRemovedConfirm": {
-    "description": "Confirmation body for the recovery action."
-  },
-  "recoverRemovedAction": "Recover",
-  "@recoverRemovedAction": {
-    "description": "Confirm button for the recovery action."
-  },
-  "recoverRemovedDone": "Recovery done — pull to refresh if anything is missing",
-  "@recoverRemovedDone": {
-    "description": "Snackbar shown after recovery completes."
   }
 }

@@ -3,16 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
-import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/drive_backup_service.dart';
-import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
-import '../services/opml_service.dart';
 import '../services/refresh_service.dart';
 import '../services/settings_notifier.dart';
 import 'keyword_alerts_screen.dart';
@@ -39,7 +36,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   GoogleSignInAccount? _googleUser;
   bool _backupBusy = false;
   bool _localBusy = false;
-  bool _opmlBusy = false;
   DateTime? _lastBackupAt;
 
   @override
@@ -199,53 +195,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _exportOpml() async {
-    if (_opmlBusy) return;
-    setState(() => _opmlBusy = true);
-    try {
-      await LoadingController.instance.run(() async {
-        final folders = await FolderRepository().getAll();
-        final feeds = await FeedRepository().getAll();
-        await OpmlService.exportToFile(folders: folders, feeds: feeds);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(AppLocalizations.of(context)!.opmlExportSuccess)),
-          );
-        }
-      }, label: 'Exporting OPML');
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _opmlBusy = false);
-    }
-  }
-
-  Future<void> _importOpml() async {
-    if (_opmlBusy) return;
-    setState(() => _opmlBusy = true);
-    try {
-      final count = await LoadingController.instance.run(() => OpmlService.importFromFile(
-        folderRepo: FolderRepository(),
-        feedRepo: FeedRepository(),
-        settingsRepo: _settingsRepo,
-        articleRepo: ArticleRepository(),
-      ), label: 'Importing OPML');
-      if (!mounted) return;
-      if (count == -1) return; // cancelled
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.opmlImportSuccess(count))),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _opmlBusy = false);
-    }
-  }
-
   Future<void> _restoreFromDrive() async {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
@@ -306,35 +255,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       body: ListView(
         children: [
-          // ── Reading ──
-          _sectionHeader(l10n.reading),
-          _toggle(
-            title: l10n.autoMarkReadAtBottom,
-            subtitle: l10n.autoMarkReadAtBottomSubtitle,
-            value: s.autoMarkReadAtBottom,
-            onChanged: (v) => _save('auto_mark_read_at_bottom', v.toString()),
-          ),
-          // Only meaningful while the behaviour is on; hidden rather than
-          // disabled so the Reading section doesn't carry a dead control.
-          if (s.autoMarkReadAtBottom)
-            _dropdown<int>(
-              title: l10n.autoMarkReadDelay,
-              value: s.autoMarkReadAtBottomSeconds,
-              items: [
-                for (final seconds in AppSettings.autoMarkReadDelayOptions)
-                  DropdownMenuItem(
-                    value: seconds,
-                    child: Text(seconds == 0
-                        ? l10n.autoMarkReadImmediately
-                        : l10n.autoMarkReadAfterSeconds(seconds)),
-                  ),
-              ],
-              onChanged: (v) {
-                if (v == null) return;
-                _save('auto_mark_read_at_bottom_seconds', v.toString());
-              },
-            ),
-
           // ── Refresh ──
           _sectionHeader(l10n.refresh),
           _dropdown<int>(
@@ -378,54 +298,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const KeywordAlertsScreen()),
-            ),
-          ),
-
-          ListTile(
-            leading: const Icon(Icons.restore_from_trash_outlined),
-            title: Text(l10n.recoverRemoved),
-            subtitle: Text(l10n.recoverRemovedSubtitle),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _recoverRemovedArticles,
-          ),
-
-          // ── OPML ──
-          _sectionHeader(l10n.opml),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.opmlSubtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _opmlBusy ? null : _exportOpml,
-                        icon: _opmlBusy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Icon(Icons.upload_outlined),
-                        label: Text(l10n.opmlExport),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _opmlBusy ? null : _importOpml,
-                        icon: const Icon(Icons.download_outlined),
-                        label: Text(l10n.opmlImport),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ),
           ),
 
@@ -517,35 +389,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _backupBusy ? null : _backupNow,
-                      icon: _backupBusy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Icons.cloud_upload_outlined),
-                      label: Text(l10n.backupNow),
+            // IntrinsicHeight sizes both cells to the taller button, so when
+            // "Restore from Drive" (or its French translation) wraps to two
+            // lines, "Back up now" grows to match rather than the pair looking
+            // mismatched. The 48dp is a floor for the tap target, not a cap —
+            // a fixed height is what clipped the label in the first place.
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: OutlinedButton.icon(
+                        onPressed: _backupBusy ? null : _backupNow,
+                        icon: _backupBusy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.cloud_upload_outlined),
+                        label: Text(l10n.backupNow, textAlign: TextAlign.center),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 48,
-                    child: OutlinedButton.icon(
-                      onPressed: _backupBusy ? null : _restoreFromDrive,
-                      icon: const Icon(Icons.cloud_download_outlined),
-                      label: Text(l10n.restoreFromDrive),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: OutlinedButton.icon(
+                        onPressed: _backupBusy ? null : _restoreFromDrive,
+                        icon: const Icon(Icons.cloud_download_outlined),
+                        label: Text(l10n.restoreFromDrive,
+                            textAlign: TextAlign.center),
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -555,51 +436,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   String _formatDate(DateTime dt) {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
-  /// Clears every tombstone so retired articles the feeds still carry can
-  /// come back on the next fetch.
-  ///
-  /// Retirement is irreversible by design, so this is the only way back for a
-  /// user who scrolled faster than they meant to. It is deliberately a manual
-  /// action rather than anything automatic: clearing tombstones means the next
-  /// refresh re-inserts everything still inside the fetch window, which is
-  /// only what you want if you actually lost something.
-  Future<void> _recoverRemovedArticles() async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.recoverRemoved),
-        content: Text(l10n.recoverRemovedConfirm),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(l10n.recoverRemovedAction),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    await LoadingController.instance.run(() async {
-      await ArticleRepository().clearAllTombstones();
-      await RefreshService(_settingsRepo).refreshAll();
-      // The fetch above writes rows; it does not make the feed screen look at
-      // them. Without this the user runs recovery, returns to Flash, and sees
-      // the same empty list they started with — found on device, and it reads
-      // exactly like the action having failed.
-      FeedsChangedNotifier.instance.structureChanged();
-    }, label: 'Recovering articles');
-
-    if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(l10n.recoverRemovedDone)));
-    }
   }
 
   Widget _sectionHeader(String title) {
@@ -619,21 +455,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _toggle({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return SwitchListTile(
-      title: Text(title),
-      subtitle: Text(subtitle),
-      value: value,
-      onChanged: onChanged,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 

@@ -429,27 +429,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get markUnread => 'Mark as unread';
 
   @override
-  String get opml => 'OPML';
-
-  @override
-  String get opmlSubtitle =>
-      'Import or export your feeds in the universal OPML format, compatible with all RSS readers';
-
-  @override
-  String get opmlExport => 'Export OPML';
-
-  @override
-  String get opmlImport => 'Import OPML';
-
-  @override
-  String get opmlExportSuccess => 'Feeds exported to OPML file';
-
-  @override
-  String opmlImportSuccess(int count) {
-    return '$count feeds imported';
-  }
-
-  @override
   String get timeJustNow => 'just now';
 
   @override
@@ -500,24 +479,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refreshFailed => 'Couldn\'t refresh — check your connection';
-
-  @override
-  String get autoMarkReadAtBottom => 'Mark all read at end of feed';
-
-  @override
-  String get autoMarkReadAtBottomSubtitle =>
-      'Reaching the bottom marks every article in this feed as read';
-
-  @override
-  String get autoMarkReadDelay => 'Wait before marking';
-
-  @override
-  String get autoMarkReadImmediately => 'Immediately';
-
-  @override
-  String autoMarkReadAfterSeconds(int n) {
-    return 'After ${n}s';
-  }
 
   @override
   String get filterBubbleTitle => 'Filter';
@@ -576,22 +537,4 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Confirm mark all as read';
-
-  @override
-  String get recoverRemoved => 'Recover recently removed articles';
-
-  @override
-  String get recoverRemovedSubtitle =>
-      'Let articles removed by scrolling reappear on the next refresh';
-
-  @override
-  String get recoverRemovedConfirm =>
-      'Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.';
-
-  @override
-  String get recoverRemovedAction => 'Recover';
-
-  @override
-  String get recoverRemovedDone =>
-      'Recovery done — pull to refresh if anything is missing';
 }

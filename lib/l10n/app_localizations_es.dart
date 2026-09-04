@@ -433,27 +433,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get markUnread => 'Marcar como no leído';
 
   @override
-  String get opml => 'OPML';
-
-  @override
-  String get opmlSubtitle =>
-      'Importa o exporta tus feeds en formato OPML, compatible con todos los lectores RSS';
-
-  @override
-  String get opmlExport => 'Exportar OPML';
-
-  @override
-  String get opmlImport => 'Importar OPML';
-
-  @override
-  String get opmlExportSuccess => 'Feeds exportados a OPML';
-
-  @override
-  String opmlImportSuccess(int count) {
-    return '$count feeds importados';
-  }
-
-  @override
   String get timeJustNow => 'ahora';
 
   @override
@@ -504,24 +483,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get refreshFailed => 'No se pudo actualizar — comprueba tu conexión';
-
-  @override
-  String get autoMarkReadAtBottom => 'Marcar todo como leído al final del feed';
-
-  @override
-  String get autoMarkReadAtBottomSubtitle =>
-      'Llegar al final marca como leídos todos los artículos de este feed';
-
-  @override
-  String get autoMarkReadDelay => 'Esperar antes de marcar';
-
-  @override
-  String get autoMarkReadImmediately => 'Inmediatamente';
-
-  @override
-  String autoMarkReadAfterSeconds(int n) {
-    return 'Tras $n s';
-  }
 
   @override
   String get filterBubbleTitle => 'Filtro';
@@ -581,22 +542,4 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Confirmar marcar todo como leído';
-
-  @override
-  String get recoverRemoved => 'Recuperar artículos eliminados recientemente';
-
-  @override
-  String get recoverRemovedSubtitle =>
-      'Permite que los artículos eliminados al desplazarte reaparezcan en la próxima actualización';
-
-  @override
-  String get recoverRemovedConfirm =>
-      'Los artículos que has dejado atrás al desplazarte normalmente desaparecen para siempre. Esto permite que vuelvan los que tus feeds aún incluyan la próxima vez que Flash se actualice. Los más antiguos no se pueden recuperar.';
-
-  @override
-  String get recoverRemovedAction => 'Recuperar';
-
-  @override
-  String get recoverRemovedDone =>
-      'Recuperación completada: desliza para actualizar si falta algo';
 }

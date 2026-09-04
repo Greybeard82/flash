@@ -20,14 +20,11 @@ import '../services/refresh_service.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
-import '../utils/bottom_dwell_timer.dart';
 import '../utils/day_grouping.dart';
 import '../utils/mark_read_gate.dart';
-import '../utils/retirement_frontier.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
 import '../reading/read_gate.dart';
-import '../reading/retirement_queue.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
 import '../widgets/article_card.dart';
@@ -86,17 +83,30 @@ class _FeedScreenState extends State<FeedScreen>
   /// rows, and gained fetched ones. See [ScrollAnchor].
   final Map<int, ScrollAnchor> _tabAnchors = {};
 
+  /// True from just before our own `launchUrl` until the `resumed` that it
+  /// causes has been handled.
+  ///
+  /// Opening an article in the external browser backgrounds Flutter, and the
+  /// return fires `resumed` like any other. "Warm start" means the user came
+  /// back after being away — not that their own tap-to-read bounced the app
+  /// for a moment. Without this, the resume flush deleted the article the
+  /// user had just tapped before they ever saw it dimmed (bug 2).
+  ///
+  /// Consumed by the resume handler. **Not** cleared after the `launchUrl`
+  /// await: that future completes when the intent is dispatched, ~50ms after
+  /// the tap and long before the user returns, so clearing there disarmed
+  /// the flag before the resume it existed for (measured on device: cleared
+  /// at t+51ms, resume at t+9.5s, article deleted). It is cleared when the
+  /// launch fails — no backgrounding will follow — and treated as stale by
+  /// the resume handler if no pause was ever observed.
+  bool _returningFromArticleOpen = false;
+
   /// When the app last reached `resumed`, for [ReadGate]'s grace window.
   ///
   /// Starts at the epoch so a cold start is never inside the window — there
   /// is nothing to protect against before the first background/foreground
   /// cycle, and a fresh launch that blocked reads would be its own bug.
   DateTime _lastResumeAt = DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// Rows that have scrolled past the frontier and are waiting to be
-  /// deleted. Nothing here is removed from the list or the database until one
-  /// of the four flush points runs. See [RetirementQueue].
-  final RetirementQueue _retirementQueue = RetirementQueue();
 
   // ── Banner ─────────────────────────────────────────────────────────────────
   final _bannerKey = GlobalKey<NotificationBannerState>();
@@ -176,8 +186,6 @@ class _FeedScreenState extends State<FeedScreen>
   final _filterFabKey = GlobalKey();
   final _quickSettingsFabKey = GlobalKey();
   OverlayEntry? _openBubble;
-  late final BottomDwellTimer _bottomDwellTimer =
-      BottomDwellTimer(onComplete: _onBottomDwellComplete);
 
   /// Feed ordering. Applied to the loaded list rather than in SQL, so the
   /// repository queries — which several other screens share — stay untouched.
@@ -214,6 +222,19 @@ class _FeedScreenState extends State<FeedScreen>
   /// actually marks them. Cleared when new articles arrive for the scope, or
   /// on cold start — a scope with genuinely new unread content has to show it.
   final Set<int> _zeroedScopes = {};
+
+  /// READ -> DELETED, app-wide, at a lifecycle boundary. Returns how many
+  /// rows went, so callers can rebuild the list when something actually
+  /// changed rather than only when the fetch found new content — deleting
+  /// rows and then leaving them on screen is exactly bug 1.
+  ///
+  /// Every deletion boundary goes through here so each one leaves a
+  /// `[RETIRE]` line in the debug log with its trigger name.
+  Future<int> _flushRead(String trigger, {int? folderId}) async {
+    final deleted = await _articleRepo.retireAllRead(folderId: folderId);
+    DiagLog.retire(ids: deleted, trigger: trigger);
+    return deleted;
+  }
 
   /// The scope the selected tab represents, for [_zeroedScopes].
   int get _currentScope => _selectedTabIndex == 0
@@ -255,10 +276,6 @@ class _FeedScreenState extends State<FeedScreen>
     _displayLimit = settings.articleLimit;
     _displayAgeDays = settings.cleanupAgeDays;
     _showRead = settings.showRead;
-    _bottomDwellTimer.configure(
-      enabled: settings.autoMarkReadAtBottom,
-      duration: Duration(seconds: settings.autoMarkReadAtBottomSeconds),
-    );
   }
 
   Future<void> _onSettingsChanged() async {
@@ -367,7 +384,6 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     _scrollDebounce?.cancel();
-    _bottomDwellTimer.cancel();
     _fabFade.dispose();
     if (_openBubble?.mounted ?? false) _openBubble!.remove();
     _scrollController.dispose();
@@ -398,31 +414,36 @@ class _FeedScreenState extends State<FeedScreen>
     }
     if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
       _pausedAt = DateTime.now();
-      // Don't complete a bulk mark-as-read the user didn't witness while
-      // the app sits in the background.
-      _bottomDwellTimer.cancel();
       return;
     }
     if (state == AppLifecycleState.resumed) {
       final resumedAt = DateTime.now();
+      final wasPaused = _pausedAt != null;
       final shouldFetch = _resumePolicy.shouldFetch(
         pausedAt: _pausedAt,
         resumedAt: resumedAt,
         lastFetchAt: _lastFetchAt,
       );
       _pausedAt = null;
+      // Our own launchUrl round-trip is not a warm start. The flag is honoured
+      // only if we really went to background (a pause was seen); a flag with
+      // no pause behind it is stale — the launch never left the app — and is
+      // simply dropped so it cannot suppress the next genuine boundary.
+      final ownLaunchReturn = _returningFromArticleOpen && wasPaused;
+      _returningFromArticleOpen = false;
       if (_booting || _loading) return;
       if (shouldFetch) {
-        _fetchOnResume();
+        _fetchOnResume(ownLaunchReturn: ownLaunchReturn);
       } else {
-        _reloadArticles();
+        _reloadArticles(ownLaunchReturn: ownLaunchReturn);
       }
     }
   }
 
   /// Resume from background with a fetch. Same indicator as cold start, so
   /// the two read as one behaviour.
-  Future<void> _fetchOnResume() => _backgroundRefresh();
+  Future<void> _fetchOnResume({bool ownLaunchReturn = false}) =>
+      _backgroundRefresh(ownLaunchReturn: ownLaunchReturn);
 
   /// A refresh threw. These were previously swallowed silently, so on a
   /// captive-portal wifi or an expired certificate the spinner simply
@@ -447,12 +468,16 @@ class _FeedScreenState extends State<FeedScreen>
     _applyReadingSettings(settings);
     if (mounted) setState(() => _newspaperMode = settings.newspaperMode);
 
-    // 1. Cleanup first, so the list we're about to show is already purged of
-    //    stale read articles rather than shedding rows a moment later.
+    // 1. Delete every read article, then age-based cleanup, so the list we
+    //    are about to show is already purged rather than shedding rows a
+    //    moment later. Unconditional: a cold start is a lifecycle boundary,
+    //    and READ -> DELETED fires at every one of them whether or not the
+    //    fetch that follows finds anything.
     try {
+      await _flushRead('coldStart');
       await _articleRepo.runCleanup(days: settings.cleanupAgeDays);
     } catch (_) {
-      // Cleanup is housekeeping; a failure must not hold up the feed.
+      // Housekeeping; a failure must not hold up the feed.
     }
 
     // 2. Show the cached list immediately. No network in the way.
@@ -467,29 +492,29 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// Network fetch that never covers the content. Shared by cold start and
   /// resume so the two look the same.
-  Future<void> _backgroundRefresh() async {
+  Future<void> _backgroundRefresh({bool ownLaunchReturn = false}) async {
     if (!mounted || _backgroundFetching) return;
     setState(() => _backgroundFetching = true);
-    await _fetchAndApply();
+    await _fetchAndApply(ownLaunchReturn: ownLaunchReturn);
     if (mounted) setState(() => _backgroundFetching = false);
   }
 
-  /// Fetches, then decides whether anything actually arrived before touching
-  /// the list.
+  /// Fetches, deletes every read article, then decides whether anything
+  /// actually arrived before touching the list.
   ///
-  /// Retirement happens *after* the decision, not before. Retiring first would
-  /// delete read rows even in the case where the user is meant to see nothing
-  /// change at all — and they would then vanish at the next unrelated rebuild,
-  /// which reads as a random glitch.
+  /// Deletion is unconditional. It used to sit behind the `hasNew` check
+  /// below, which meant a cold start or a resume that found nothing new
+  /// skipped it entirely — read rows accumulated across sessions and only
+  /// went when a fetch happened to land. READ -> DELETED is a lifecycle rule,
+  /// not a side effect of new content.
   ///
-  /// "Visible" not "inserted": an article can be inserted and then hidden by
-  /// the age filter, the per-feed cap or a blocklist match. Triggering on
-  /// inserts would jump the user to the top to see nothing new.
-  ///
-  /// The list is either left completely alone or rebuilt from scratch and
-  /// reset to the top, so this never removes a row from a list the user is
-  /// looking at mid-position.
-  Future<void> _fetchAndApply() async {
+  /// The list rebuild is still conditional. "Visible" not "inserted": an
+  /// article can be inserted and then hidden by the age filter, the per-feed
+  /// cap or a blocklist match, and triggering on inserts would jump the user
+  /// to the top to see nothing new. When nothing arrived the on-screen list
+  /// is left alone — any dimmed rows it still shows are already gone from the
+  /// database and drop out at the next rebuild.
+  Future<void> _fetchAndApply({bool ownLaunchReturn = false}) async {
     final beforeIds = _articles.map((a) => a.id).toSet();
 
     try {
@@ -500,17 +525,26 @@ class _FeedScreenState extends State<FeedScreen>
     }
 
     if (!mounted) return;
+    final deleted = ownLaunchReturn ? 0 : await _flushRead('resumeFetch');
+    if (!mounted) return;
     final folders = await _folderRepo.getAll();
     if (!mounted) return;
     final probe = await _articlesForTab(_selectedTabIndex, folders);
     final hasNew = probe.any((a) => !beforeIds.contains(a.id));
 
-    if (!hasNew) {
+    // Two independent reasons to rebuild: something new arrived, or the
+    // flush removed rows that are still on screen. Only when neither is true
+    // does the list stay exactly where it is.
+    //
+    // Returning from our own browser launch never rebuilds, even if the fetch
+    // found something: the user tapped one card and expects to find it where
+    // it was, dimmed. With Show read off a re-query would hide it. What was
+    // fetched is in the database and appears at the next real boundary.
+    if (ownLaunchReturn || (!hasNew && deleted == 0)) {
       await _refreshCountsFromDb();
       return; // nothing moves
     }
 
-    await _articleRepo.retireAllRead();
     await _loadArticles();
     _resetScrollToTop();
     _clearZeroedScopes();
@@ -572,9 +606,6 @@ class _FeedScreenState extends State<FeedScreen>
     if (id == null) return;
     final saved = SavedStateNotifier.instance.saved;
 
-    // Bookmarked from another screen: same exemption as _toggleSaved.
-    if (saved) _retirementQueue.release(id);
-
     final current = _articles.indexWhere((a) => a.id == id);
     if (current < 0 || _articles[current].isSaved == saved) return;
 
@@ -604,7 +635,15 @@ class _FeedScreenState extends State<FeedScreen>
     AppBadgePlus.updateBadge(suppressed.all);
   }
 
-  Future<void> _reloadArticles() async {
+  Future<void> _reloadArticles({bool ownLaunchReturn = false}) async {
+    if (ownLaunchReturn) {
+      // The card was dimmed in place before we left. Re-querying would hide
+      // it under Show read off, and deleting it is bug 2. Counts and the
+      // anchor are all that need touching.
+      await _refreshCountsFromDb();
+      if (mounted) _restoreAnchor();
+      return;
+    }
     await LoadingController.instance.run(() async {
       // Pick up anything changed in Settings while we were away.
       final settings = await _settingsRepo.getAll();
@@ -614,6 +653,9 @@ class _FeedScreenState extends State<FeedScreen>
           _newspaperMode = settings.newspaperMode;
         });
       }
+      // Warm start is a lifecycle boundary: READ -> DELETED, app-wide, before
+      // the list is rebuilt from the post-delete state.
+      await _flushRead('resume');
       await _loadArticles();
       // Anchor, not `offset`: _loadArticles has just re-queried, so read rows
       // are gone and fetched rows may have been inserted above. The pixel
@@ -640,8 +682,9 @@ class _FeedScreenState extends State<FeedScreen>
   /// A dozen sites change the list, and any one of them forgetting to regroup
   /// would show stale headers or throw off `_onScroll`'s height accounting.
   ///
-  /// Since pass 12 there is no exception: retirement no longer mutates the
-  /// list in place, it queues ids and lets the next rebuild drop them.
+  /// There is no exception: deletion never mutates the list in place. Read
+  /// rows are deleted from the database at lifecycle boundaries and the next
+  /// rebuild simply does not find them.
   ///
   /// Safe to call inside a `setState` closure; it only assigns fields.
   void _setArticles(List<Article> articles) {
@@ -800,9 +843,9 @@ class _FeedScreenState extends State<FeedScreen>
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
 
-    // Flush points 2 and 3 of 4. The refresh FAB and pull-to-refresh are
-    // separate gestures but the same code path, so one flush serves both.
-    await _flushRetirementQueue('refresh');
+    // The refresh FAB and pull-to-refresh are separate gestures but the same
+    // code path, so one deletion serves both. App-wide and unconditional.
+    final deleted = await _flushRead('refresh');
 
     await LoadingController.instance.run(() async {
       try {
@@ -824,12 +867,14 @@ class _FeedScreenState extends State<FeedScreen>
         if (!mounted) return;
         final probe = await _articlesForTab(_selectedTabIndex, _folders);
         final hasNew = probe.any((a) => !beforeIds.contains(a.id));
-        if (!hasNew) {
+        // The user pressed refresh expecting read articles to clear. Rebuild
+        // if the flush removed anything, whether or not the fetch found new
+        // content — those are unrelated conditions (bug 1).
+        if (!hasNew && deleted == 0) {
           await _refreshCountsFromDb();
           return;
         }
 
-        await _articleRepo.retireAllRead();
         await _loadArticles();
         _resetScrollToTop();
         _clearZeroedScopes();
@@ -849,11 +894,13 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<void> _onTabSelectedBody(int index) async {
-    _bottomDwellTimer.cancel();
     _captureAnchor();
-    // Flush point 4 of 4. Before the articles for the new tab are queried, so
-    // the rows retired here never reach the list being built.
-    await _flushRetirementQueue('tabSwitch');
+    // Before the articles for the new tab are queried, so deleted rows never
+    // reach the list being built. App-wide, not folder-scoped: switching tabs
+    // is a lifecycle boundary for the whole library, not just the destination.
+    await _flushRead('tabSwitch');
+    await _refreshCountsFromDb();
+    ReadStateNotifier.instance.articleReadStateChanged();
 
     final gen = ++_tabGeneration;
     setState(() {
@@ -889,101 +936,6 @@ class _FeedScreenState extends State<FeedScreen>
         unawaited(_refreshCountsFromDb());
       }
     }
-
-    _enqueueScrolledPast();
-  }
-
-  /// Queues rows that have scrolled past the retirement frontier.
-  ///
-  /// Phase one of two, and the half that must never move anything. It adds
-  /// ids to [_retirementQueue] and stops: no deletion, no tombstone, no row
-  /// leaves the list, and the scroll offset is not touched. Because it cannot
-  /// move the list it needs no quiescence guard and is safe to run while a
-  /// gesture is live.
-  ///
-  /// The deletion happens in [_flushRetirementQueue], at moments when the
-  /// scroll position is being rebuilt anyway.
-  void _enqueueScrolledPast() {
-    if (!kEnableScrollRetirement) return;
-    if (!_markReadOnScroll || _showRead) return;
-    if (!_scrollController.hasClients) return;
-    if (_booting || _refreshing || _backgroundFetching) return;
-    // Same evidence-of-a-person rule as the mark-read pass: a programmatic
-    // jump is not the user scrolling past anything.
-    if (!_markReadGate.isOpen) return;
-
-    final plan = planRetirement(
-      rows: _rowMetrics(),
-      scrollOffset: _scrollController.offset,
-      bufferCards: kRetirementBufferCards,
-    );
-    if (plan.isEmpty) return;
-
-    _retirementQueue.enqueue(plan.articleIds);
-  }
-
-  /// Phase two: delete everything the queue has collected.
-  ///
-  /// Called from exactly four places — mark all as read, the refresh FAB,
-  /// pull-to-refresh and a category tab switch. Each is a moment where the
-  /// scroll position is already being reset or the user is already at the top,
-  /// so removing rows produces no visible movement and there is no offset
-  /// arithmetic left to get wrong.
-  ///
-  /// Awaited before the caller rebuilds, so the list is built once from the
-  /// post-flush state rather than built and then rebuilt.
-  Future<void> _flushRetirementQueue(String trigger) async {
-    if (_retirementQueue.isEmpty) return;
-    final ids = _retirementQueue.drain();
-    DiagLog.retire(ids: ids.length, trigger: trigger);
-    try {
-      await _articleRepo.retireArticles(ids);
-      await _refreshCountsFromDb();
-      ReadStateNotifier.instance.articleReadStateChanged();
-    } catch (_) {
-      // Self-healing: a failed write leaves the rows in place, and they are
-      // re-queued the next time the user scrolls past them.
-    }
-  }
-
-  /// Measures the current rows for the frontier calculation.
-  ///
-  /// Height comes from three places, in order: the live render box while the
-  /// row is built, the remembered height from when it last was, and only then
-  /// the constant. The constant is the one that caused this regression — real
-  /// cards measure 96.8dp and 121.9dp on a Pixel 11 Pro against a hardcoded
-  /// 120, so guessing was wrong in both directions and the error accumulated
-  /// down the list.
-  List<RowMetric> _rowMetrics() {
-    return [
-      for (final row in _rows)
-        if (row is DayHeaderRow)
-          // Fixed by construction and enforced by a SizedBox, so this one is
-          // not a guess.
-          const RowMetric(height: kDayHeaderHeight)
-        else
-          () {
-            final article = (row as ArticleRow).article;
-            final id = article.id;
-            final key = id != null ? _cardKeys[id] : null;
-            final context = key?.currentContext;
-
-            double? measured;
-            if (context != null) {
-              final box = context.findRenderObject() as RenderBox?;
-              if (box != null && box.hasSize) {
-                measured = box.size.height;
-                if (id != null) _measuredHeights[id] = measured;
-              }
-            }
-
-            return RowMetric(
-              height: measured ?? (id != null ? _measuredHeights[id] : null) ?? 120.0,
-              articleId: id,
-              isSaved: article.isSaved,
-            );
-          }(),
-    ];
   }
 
   void _onScroll() {
@@ -1000,7 +952,6 @@ class _FeedScreenState extends State<FeedScreen>
     // Before the early return below: the fade has to work whether or not
     // mark-read-on-scroll is switched on.
     _fabFade.onScroll();
-    _updateBottomDwellTimer();
     if (!_markReadOnScroll || _articles.isEmpty) return;
     final offset = _scrollController.offset;
     double cumulative = 0.0;
@@ -1092,48 +1043,6 @@ class _FeedScreenState extends State<FeedScreen>
     unawaited(_refreshCountsFromDb());
   }
 
-  // ── Delayed mark-all-as-read on reaching the bottom of a feed ──────────────
-
-  void _updateBottomDwellTimer() {
-    if (_articles.isEmpty || !_scrollController.hasClients) {
-      _bottomDwellTimer.cancel();
-      return;
-    }
-    _bottomDwellTimer
-        .updateAtBottom(_scrollController.position.extentAfter == 0);
-  }
-
-  Future<void> _onBottomDwellComplete() async {
-    if (!mounted || _articles.isEmpty) return;
-
-    // Reuse the exact same per-article read path used elsewhere (tap/swipe
-    // to read) so unread-count propagation to every tab an article appears
-    // in — its own category and "All" — stays consistent with the rest of
-    // the app, rather than a bespoke bulk-update path.
-    // Marks read only. Retirement is deliberately NOT triggered here: the
-    // user is parked at the bottom with the whole feed above them, and
-    // removing rows would collapse the list while they watch. The next
-    // refresh retires them.
-    DiagLog.read(
-      id: -1,
-      trigger: 'bottomDwell',
-      offset: _scrollController.hasClients ? _scrollController.offset : -1,
-    );
-    if (_selectedTabIndex == 0) {
-      await _articleRepo.markAllAsRead();
-    } else {
-      await _articleRepo.markAllAsReadByFolder(
-        _folders[_selectedTabIndex - 1].id!,
-      );
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _setArticles([for (final a in _articles) a.copyWith(isRead: true)]);
-    });
-    unawaited(_refreshCountsFromDb());
-  }
-
   // ── Article actions ────────────────────────────────────────────────────────
 
   Future<void> _openArticle(Article article) async {
@@ -1164,7 +1073,18 @@ class _FeedScreenState extends State<FeedScreen>
     if (uri == null) return;
 
     _captureAnchor();
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    _returningFromArticleOpen = true;
+    var launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+    // A launch that did not happen will not background the app, so there is
+    // no resume coming to consume the flag. Disarm it here, and only here —
+    // a successful launch leaves it armed for the resume the browser return
+    // will cause.
+    if (!launched) _returningFromArticleOpen = false;
 
     // Restore by anchor. The list is *not* unchanged: with Show read off the
     // article just opened has been filtered out of it, so every row below it
@@ -1195,9 +1115,6 @@ class _FeedScreenState extends State<FeedScreen>
 
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
-    // Unread means the user has not finished with it, so it must not be
-    // retired at the next flush.
-    _retirementQueue.release(article.id!);
     await _articleRepo.markAsUnread(article.id!);
     HapticFeedback.lightImpact();
     if (!mounted) return;
@@ -1214,11 +1131,6 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _toggleSaved(Article article) async {
     if (article.id == null) return;
     final nowSaved = !article.isSaved;
-    // PRD 4.9: a saved article is never deleted, whatever its read state or
-    // age. Releasing here is belt and braces — retireArticles also scopes its
-    // delete to is_saved = 0 — but it keeps the queue honest about what it
-    // will actually retire.
-    if (nowSaved) _retirementQueue.release(article.id!);
     await _articleRepo.setSaved(article.id!, saved: nowSaved);
     HapticFeedback.lightImpact();
     if (mounted) {
@@ -1306,8 +1218,6 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   Future<void> _markAllReadBody() async {
-    // Flush point 1 of 4. Before the rebuild below, so the list is built once.
-    await _flushRetirementQueue('markAllRead');
     final settings = await _settingsRepo.getAll();
     final cleanupDays = settings.cleanupAgeDays;
 
@@ -1316,7 +1226,7 @@ class _FeedScreenState extends State<FeedScreen>
       // cold-start fetch. This path rebuilds the list from scratch behind
       // _booting, so retiring here cannot move anything on screen.
       await _articleRepo.markAllAsRead();
-      await _articleRepo.retireAllRead();
+      await _flushRead('markAllRead:all');
       await _articleRepo.runCleanup(days: cleanupDays);
 
       if (!mounted) return;
@@ -1340,7 +1250,7 @@ class _FeedScreenState extends State<FeedScreen>
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
       await _articleRepo.markAllAsReadByFolder(folderId);
-      await _articleRepo.retireAllRead(folderId: folderId);
+      await _flushRead('markAllRead:folder', folderId: folderId);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
       // Refresh feeds in this folder — one pass, not one call per feed.
@@ -1631,11 +1541,8 @@ class _FeedScreenState extends State<FeedScreen>
           child: ListView.builder(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
-            // Pure scroll-performance tuning again. It used to double as the
-            // retirement distance, because retirement was confined to rows
-            // this ListView had disposed — that coupling went with the
-            // built-row ceiling in pass 12. kRetirementBufferCards alone now
-            // decides how far above the viewport a row is queued.
+            // Pure scroll-performance tuning. Nothing about deletion depends
+            // on which rows are built any more.
             cacheExtent: 500,
             itemCount: _rows.length,
             itemBuilder: (context, i) {

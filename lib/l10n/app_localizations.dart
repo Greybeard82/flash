@@ -872,42 +872,6 @@ abstract class AppLocalizations {
   /// **'Mark as unread'**
   String get markUnread;
 
-  /// No description provided for @opml.
-  ///
-  /// In en, this message translates to:
-  /// **'OPML'**
-  String get opml;
-
-  /// No description provided for @opmlSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Import or export your feeds in the universal OPML format, compatible with all RSS readers'**
-  String get opmlSubtitle;
-
-  /// No description provided for @opmlExport.
-  ///
-  /// In en, this message translates to:
-  /// **'Export OPML'**
-  String get opmlExport;
-
-  /// No description provided for @opmlImport.
-  ///
-  /// In en, this message translates to:
-  /// **'Import OPML'**
-  String get opmlImport;
-
-  /// No description provided for @opmlExportSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'Feeds exported to OPML file'**
-  String get opmlExportSuccess;
-
-  /// No description provided for @opmlImportSuccess.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} feeds imported'**
-  String opmlImportSuccess(int count);
-
   /// No description provided for @timeJustNow.
   ///
   /// In en, this message translates to:
@@ -985,36 +949,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t refresh — check your connection'**
   String get refreshFailed;
-
-  /// No description provided for @autoMarkReadAtBottom.
-  ///
-  /// In en, this message translates to:
-  /// **'Mark all read at end of feed'**
-  String get autoMarkReadAtBottom;
-
-  /// No description provided for @autoMarkReadAtBottomSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Reaching the bottom marks every article in this feed as read'**
-  String get autoMarkReadAtBottomSubtitle;
-
-  /// No description provided for @autoMarkReadDelay.
-  ///
-  /// In en, this message translates to:
-  /// **'Wait before marking'**
-  String get autoMarkReadDelay;
-
-  /// No description provided for @autoMarkReadImmediately.
-  ///
-  /// In en, this message translates to:
-  /// **'Immediately'**
-  String get autoMarkReadImmediately;
-
-  /// No description provided for @autoMarkReadAfterSeconds.
-  ///
-  /// In en, this message translates to:
-  /// **'After {n}s'**
-  String autoMarkReadAfterSeconds(int n);
 
   /// No description provided for @filterBubbleTitle.
   ///
@@ -1123,36 +1057,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm mark all as read'**
   String get confirmMarkAllRead;
-
-  /// Settings action that clears retirement tombstones.
-  ///
-  /// In en, this message translates to:
-  /// **'Recover recently removed articles'**
-  String get recoverRemoved;
-
-  /// Explains what the recovery action does.
-  ///
-  /// In en, this message translates to:
-  /// **'Let articles removed by scrolling reappear on the next refresh'**
-  String get recoverRemovedSubtitle;
-
-  /// Confirmation body for the recovery action.
-  ///
-  /// In en, this message translates to:
-  /// **'Articles you have scrolled past are normally gone for good. This lets any your feeds still carry come back the next time Flash refreshes. Older ones cannot be recovered.'**
-  String get recoverRemovedConfirm;
-
-  /// Confirm button for the recovery action.
-  ///
-  /// In en, this message translates to:
-  /// **'Recover'**
-  String get recoverRemovedAction;
-
-  /// Snackbar shown after recovery completes.
-  ///
-  /// In en, this message translates to:
-  /// **'Recovery done — pull to refresh if anything is missing'**
-  String get recoverRemovedDone;
 }
 
 class _AppLocalizationsDelegate

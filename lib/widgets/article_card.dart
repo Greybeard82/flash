@@ -103,7 +103,7 @@ class ArticleCard extends StatelessWidget {
   final Article article;
   final VoidCallback onTap;
   final VoidCallback onMarkRead;
-  final VoidCallback? onMarkUnread;
+  final VoidCallback onMarkUnread;
   final VoidCallback onShare;
   final VoidCallback onBookmark;
 
@@ -112,7 +112,7 @@ class ArticleCard extends StatelessWidget {
     required this.article,
     required this.onTap,
     required this.onMarkRead,
-    this.onMarkUnread,
+    required this.onMarkUnread,
     required this.onShare,
     required this.onBookmark,
   });
@@ -238,23 +238,40 @@ class ArticleCard extends StatelessWidget {
       return InkWell(onTap: onTap, child: content);
     }
 
-    final swipeBg = _swipeBackground(
+    // Two gestures, two backgrounds. Flutter paints `background` behind a
+    // startToEnd drag (finger moving left-to-right, revealing the left edge)
+    // and `secondaryBackground` behind endToStart (right-to-left, revealing
+    // the right edge). Right-to-left marks read; left-to-right marks unread.
+    // Each icon sits on the edge its own gesture uncovers.
+    final unreadBg = _swipeBackground(
       context,
       alignment: Alignment.centerLeft,
+      color: theme.colorScheme.secondary.withValues(alpha: 0.15),
+      icon: Icons.mark_email_unread_rounded,
+      iconColor: theme.colorScheme.secondary,
+    );
+    final readBg = _swipeBackground(
+      context,
+      alignment: Alignment.centerRight,
       color: theme.colorScheme.primary.withValues(alpha: 0.15),
       icon: Icons.mark_email_read_rounded,
       iconColor: theme.colorScheme.primary,
     );
     return Dismissible(
       key: ValueKey('article_${article.id}'),
-      background: swipeBg,
-      secondaryBackground: swipeBg,
+      background: unreadBg,
+      secondaryBackground: readBg,
       // confirmDismiss always returns false — the card never leaves the list,
-      // it just marks read and springs back. The stock 200ms snap-back is
-      // longer than it needs to be for a gesture with no dismissal to wait on.
+      // it just changes read state and springs back. The stock 200ms
+      // snap-back is longer than it needs to be for a gesture with no
+      // dismissal to wait on.
       movementDuration: const Duration(milliseconds: 150),
-      confirmDismiss: (_) async {
-        onMarkRead();
+      confirmDismiss: (direction) async {
+        if (direction == DismissDirection.endToStart) {
+          onMarkRead();
+        } else {
+          onMarkUnread();
+        }
         return false;
       },
       child: GestureDetector(

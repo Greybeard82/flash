@@ -433,27 +433,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get markUnread => 'Als ungelesen markieren';
 
   @override
-  String get opml => 'OPML';
-
-  @override
-  String get opmlSubtitle =>
-      'Importiere oder exportiere deine Feeds im OPML-Format, kompatibel mit allen RSS-Readern';
-
-  @override
-  String get opmlExport => 'OPML exportieren';
-
-  @override
-  String get opmlImport => 'OPML importieren';
-
-  @override
-  String get opmlExportSuccess => 'Feeds als OPML exportiert';
-
-  @override
-  String opmlImportSuccess(int count) {
-    return '$count Feeds importiert';
-  }
-
-  @override
   String get timeJustNow => 'gerade eben';
 
   @override
@@ -505,24 +484,6 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get refreshFailed =>
       'Aktualisierung fehlgeschlagen — bitte Verbindung prüfen';
-
-  @override
-  String get autoMarkReadAtBottom => 'Am Feed-Ende alles als gelesen markieren';
-
-  @override
-  String get autoMarkReadAtBottomSubtitle =>
-      'Das Ende zu erreichen markiert alle Artikel dieses Feeds als gelesen';
-
-  @override
-  String get autoMarkReadDelay => 'Wartezeit';
-
-  @override
-  String get autoMarkReadImmediately => 'Sofort';
-
-  @override
-  String autoMarkReadAfterSeconds(int n) {
-    return 'Nach $n s';
-  }
 
   @override
   String get filterBubbleTitle => 'Filter';
@@ -582,22 +543,4 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get confirmMarkAllRead => 'Alle als gelesen bestätigen';
-
-  @override
-  String get recoverRemoved => 'Kürzlich entfernte Artikel wiederherstellen';
-
-  @override
-  String get recoverRemovedSubtitle =>
-      'Lässt beim Scrollen entfernte Artikel bei der nächsten Aktualisierung wieder erscheinen';
-
-  @override
-  String get recoverRemovedConfirm =>
-      'Artikel, an denen du vorbeigescrollt bist, sind normalerweise endgültig weg. Dies lässt alle, die deine Feeds noch anbieten, bei der nächsten Aktualisierung zurückkehren. Ältere können nicht wiederhergestellt werden.';
-
-  @override
-  String get recoverRemovedAction => 'Wiederherstellen';
-
-  @override
-  String get recoverRemovedDone =>
-      'Wiederherstellung abgeschlossen — zum Aktualisieren ziehen, falls etwas fehlt';
 }

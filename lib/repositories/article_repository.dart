@@ -1,5 +1,4 @@
 import 'package:sqflite/sqflite.dart';
-import '../utils/diag_log.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/article.dart';
@@ -266,67 +265,6 @@ class ArticleRepository {
   }
 
   // ── Retirement ─────────────────────────────────────────────────────────────
-
-  /// Retires [articleIds]: the user is finished with them.
-  ///
-  /// Saved articles are exempt — marked read and kept, under either show-read
-  /// setting, until un-bookmarked. Everything else is tombstoned and deleted.
-  ///
-  /// Tombstone first, delete second, both in one transaction. The other order
-  /// leaves a window where an interrupted retirement has deleted rows with
-  /// nothing to stop the next fetch restoring them.
-  ///
-  /// Returns the number of rows deleted.
-  Future<int> retireArticles(List<int> articleIds) async {
-    if (articleIds.isEmpty) return 0;
-    var deleted = 0;
-    for (var i = 0; i < articleIds.length; i += _retireChunkSize) {
-      final end = (i + _retireChunkSize).clamp(0, articleIds.length);
-      deleted += await _retireChunk(articleIds.sublist(i, end));
-    }
-    return deleted;
-  }
-
-  /// Ids per retirement transaction.
-  ///
-  /// Each chunk binds its id list three times — the saved-exempt update, the
-  /// tombstone select and the delete — plus one timestamp, so the ceiling is
-  /// roughly `3N + 1` variables. At 200 that is ~601, comfortably under
-  /// SQLite's old 999 default as well as the current 32,766. The count is
-  /// invisible at the call site, which is why it is bounded here rather than
-  /// trusted to stay small.
-  static const int _retireChunkSize = 200;
-
-  Future<int> _retireChunk(List<int> articleIds) async {
-    final db = await _db;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final ph = List.filled(articleIds.length, '?').join(',');
-
-    return db.transaction((txn) async {
-      final savedMarked = await txn.rawUpdate('''
-        UPDATE ${TableNames.articles}
-        SET is_read = 1
-        WHERE id IN ($ph) AND is_saved = 1
-      ''', articleIds);
-      if (savedMarked > 0) {
-        DiagLog.read(
-            id: -savedMarked, trigger: 'retirement:saved', offset: -1);
-      }
-
-      await txn.rawInsert('''
-        INSERT OR IGNORE INTO ${TableNames.deletedArticles}
-          (feed_id, guid, deleted_at)
-        SELECT feed_id, guid, ?
-        FROM ${TableNames.articles}
-        WHERE id IN ($ph) AND is_saved = 0
-      ''', [now, ...articleIds]);
-
-      return txn.rawDelete('''
-        DELETE FROM ${TableNames.articles}
-        WHERE id IN ($ph) AND is_saved = 0
-      ''', articleIds);
-    });
-  }
 
   /// Retires every read, unsaved article in scope.
   ///
