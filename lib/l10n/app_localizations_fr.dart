@@ -326,25 +326,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Sans compte. Vos données restent sur votre téléphone.';
 
   @override
-  String get blockedArticles => 'Articles bloqués';
-
-  @override
-  String get noBlockedArticles => 'Aucun article bloqué pour l\'instant.';
-
-  @override
-  String blockedByKeyword(String keyword) {
-    return 'Bloqué par : $keyword';
-  }
-
-  @override
-  String get matchedArticles => 'Articles correspondants';
-
-  @override
-  String matchedByKeyword(String keyword) {
-    return 'Correspond à : $keyword';
-  }
-
-  @override
   String get localBackup => 'Fichier de sauvegarde local';
 
   @override

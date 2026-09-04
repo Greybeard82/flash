@@ -12,6 +12,8 @@ import '../services/feedly_service.dart';
 import '../services/loading_controller.dart';
 import '../services/rss_service.dart';
 import '../repositories/article_repository.dart';
+import '../repositories/keyword_alert_repository.dart';
+import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../widgets/feed_card.dart';
 import '../l10n/app_localizations.dart';
@@ -872,8 +874,19 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
 
       // Initial fetch — respects the same cap as every later refresh, so a
       // newly added feed doesn't arrive holding more than the setting allows.
+      // Blocklist and alerts must flow in the same way refresh_service.dart's
+      // _doRefresh already does: without them, every article this fetch
+      // writes is permanently unmatched, since matching only ever runs at
+      // insert time and nothing re-evaluates a row later.
       final settings = await widget.settingsRepo.getAll();
-      await rssService.fetchAndStore(feed, articleLimit: settings.articleLimit);
+      final keywords = await KeywordRepository().getAll();
+      final alerts = await KeywordAlertRepository().getAll();
+      await rssService.fetchAndStore(
+        feed,
+        keywords: keywords,
+        alerts: alerts,
+        articleLimit: settings.articleLimit,
+      );
 
       if (mounted) {
         Navigator.pop(context);

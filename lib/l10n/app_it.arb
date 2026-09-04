@@ -98,21 +98,6 @@
   "onboardingBullet1": "Segui qualsiasi feed RSS — notizie, blog, podcast.",
   "onboardingBullet2": "Riassunti AI, sul dispositivo.",
   "onboardingBullet3": "Nessun account. I tuoi dati restano sul telefono.",
-  "blockedArticles": "Articoli bloccati",
-  "noBlockedArticles": "Nessun articolo bloccato ancora.",
-  "blockedByKeyword": "Bloccato da: {keyword}",
-  "@blockedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
-  "matchedArticles": "Articoli corrispondenti",
-  "matchedByKeyword": "Corrisponde a: {keyword}",
-  "@matchedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
   "localBackup": "File di backup locale",
   "exportBackup": "Esporta backup",
   "importBackup": "Importa backup",

@@ -62,7 +62,7 @@ class ArticleRepository {
         (feed_id, guid, title, url, description, thumbnail_url, thumbnail_path,
          published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword,
          matched_alert_keyword)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?
         WHERE NOT EXISTS (
           SELECT 1 FROM ${TableNames.deletedArticles}
           WHERE feed_id = ? AND guid = ?
@@ -78,6 +78,9 @@ class ArticleRepository {
         a.publishedAt,
         fetchedAt,
         a.isBlocked ? 1 : 0,
+        // Almost always false on insert — true only when an alert keyword
+        // matched this article and auto-bookmarked it (see rss_service.dart).
+        a.isSaved ? 1 : 0,
         a.blockedKeyword,
         a.matchedAlertKeyword,
         feedId,
@@ -493,4 +496,52 @@ class ArticleRepository {
     );
   }
 
+  // ── Keyword alerts ─────────────────────────────────────────────────────────
+
+  /// Alert-side counterpart to [retroactivelyBlock]: matches [keyword]
+  /// against every article not already claimed by another alert, and
+  /// auto-bookmarks each match — see the note in `rss_service.dart` on why
+  /// alerts piggyback on `is_saved` for now. Restricted to
+  /// `matched_alert_keyword IS NULL` so this never overwrites an article
+  /// another alert already claimed, mirroring `retroactivelyBlock`'s
+  /// `is_blocked = 0` restriction.
+  Future<void> retroactivelyMatchAlert(String keyword, bool wholeWord) async {
+    final db = await _db;
+    final rows = await db.query(
+      TableNames.articles,
+      columns: ['id', 'title', 'description'],
+      where: 'matched_alert_keyword IS NULL',
+    );
+    final batch = db.batch();
+    for (final row in rows) {
+      final haystack = KeywordMatcher.buildHaystack(
+        row['title'] as String,
+        row['description'] as String?,
+      );
+      if (KeywordMatcher.matches(keyword, haystack, wholeWord: wholeWord)) {
+        batch.update(
+          TableNames.articles,
+          {'matched_alert_keyword': keyword, 'is_saved': 1},
+          where: 'id = ?',
+          whereArgs: [row['id']],
+        );
+      }
+    }
+    await batch.commit(noResult: true);
+  }
+
+  /// Alert-side counterpart to [unblockByKeyword]. Deliberately leaves
+  /// `is_saved` alone: the article may have been bookmarked deliberately
+  /// too, or by another alert on the same row in the past, and there is no
+  /// way to tell "why" a single boolean is set. An article this un-matches
+  /// stays bookmarked until the user removes it themselves.
+  Future<void> clearAlertMatchesByKeyword(String keyword) async {
+    final db = await _db;
+    await db.update(
+      TableNames.articles,
+      {'matched_alert_keyword': null},
+      where: 'matched_alert_keyword = ?',
+      whereArgs: [keyword],
+    );
+  }
 }

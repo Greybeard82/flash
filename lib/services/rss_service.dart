@@ -106,7 +106,17 @@ class RssService {
           // to have hidden would be confusing, not helpful.
           if (a.isBlocked) return a;
           final match = KeywordAlertRepository.findMatch(a.title, a.description, alerts);
-          if (match != null) return a.copyWith(matchedAlertKeyword: match.keyword);
+          // Auto-bookmarked so the match survives: matched_alert_keyword only
+          // exists as long as the row does, and every read/unsaved article is
+          // deleted app-wide at the next lifecycle boundary. is_saved is
+          // already exempt from every one of those deletion paths, so this
+          // reuses that exemption instead of adding a second one. Interim,
+          // per David: matched articles land in Bookmarks mixed in with
+          // deliberately-saved ones, and un-bookmarking one makes it
+          // deletable again.
+          if (match != null) {
+            return a.copyWith(matchedAlertKeyword: match.keyword, isSaved: true);
+          }
           return a;
         }).toList();
       }

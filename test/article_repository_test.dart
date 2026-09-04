@@ -394,4 +394,97 @@ void main() {
       expect(deleted, 0);
     });
   });
+
+  group('keyword alerts', () {
+    setUp(_setUp);
+    tearDown(_tearDown);
+
+    Future<int> insertWithTitle(String guid, String title) async {
+      final db = await AppDatabase.instance.database;
+      return db.insert(TableNames.articles, {
+        'feed_id': 1,
+        'guid': guid,
+        'title': title,
+        'url': 'https://example.com/$guid',
+        'fetched_at': 0,
+        'is_read': 0,
+        'is_blocked': 0,
+        'is_saved': 0,
+      });
+    }
+
+    group('retroactivelyMatchAlert', () {
+      test('matches an existing article and auto-bookmarks it', () async {
+        await insertWithTitle('z1', 'Nintendo teases new Zelda game');
+
+        await _repo.retroactivelyMatchAlert('zelda', false);
+
+        final row = await _row('z1');
+        expect(row?['matched_alert_keyword'], 'zelda');
+        expect(row?['is_saved'], 1,
+            reason: 'the bookmark is the only thing keeping this article '
+                'from being deleted by the next read-flush or cleanup');
+      });
+
+      test('does not touch an article that does not match', () async {
+        await insertWithTitle('z2', 'Completely unrelated tech news');
+
+        await _repo.retroactivelyMatchAlert('zelda', false);
+
+        final row = await _row('z2');
+        expect(row?['matched_alert_keyword'], isNull);
+        expect(row?['is_saved'], 0);
+      });
+
+      test('does not reassign an article another alert already claimed',
+          () async {
+        await insertWithTitle('z3', 'Zelda and Mario team up');
+        await _repo.retroactivelyMatchAlert('mario', false);
+        expect((await _row('z3'))?['matched_alert_keyword'], 'mario');
+
+        await _repo.retroactivelyMatchAlert('zelda', false);
+
+        expect((await _row('z3'))?['matched_alert_keyword'], 'mario',
+            reason: 'the first match wins; a second alert must not steal an '
+                'article already attributed to another keyword');
+      });
+
+      test('respects whole-word matching', () async {
+        await insertWithTitle('z4', 'A cryptocurrency explainer');
+
+        await _repo.retroactivelyMatchAlert('crypto', true);
+
+        expect((await _row('z4'))?['matched_alert_keyword'], isNull);
+      });
+    });
+
+    group('clearAlertMatchesByKeyword', () {
+      test('clears the match but leaves is_saved untouched', () async {
+        await insertWithTitle('z5', 'Zelda 40th anniversary');
+        await _repo.retroactivelyMatchAlert('zelda', false);
+        expect((await _row('z5'))?['is_saved'], 1);
+
+        await _repo.clearAlertMatchesByKeyword('zelda');
+
+        final row = await _row('z5');
+        expect(row?['matched_alert_keyword'], isNull);
+        expect(row?['is_saved'], 1,
+            reason: 'there is no way to tell whether is_saved was set by '
+                'this match alone or also by a deliberate bookmark, so '
+                'clearing the match must not unsave the article');
+      });
+
+      test('only clears articles matching that exact keyword', () async {
+        await insertWithTitle('z6', 'Zelda news');
+        await insertWithTitle('z7', 'Mario news');
+        await _repo.retroactivelyMatchAlert('zelda', false);
+        await _repo.retroactivelyMatchAlert('mario', false);
+
+        await _repo.clearAlertMatchesByKeyword('zelda');
+
+        expect((await _row('z6'))?['matched_alert_keyword'], isNull);
+        expect((await _row('z7'))?['matched_alert_keyword'], 'mario');
+      });
+    });
+  });
 }

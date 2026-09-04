@@ -41,6 +41,16 @@ class KeywordRepository {
     );
   }
 
+  Future<void> setKeyword(int id, String keyword) async {
+    final db = await _db;
+    await db.update(
+      TableNames.keywordBlocklist,
+      {'keyword': keyword},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
   /// Checks title + description against a list of keywords.
   /// Returns the first matching KeywordBlock, or null.
   static KeywordBlock? findMatch(

@@ -327,25 +327,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Nessun account. I tuoi dati restano sul telefono.';
 
   @override
-  String get blockedArticles => 'Articoli bloccati';
-
-  @override
-  String get noBlockedArticles => 'Nessun articolo bloccato ancora.';
-
-  @override
-  String blockedByKeyword(String keyword) {
-    return 'Bloccato da: $keyword';
-  }
-
-  @override
-  String get matchedArticles => 'Articoli corrispondenti';
-
-  @override
-  String matchedByKeyword(String keyword) {
-    return 'Corrisponde a: $keyword';
-  }
-
-  @override
   String get localBackup => 'File di backup locale';
 
   @override

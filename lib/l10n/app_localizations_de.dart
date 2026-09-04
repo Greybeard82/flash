@@ -328,25 +328,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Kein Konto. Deine Daten bleiben auf deinem Handy.';
 
   @override
-  String get blockedArticles => 'Blockierte Artikel';
-
-  @override
-  String get noBlockedArticles => 'Noch keine blockierten Artikel.';
-
-  @override
-  String blockedByKeyword(String keyword) {
-    return 'Blockiert durch: $keyword';
-  }
-
-  @override
-  String get matchedArticles => 'Passende Artikel';
-
-  @override
-  String matchedByKeyword(String keyword) {
-    return 'Passt zu: $keyword';
-  }
-
-  @override
   String get localBackup => 'Lokale Sicherungsdatei';
 
   @override

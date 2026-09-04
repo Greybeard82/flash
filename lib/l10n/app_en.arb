@@ -139,21 +139,6 @@
   "onboardingBullet1": "Follow any RSS feed — news, blogs, podcasts.",
   "onboardingBullet2": "AI summaries, on-device.",
   "onboardingBullet3": "No accounts. Your data stays on your phone.",
-  "blockedArticles": "Blocked Articles",
-  "noBlockedArticles": "No blocked articles yet.",
-  "blockedByKeyword": "Blocked by: {keyword}",
-  "@blockedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
-  "matchedArticles": "Matched Articles",
-  "matchedByKeyword": "Matched: {keyword}",
-  "@matchedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
   "localBackup": "Local backup file",
   "exportBackup": "Export backup",
   "importBackup": "Import backup",

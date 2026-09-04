@@ -31,6 +31,12 @@ class KeywordAlertRepository {
         where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> setKeyword(int id, String keyword) async {
+    final db = await _db;
+    await db.update(TableNames.keywordAlerts, {'keyword': keyword},
+        where: 'id = ?', whereArgs: [id]);
+  }
+
   /// Checks title + description against a list of alerts.
   /// Returns the first matching [KeywordAlert], or null. Mirrors
   /// `KeywordRepository.findMatch` so the two systems never diverge on what

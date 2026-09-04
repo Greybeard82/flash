@@ -324,25 +324,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get onboardingBullet3 => 'No accounts. Your data stays on your phone.';
 
   @override
-  String get blockedArticles => 'Blocked Articles';
-
-  @override
-  String get noBlockedArticles => 'No blocked articles yet.';
-
-  @override
-  String blockedByKeyword(String keyword) {
-    return 'Blocked by: $keyword';
-  }
-
-  @override
-  String get matchedArticles => 'Matched Articles';
-
-  @override
-  String matchedByKeyword(String keyword) {
-    return 'Matched: $keyword';
-  }
-
-  @override
   String get localBackup => 'Local backup file';
 
   @override

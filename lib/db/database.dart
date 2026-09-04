@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../utils/keyword_matcher.dart';
 import 'schema.dart';
 
 class AppDatabase {
@@ -40,7 +41,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 14,
+      version: 15,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -247,6 +248,43 @@ class AppDatabase {
         "VALUES ('color_palette', 'orange', $now)",
       );
     }
+    if (oldVersion < 15) {
+      // v14's ALTER TABLE left matched_alert_keyword NULL on every article
+      // that already existed — matching only ever ran at insert time, so
+      // nothing had a chance to evaluate a row already in the table before
+      // this. Re-run it once here, against every alert configured as of this
+      // upgrade, same matching (and first-match-wins order) the live insert
+      // path uses, and the same auto-bookmark fetchAndStore now applies to a
+      // fresh match — see the note on ArticleRepository.retroactivelyMatchAlert
+      // for why is_saved is what keeps a match from being deleted later.
+      final alerts = await db.query(TableNames.keywordAlerts);
+      if (alerts.isNotEmpty) {
+        final unmatched = await db.query(
+          TableNames.articles,
+          columns: ['id', 'title', 'description'],
+          where: 'matched_alert_keyword IS NULL',
+        );
+        for (final row in unmatched) {
+          final haystack = KeywordMatcher.buildHaystack(
+            row['title'] as String,
+            row['description'] as String?,
+          );
+          for (final alert in alerts) {
+            final keyword = alert['keyword'] as String;
+            final wholeWord = (alert['whole_word'] as int) == 1;
+            if (KeywordMatcher.matches(keyword, haystack, wholeWord: wholeWord)) {
+              await db.update(
+                TableNames.articles,
+                {'matched_alert_keyword': keyword, 'is_saved': 1},
+                where: 'id = ?',
+                whereArgs: [row['id']],
+              );
+              break;
+            }
+          }
+        }
+      }
+    }
   }
 
   /// Removes `read_at` by rebuilding the table.
@@ -324,7 +362,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 14);
+    await _onUpgrade(db, fromVersion, 15);
   }
 
   Future<void> close() async {

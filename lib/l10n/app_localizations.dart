@@ -686,36 +686,6 @@ abstract class AppLocalizations {
   /// **'No accounts. Your data stays on your phone.'**
   String get onboardingBullet3;
 
-  /// No description provided for @blockedArticles.
-  ///
-  /// In en, this message translates to:
-  /// **'Blocked Articles'**
-  String get blockedArticles;
-
-  /// No description provided for @noBlockedArticles.
-  ///
-  /// In en, this message translates to:
-  /// **'No blocked articles yet.'**
-  String get noBlockedArticles;
-
-  /// No description provided for @blockedByKeyword.
-  ///
-  /// In en, this message translates to:
-  /// **'Blocked by: {keyword}'**
-  String blockedByKeyword(String keyword);
-
-  /// No description provided for @matchedArticles.
-  ///
-  /// In en, this message translates to:
-  /// **'Matched Articles'**
-  String get matchedArticles;
-
-  /// No description provided for @matchedByKeyword.
-  ///
-  /// In en, this message translates to:
-  /// **'Matched: {keyword}'**
-  String matchedByKeyword(String keyword);
-
   /// No description provided for @localBackup.
   ///
   /// In en, this message translates to:

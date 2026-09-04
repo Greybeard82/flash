@@ -98,21 +98,6 @@
   "onboardingBullet1": "Folge jedem RSS-Feed — Nachrichten, Blogs, Podcasts.",
   "onboardingBullet2": "KI-Zusammenfassungen, auf dem Gerät.",
   "onboardingBullet3": "Kein Konto. Deine Daten bleiben auf deinem Handy.",
-  "blockedArticles": "Blockierte Artikel",
-  "noBlockedArticles": "Noch keine blockierten Artikel.",
-  "blockedByKeyword": "Blockiert durch: {keyword}",
-  "@blockedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
-  "matchedArticles": "Passende Artikel",
-  "matchedByKeyword": "Passt zu: {keyword}",
-  "@matchedByKeyword": {
-    "placeholders": {
-      "keyword": { "type": "String" }
-    }
-  },
   "localBackup": "Lokale Sicherungsdatei",
   "exportBackup": "Sicherung exportieren",
   "importBackup": "Sicherung importieren",
