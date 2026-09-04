@@ -6,31 +6,34 @@ import '../repositories/settings_repository.dart';
 import '../services/settings_notifier.dart';
 import 'bubble_panel.dart';
 
-/// Filter panel: how many articles to keep per feed, and how far back to keep
-/// them.
+/// Filter panel: sort order, read visibility, and the two keyword tools.
 ///
-/// Both sliders write the same two settings the Settings screen already edits
-/// (`article_limit`, `cleanup_age_days`) through the same repository, and ping
-/// [SettingsNotifier] exactly as `settings_screen.dart` does — so the feed
-/// picks the change up live rather than through a second, parallel path.
+/// The article-count and article-age sliders that used to live here were
+/// removed; this panel's job is now the things a reader reaches for while
+/// looking at the feed: how it's sorted, whether read articles stay visible,
+/// and the keyword blocklist/alerts that shape what's in it. `article_limit`
+/// and `cleanup_age_days` still exist on [AppSettings] and still govern
+/// fetching/cleanup, but with the sliders gone there is currently no UI
+/// control for either value anywhere in the app.
 class FilterBubble extends StatefulWidget {
   final AppSettings initial;
 
-  const FilterBubble({super.key, required this.initial});
+  /// Reopens this bubble as the keyword blocklist panel, anchored to the same
+  /// button. Owned by the caller (`feed_screen.dart`) rather than done here
+  /// directly: by the time the dismiss animation this row starts has
+  /// finished, this widget's own context is unmounted, so the reopen has to
+  /// be a still-alive object's job, not this one's.
+  final VoidCallback onOpenBlocklist;
 
-  /// 20–150 in steps of 10. Thirteen divisions, not fourteen: a Slider's
-  /// `divisions` counts intervals, so (150 − 20) / 13 = 10 exactly. Fourteen
-  /// would land on 9.29-unit steps and never sit on a round number.
-  static const double minArticles = 20;
-  static const double maxArticles = 150;
-  static const int articleDivisions = 13;
+  /// As [onOpenBlocklist], for the keyword alerts panel.
+  final VoidCallback onOpenAlerts;
 
-  /// 2–15 days in steps of 1 — thirteen intervals again. A step of 10 would be
-  /// meaningless across a 13-day span; whole days is the only sensible unit
-  /// here, and matches how the Settings screen's stepper already moves.
-  static const double minDays = 2;
-  static const double maxDays = 15;
-  static const int dayDivisions = 13;
+  const FilterBubble({
+    super.key,
+    required this.initial,
+    required this.onOpenBlocklist,
+    required this.onOpenAlerts,
+  });
 
   @override
   State<FilterBubble> createState() => _FilterBubbleState();
@@ -39,23 +42,12 @@ class FilterBubble extends StatefulWidget {
 class _FilterBubbleState extends State<FilterBubble> {
   final _repo = SettingsRepository();
 
-  late double _articles;
-  late double _days;
   late String _sortOrder;
   late bool _showRead;
 
   @override
   void initState() {
     super.initState();
-    // Clamp on the way in: the Settings screen's dropdown offers values well
-    // outside this slider's range (500, "unlimited"), and a Slider asserts if
-    // handed a value outside min..max.
-    _articles = widget.initial.articleLimit
-        .toDouble()
-        .clamp(FilterBubble.minArticles, FilterBubble.maxArticles);
-    _days = widget.initial.cleanupAgeDays
-        .toDouble()
-        .clamp(FilterBubble.minDays, FilterBubble.maxDays);
     _sortOrder = widget.initial.articleSortOrder;
     _showRead = widget.initial.showRead;
   }
@@ -66,14 +58,10 @@ class _FilterBubbleState extends State<FilterBubble> {
   /// persisting on release meant a drag past 20 could re-query the feed
   /// several times on the way to the value the user actually wanted.
   bool get _hasPendingChanges =>
-      _articles.round() != widget.initial.articleLimit ||
-      _days.round() != widget.initial.cleanupAgeDays ||
       _sortOrder != widget.initial.articleSortOrder ||
       _showRead != widget.initial.showRead;
 
   Future<void> _apply() async {
-    await _repo.set('article_limit', _articles.round().toString());
-    await _repo.set('cleanup_age_days', _days.round().toString());
     await _repo.set('article_sort_order', _sortOrder);
     await _repo.set('show_read', _showRead.toString());
     // One notify for the whole set, so the feed re-queries once.
@@ -95,26 +83,6 @@ class _FilterBubbleState extends State<FilterBubble> {
           title: l10n.filterBubbleTitle,
         ),
         const SizedBox(height: 4),
-        _SliderRow(
-          label: l10n.maxArticlesPerFeed,
-          valueLabel: l10n.articlesCount(_articles.round()),
-          value: _articles,
-          min: FilterBubble.minArticles,
-          max: FilterBubble.maxArticles,
-          divisions: FilterBubble.articleDivisions,
-          onChanged: (v) => setState(() => _articles = v),
-        ),
-        const SizedBox(height: 12),
-        _SliderRow(
-          label: l10n.articleAgeFilter,
-          valueLabel: l10n.daysCount(_days.round()),
-          value: _days,
-          min: FilterBubble.minDays,
-          max: FilterBubble.maxDays,
-          divisions: FilterBubble.dayDivisions,
-          onChanged: (v) => setState(() => _days = v),
-        ),
-        const SizedBox(height: 14),
         Text(l10n.articleOrder, style: theme.textTheme.bodyMedium),
         const SizedBox(height: 8),
         SegmentedButton<String>(
@@ -145,6 +113,27 @@ class _FilterBubbleState extends State<FilterBubble> {
           ),
           onChanged: (v) => setState(() => _showRead = v),
         ),
+        const SizedBox(height: 6),
+        const Divider(height: 1),
+        _ToolRow(
+          icon: Icons.block_rounded,
+          label: l10n.keywordBlocklist,
+          subtitle: l10n.keywordBlocklistSubtitle,
+          onTap: () async {
+            await BubblePanelScope.maybeOf(context)?.dismiss();
+            widget.onOpenBlocklist();
+          },
+        ),
+        const Divider(height: 1),
+        _ToolRow(
+          icon: Icons.notifications_active_outlined,
+          label: l10n.keywordAlerts,
+          subtitle: l10n.keywordAlertsSubtitle,
+          onTap: () async {
+            await BubblePanelScope.maybeOf(context)?.dismiss();
+            widget.onOpenAlerts();
+          },
+        ),
         const SizedBox(height: 10),
         Text(
           l10n.filterBubbleFootnote,
@@ -167,59 +156,53 @@ class _FilterBubbleState extends State<FilterBubble> {
   }
 }
 
-class _SliderRow extends StatelessWidget {
+/// A tappable row for one of the two keyword tools, styled to sit inside
+/// this bubble rather than as a Settings-style ListTile.
+class _ToolRow extends StatelessWidget {
+  final IconData icon;
   final String label;
-  final String valueLabel;
-  final double value;
-  final double min;
-  final double max;
-  final int divisions;
-  final ValueChanged<double> onChanged;
+  final String subtitle;
+  final VoidCallback onTap;
 
-
-  const _SliderRow({
+  const _ToolRow({
+    required this.icon,
     required this.label,
-    required this.valueLabel,
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.onChanged,
-
+    required this.subtitle,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
           children: [
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 14),
             Expanded(
-              child: Text(label, style: theme.textTheme.bodyMedium),
-            ),
-            Text(
-              valueLabel,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.primary,
-                fontWeight: FontWeight.w700,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      )),
+                  Text(
+                    subtitle,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ),
             ),
+            Icon(Icons.chevron_right_rounded,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
           ],
         ),
-        Slider(
-          value: value,
-          min: min,
-          max: max,
-          // Built-in discrete stops — the slider can only rest on a division,
-          // so no custom drag handling is needed to make it snap.
-          divisions: divisions,
-          label: valueLabel,
-          onChanged: onChanged,
-
-        ),
-      ],
+      ),
     );
   }
 }

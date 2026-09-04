@@ -32,6 +32,8 @@ import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/filter_bubble.dart';
+import '../widgets/keyword_alerts_panel.dart';
+import '../widgets/keyword_blocklist_panel.dart';
 import '../widgets/quick_settings_bubble.dart';
 import '../widgets/scroll_fade.dart';
 import '../widgets/fetching_indicator.dart';
@@ -125,6 +127,13 @@ class _FeedScreenState extends State<FeedScreen>
   /// the live list (and the one shared _scrollController); every other page
   /// renders from [_tabArticlesCache] so a swipe shows real content at once.
   final PageController _pageController = PageController();
+
+  /// True for the duration of a horizontal drag on the category PageView,
+  /// including its post-release settle. The vertical list's own Scrollbar
+  /// reads this to hide its thumb while the whole page — thumb included —
+  /// is being carried sideways by the swipe, which otherwise reads as a
+  /// stray bar drifting across the screen rather than a scrollbar.
+  bool _isPageSwiping = false;
 
   /// Articles per tab index, warmed for every tab as soon as folders load and
   /// refreshed at every deletion boundary. Swiping used to show a shimmer on
@@ -1382,8 +1391,29 @@ class _FeedScreenState extends State<FeedScreen>
 
   void _openFilterBubble() => _openBubblePanel(
         _filterFabKey,
-        (settings) => FilterBubble(initial: settings),
+        (settings) => FilterBubble(
+          initial: settings,
+          onOpenBlocklist: () =>
+              _reopenAsKeywordPanel(const KeywordBlocklistPanel()),
+          onOpenAlerts: () => _reopenAsKeywordPanel(const KeywordAlertsPanel()),
+        ),
       );
+
+  /// Hands the Filter bubble off to a keyword panel, growing from the same
+  /// button. The row that triggers this already awaited its own dismiss
+  /// (using its own, still-live context) before calling here — by the time
+  /// this runs, FilterBubble's context may already be unmounted, so the
+  /// reopen has to be this still-alive State's job, using its own context,
+  /// not the row's.
+  void _reopenAsKeywordPanel(Widget panel) {
+    if (!mounted) return;
+    _fabFade.settleNow();
+    _openBubble = showBubblePanel(
+      context: context,
+      anchorKey: _filterFabKey,
+      child: panel,
+    );
+  }
 
   void _openQuickSettingsBubble() => _openBubblePanel(
         _quickSettingsFabKey,
@@ -1498,21 +1528,41 @@ class _FeedScreenState extends State<FeedScreen>
             children: [
               NotificationBanner(key: _bannerKey),
               Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  // With a single tab there is nothing to page to.
-                  physics: _hasFeeds && _folders.length > 1
-                      ? const PageScrollPhysics()
-                      : const NeverScrollableScrollPhysics(),
-                  onPageChanged: _onPageChanged,
-                  itemCount: _hasFeeds ? 1 + _folders.length : 1,
-                  itemBuilder: (_, i) {
-                    if (i == _selectedTabIndex) return _buildContent();
-                    final cached = _tabArticlesCache[i];
-                    return cached == null
-                        ? _pagePlaceholder()
-                        : _cachedPage(cached);
+                child: NotificationListener<ScrollNotification>(
+                  // Notifications bubble up past this listener from the
+                  // selected page's own vertical list too, so the axis check
+                  // is load-bearing, not defensive: without it, an ordinary
+                  // vertical scroll would be misread as a page swipe and hide
+                  // the very thumb it belongs to.
+                  onNotification: (notification) {
+                    if (notification.metrics.axis != Axis.horizontal) {
+                      return false;
+                    }
+                    if (notification is ScrollStartNotification &&
+                        !_isPageSwiping) {
+                      setState(() => _isPageSwiping = true);
+                    } else if (notification is ScrollEndNotification &&
+                        _isPageSwiping) {
+                      setState(() => _isPageSwiping = false);
+                    }
+                    return false;
                   },
+                  child: PageView.builder(
+                    controller: _pageController,
+                    // With a single tab there is nothing to page to.
+                    physics: _hasFeeds && _folders.length > 1
+                        ? const PageScrollPhysics()
+                        : const NeverScrollableScrollPhysics(),
+                    onPageChanged: _onPageChanged,
+                    itemCount: _hasFeeds ? 1 + _folders.length : 1,
+                    itemBuilder: (_, i) {
+                      if (i == _selectedTabIndex) return _buildContent();
+                      final cached = _tabArticlesCache[i];
+                      return cached == null
+                          ? _pagePlaceholder()
+                          : _cachedPage(cached);
+                    },
+                  ),
                 ),
               ),
             ],
@@ -1648,7 +1698,9 @@ class _FeedScreenState extends State<FeedScreen>
         },
         child: Scrollbar(
           controller: _scrollController,
-          thumbVisibility: true,
+          // Suppressed for the duration of a category swipe: outside that,
+          // behaviour is unchanged from the previous hardcoded true.
+          thumbVisibility: !_isPageSwiping,
           child: ListView.builder(
             controller: _scrollController,
             physics: const AlwaysScrollableScrollPhysics(),

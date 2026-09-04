@@ -14,8 +14,6 @@ import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
 import '../services/refresh_service.dart';
 import '../services/settings_notifier.dart';
-import 'keyword_alerts_screen.dart';
-import 'keyword_blocklist_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final ValueNotifier<String> themeModeNotifier;
@@ -265,31 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final refreshSvc = RefreshService(_settingsRepo);
               await refreshSvc.schedulePeriodicRefresh(forceReschedule: true);
             },
-          ),
-
-          // ── Filters ──
-          _sectionHeader(l10n.filters),
-          ListTile(
-            leading: const Icon(Icons.block_rounded),
-            title: Text(l10n.keywordBlocklist),
-            subtitle: Text(l10n.keywordBlocklistSubtitle),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KeywordBlocklistScreen()),
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.notifications_active_outlined),
-            title: Text(l10n.keywordAlerts),
-            subtitle: Text(l10n.keywordAlertsSubtitle),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KeywordAlertsScreen()),
-            ),
           ),
 
           // ── Local backup file ──

@@ -76,4 +76,26 @@ class DiagLog {
         'restoredOffset=${restoredOffset?.toStringAsFixed(1) ?? "null"} '
         'anchorId=${anchorId ?? "null"}');
   }
+
+  /// Pass 20 investigation: "never received a keyword-alert notification".
+  /// Called from _doRefresh on every refresh path (cold start, background
+  /// WorkManager task, pull-to-refresh, manual refresh) so a run against
+  /// each path shows exactly where the chain stops -- no alerts configured,
+  /// no hits found, or a hit found but the plugin call itself failing.
+  /// [source] distinguishes the background WorkManager isolate from the
+  /// foreground app isolate, since flutter_local_notifications has to be
+  /// initialized independently in each.
+  static void alert({
+    required String source,
+    required int alertCount,
+    required int unblockedCount,
+    required int hitCount,
+    String? shown,
+    String? error,
+  }) {
+    if (!kDebugMode) return;
+    debugPrintSynchronously('[ALERT]  t=$_t source=$source '
+        'alerts=$alertCount unblocked=$unblockedCount hits=$hitCount '
+        'shown=${shown ?? "n/a"} error=${error ?? "none"}');
+  }
 }

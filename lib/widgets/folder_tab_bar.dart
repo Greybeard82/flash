@@ -155,6 +155,11 @@ class _FolderTab extends StatelessWidget {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
+            // Without alignment, a short label ("AI", "UK") padded out to
+            // minWidth by the pill's own tap-target floor sits left-aligned
+            // in the extra space rather than centred in it — Container only
+            // centres a child smaller than its constraints when told to.
+            alignment: Alignment.center,
             constraints: const BoxConstraints(minWidth: 72, minHeight: 36),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(

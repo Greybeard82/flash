@@ -8,7 +8,6 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/models/settings.dart';
-import 'package:flash/widgets/filter_bubble.dart';
 import 'package:flash/widgets/scroll_fade.dart';
 
 void main() {
@@ -108,86 +107,6 @@ void main() {
     });
   });
 
-  group('Filter slider steps', () {
-    // A Slider's `divisions` counts intervals, so the step is
-    // (max - min) / divisions. These pin that the configured numbers actually
-    // produce the steps the feature is specified to snap to.
-    double stepOf(double min, double max, int divisions) =>
-        (max - min) / divisions;
-
-    List<double> stopsOf(double min, double max, int divisions) => [
-          for (var i = 0; i <= divisions; i++) min + stepOf(min, max, divisions) * i,
-        ];
-
-    test('article slider steps by exactly 10', () {
-      expect(
-        stepOf(FilterBubble.minArticles, FilterBubble.maxArticles,
-            FilterBubble.articleDivisions),
-        10.0,
-      );
-    });
-
-    test('article slider stops only on multiples of 10, 20 through 150', () {
-      final stops = stopsOf(FilterBubble.minArticles, FilterBubble.maxArticles,
-          FilterBubble.articleDivisions);
-      expect(stops.first, 20);
-      expect(stops.last, 150);
-      for (final s in stops) {
-        expect(s % 10, 0, reason: '$s is not a multiple of 10');
-      }
-      expect(stops.length, 14);
-    });
-
-    test('fourteen divisions would NOT land on round numbers', () {
-      // Guards the off-by-one this was specified with: 14 divisions across
-      // 20..150 gives ~9.29 steps, so the slider could never rest on 30.
-      expect(stepOf(20, 150, 14), isNot(10.0));
-    });
-
-    test('age slider steps by whole days, 2 through 15', () {
-      expect(
-        stepOf(FilterBubble.minDays, FilterBubble.maxDays,
-            FilterBubble.dayDivisions),
-        1.0,
-      );
-      final stops =
-          stopsOf(FilterBubble.minDays, FilterBubble.maxDays, FilterBubble.dayDivisions);
-      expect(stops.first, 2);
-      expect(stops.last, 15);
-      for (final s in stops) {
-        expect(s, s.roundToDouble(), reason: '$s is not a whole day');
-      }
-    });
-  });
-
-  group('settings accept what the sliders can set', () {
-    test('the age clamp was widened to admit 2 days', () {
-      final s = AppSettings.fromMap({'cleanup_age_days': '2'});
-      expect(s.cleanupAgeDays, 2,
-          reason: 'the slider goes down to 2; the model used to clamp to 5');
-    });
-
-    test('the age clamp still rejects nonsense', () {
-      expect(AppSettings.fromMap({'cleanup_age_days': '0'}).cleanupAgeDays, 2);
-      expect(AppSettings.fromMap({'cleanup_age_days': '99'}).cleanupAgeDays, 20);
-    });
-
-    test('every stop the age slider offers survives a round-trip', () {
-      for (var d = FilterBubble.minDays; d <= FilterBubble.maxDays; d++) {
-        final s = AppSettings.fromMap({'cleanup_age_days': '${d.round()}'});
-        expect(s.cleanupAgeDays, d.round());
-      }
-    });
-
-    test('every stop the article slider offers survives a round-trip', () {
-      for (var a = FilterBubble.minArticles;
-          a <= FilterBubble.maxArticles;
-          a += 10) {
-        final s = AppSettings.fromMap({'article_limit': '${a.round()}'});
-        expect(s.articleLimit, a.round());
-      }
-    });
-  });
 }
 
 // Appended: article sort order. Applied to the loaded list rather than in SQL
