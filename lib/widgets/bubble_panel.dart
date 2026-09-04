@@ -117,8 +117,20 @@ class _BubblePanelState extends State<_BubblePanel>
     );
   }
 
-  double _maxHeight(BuildContext context) =>
-      MediaQuery.of(context).size.height * 0.7;
+  /// The real remaining height below the panel's top, not an arbitrary
+  /// fraction of the screen. Quick Settings clipped and scrolled with a big
+  /// band of unused screen still visible below it once the palette picker
+  /// landed, because a flat 70% cap has no relation to how much room is
+  /// actually free — it only happened to be enough before. Mirrors
+  /// [_panelBox]'s top (`media.padding.top + 12`) and leaves the same 12px
+  /// as a bottom margin, inset further by the bottom safe area so the panel
+  /// never sits under a gesture bar or camera cutout.
+  double _maxHeight(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final top = media.padding.top + 12;
+    const bottomMargin = 12.0;
+    return media.size.height - top - media.padding.bottom - bottomMargin;
+  }
 
   /// Scale origin, so the growth appears to come out of the button rather than
   /// the panel's centre.
