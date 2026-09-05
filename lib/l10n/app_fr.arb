@@ -161,7 +161,7 @@
   "filterBubbleTitle": "Filtre",
   "quickSettingsTitle": "Réglages rapides",
   "articleAgeFilter": "Âge des articles",
-  "articlesCount": "{n} articles",
+  "articlesCount": "{n, plural, one{1 article} other{{n} articles}}",
   "daysCount": "{n} jours",
   "filterBubbleFootnote": "S'applique à tous les flux.",
   "filterTooltip": "Filtrer les articles",

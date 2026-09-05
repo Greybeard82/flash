@@ -503,7 +503,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String articlesCount(int n) {
-    return '$n articles';
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n articles',
+      one: '1 article',
+    );
+    return '$_temp0';
   }
 
   @override

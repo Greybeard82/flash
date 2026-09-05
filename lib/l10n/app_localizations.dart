@@ -995,7 +995,7 @@ abstract class AppLocalizations {
   /// No description provided for @articlesCount.
   ///
   /// In en, this message translates to:
-  /// **'{n} articles'**
+  /// **'{n, plural, one{1 article} other{{n} articles}}'**
   String articlesCount(int n);
 
   /// No description provided for @daysCount.

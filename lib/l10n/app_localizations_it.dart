@@ -508,7 +508,13 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String articlesCount(int n) {
-    return '$n articoli';
+    String _temp0 = intl.Intl.pluralLogic(
+      n,
+      locale: localeName,
+      other: '$n articoli',
+      one: '1 articolo',
+    );
+    return '$_temp0';
   }
 
   @override

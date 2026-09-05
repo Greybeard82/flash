@@ -161,7 +161,7 @@
   "filterBubbleTitle": "Filtro",
   "quickSettingsTitle": "Ajustes rápidos",
   "articleAgeFilter": "Antigüedad de artículos",
-  "articlesCount": "{n} artículos",
+  "articlesCount": "{n, plural, one{1 artículo} other{{n} artículos}}",
   "daysCount": "{n} días",
   "filterBubbleFootnote": "Se aplica a todos los feeds.",
   "filterTooltip": "Filtrar artículos",
