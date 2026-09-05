@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'repositories/settings_repository.dart';
+import 'services/alert_navigation_intent.dart';
 import 'services/settings_notifier.dart';
 import 'screens/feed_screen.dart';
 import 'screens/feeds_screen.dart';
@@ -270,6 +271,27 @@ class _AppShellState extends State<_AppShell> {
   void initState() {
     super.initState();
     _checkOnboarding();
+    AlertNavigationIntent.instance.addListener(_onAlertsRequested);
+  }
+
+  @override
+  void dispose() {
+    AlertNavigationIntent.instance.removeListener(_onAlertsRequested);
+    super.dispose();
+  }
+
+  /// A keyword-alert notification was tapped. The Alerts tab lives inside
+  /// FeedScreen's pill row, so this half of the journey only has to put the
+  /// Flash destination on screen; FeedScreen calls
+  /// [AlertNavigationIntent.consumePending] to select the pill itself.
+  ///
+  /// The flag is deliberately *not* cleared here. FeedScreen may not exist yet
+  /// on a cold start -- the tap is recorded in `main()`, before any of this is
+  /// built -- and clearing it on the way past would leave the user looking at
+  /// an ordinary feed with nothing left to say why they opened the app.
+  void _onAlertsRequested() {
+    if (!mounted || _currentIndex == 0) return;
+    setState(() => _currentIndex = 0);
   }
 
   Future<void> _checkOnboarding() async {

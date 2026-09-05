@@ -13,7 +13,6 @@ class Article {
   final bool isBlocked;
   final bool isSaved;
   final String? blockedKeyword;
-  final String? matchedAlertKeyword;
 
   // Joined fields (not stored in DB)
   final String? feedTitle;
@@ -34,7 +33,6 @@ class Article {
     this.isBlocked = false,
     this.isSaved = false,
     this.blockedKeyword,
-    this.matchedAlertKeyword,
     this.feedTitle,
     this.feedFaviconPath,
   });
@@ -55,7 +53,6 @@ class Article {
       isBlocked: (map['is_blocked'] as int? ?? 0) == 1,
       isSaved: (map['is_saved'] as int? ?? 0) == 1,
       blockedKeyword: map['blocked_keyword'] as String?,
-      matchedAlertKeyword: map['matched_alert_keyword'] as String?,
       feedTitle: map['feed_title'] as String?,
       feedFaviconPath: map['feed_favicon_path'] as String?,
     );
@@ -77,7 +74,6 @@ class Article {
       'is_blocked': isBlocked ? 1 : 0,
       'is_saved': isSaved ? 1 : 0,
       'blocked_keyword': blockedKeyword,
-      'matched_alert_keyword': matchedAlertKeyword,
     };
   }
 
@@ -96,7 +92,6 @@ class Article {
     bool? isBlocked,
     bool? isSaved,
     String? blockedKeyword,
-    String? matchedAlertKeyword,
     String? feedTitle,
     String? feedFaviconPath,
   }) {
@@ -115,7 +110,6 @@ class Article {
       isBlocked: isBlocked ?? this.isBlocked,
       isSaved: isSaved ?? this.isSaved,
       blockedKeyword: blockedKeyword ?? this.blockedKeyword,
-      matchedAlertKeyword: matchedAlertKeyword ?? this.matchedAlertKeyword,
       feedTitle: feedTitle ?? this.feedTitle,
       feedFaviconPath: feedFaviconPath ?? this.feedFaviconPath,
     );

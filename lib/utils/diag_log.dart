@@ -92,17 +92,31 @@ class DiagLog {
   /// pass -- the same set [hitCount] is now computed from, so a repeat
   /// notification for an already-seen article shows up here as `hits=0`
   /// rather than being silently indistinguishable from a real one.
+  ///
+  /// Pass 22: [hitCount] is now the number of `alert_matches` rows written,
+  /// and [groupCount] the number of notifications posted for them. The two
+  /// differ whenever an article matched more than one keyword, and the gap is
+  /// worth seeing: under the old single hardcoded id every group after the
+  /// first was destroyed by Android on arrival, so a line reading `hits=3
+  /// groups=3` with one notification on screen is the exact signature of that
+  /// bug returning. [keywordSets] spells out which sets those groups were, so
+  /// a set that split or collapsed unexpectedly is visible without guessing
+  /// from the shade.
   static void alert({
     required String source,
     required int alertCount,
     required int newCount,
     required int hitCount,
+    int groupCount = 0,
+    List<List<String>> keywordSets = const [],
     String? shown,
     String? error,
   }) {
     if (!kDebugMode) return;
+    final sets = keywordSets.map((s) => s.join('+')).join(',');
     debugPrintSynchronously('[ALERT]  t=$_t source=$source '
         'alerts=$alertCount new=$newCount hits=$hitCount '
+        'groups=$groupCount sets=[$sets] '
         'shown=${shown ?? "n/a"} error=${error ?? "none"}');
   }
 }

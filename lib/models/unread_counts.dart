@@ -3,6 +3,10 @@ import 'package:flutter/foundation.dart';
 /// Scope id standing in for the All tab, which has no folder id of its own.
 const int kAllScope = -1;
 
+/// Scope id standing in for the Alerts tab, which likewise has no folder id —
+/// it is fed by `alert_matches` rather than by any one folder's feeds.
+const int kAlertsScope = -2;
+
 /// Immutable unread totals driving every folder tab badge.
 class UnreadCounts {
   final int all;

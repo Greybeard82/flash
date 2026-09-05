@@ -227,6 +227,54 @@ void main() {
             'else, or the same headline stays bold in the All tab');
   });
 
+  test('mark-read-on-scroll in a category tab mirrors into the snapshots',
+      () async {
+    // Scroll marking writes a whole batch of article ids in one statement, and
+    // for a long time nothing mirrored it — so scrolling past an alerted
+    // headline in the All tab marked it read there and left the Alerts card
+    // bold for good. This is the batch counterpart of setRead.
+    final alerted = await _insertArticle(_feedA, 'g1');
+    final plain = await _insertArticle(_feedA, 'plain');
+    await _seedMatches([
+      _match(_feedA, 'g1', 'zelda', folderId: _gamingFolderId),
+      _match(_feedA, 'g1', 'nintendo', folderId: _gamingFolderId),
+    ]);
+
+    await _articles.markManyRead([alerted, plain]);
+    await _alerts.setReadForArticleIds([alerted, plain], isRead: true);
+
+    expect(await _readFlags(_feedA, 'g1'), [1, 1],
+        reason: 'every keyword row for the card, not just one');
+    expect(await _articleReadFlag(_feedA, 'g1'), 1);
+  });
+
+  test('the scroll mirror leaves other cards alone', () async {
+    final one = await _insertArticle(_feedA, 'g1');
+    await _insertArticle(_feedB, 'g2');
+    await _seedMatches([
+      _match(_feedA, 'g1', 'zelda', folderId: _gamingFolderId),
+      _match(_feedB, 'g2', 'zelda', folderId: _newsFolderId),
+    ]);
+
+    await _alerts.setReadForArticleIds([one], isRead: true);
+
+    expect(await _readFlags(_feedA, 'g1'), [1]);
+    expect(await _readFlags(_feedB, 'g2'), [0],
+        reason: 'only the ids actually scrolled past');
+  });
+
+  test('the scroll mirror is a no-op for an id with no snapshot', () async {
+    final plain = await _insertArticle(_feedA, 'plain');
+    await _seedMatches([
+      _match(_feedA, 'g1', 'zelda', folderId: _gamingFolderId),
+    ]);
+
+    await _alerts.setReadForArticleIds([plain], isRead: true);
+
+    expect(await _readFlags(_feedA, 'g1'), [0],
+        reason: 'an unrelated article must not sweep up a snapshot');
+  });
+
   test('an entry whose articles row is gone can still be marked read',
       () async {
     await _insertArticle(_feedA, 'g1', read: true);

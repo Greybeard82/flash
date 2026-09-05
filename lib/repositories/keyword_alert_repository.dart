@@ -37,19 +37,30 @@ class KeywordAlertRepository {
         where: 'id = ?', whereArgs: [id]);
   }
 
-  /// Checks title + description against a list of alerts.
-  /// Returns the first matching [KeywordAlert], or null. Mirrors
-  /// `KeywordRepository.findMatch` so the two systems never diverge on what
-  /// "matches" means.
-  static KeywordAlert? findMatch(
+  /// Checks title + description against a list of alerts and returns **every**
+  /// [KeywordAlert] that matched, in the order [alerts] were given.
+  ///
+  /// This deliberately no longer mirrors `KeywordRepository.findMatch`, which
+  /// still stops at the first hit. The two only ever agreed by accident: the
+  /// blocklist has one question to answer — whether to hide the article — and
+  /// a second matching keyword tells it nothing it does not already know. An
+  /// alert has to say *which* keywords fired, because the card carries a badge
+  /// for each and each keyword's panel has to list it. Under first-match-wins
+  /// an article hitting two alerts was filed under one of them and the other
+  /// panel stayed wrongly empty.
+  ///
+  /// [KeywordMatcher] is still shared, so the two systems continue to agree on
+  /// what "matches" means at the character level; they now differ only on how
+  /// many answers they need.
+  static List<KeywordAlert> findAllMatches(
       String title, String? description, List<KeywordAlert> alerts) {
-    if (alerts.isEmpty) return null;
+    if (alerts.isEmpty) return const [];
     final haystack = KeywordMatcher.buildHaystack(title, description);
-    for (final alert in alerts) {
-      if (KeywordMatcher.matches(alert.keyword, haystack, wholeWord: alert.wholeWord)) {
-        return alert;
-      }
-    }
-    return null;
+    return [
+      for (final alert in alerts)
+        if (KeywordMatcher.matches(alert.keyword, haystack,
+            wholeWord: alert.wholeWord))
+          alert,
+    ];
   }
 }

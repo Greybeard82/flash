@@ -124,6 +124,12 @@
   "matchingAnywhere": "Matching anywhere in text",
   "allTab": "All",
   "allMarkedRead": "All marked as read",
+  "alertKeywordExists": "\"{keyword}\" is already an alert keyword",
+  "@alertKeywordExists": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
   "keywordRemoved": "\"{keyword}\" removed",
   "@keywordRemoved": {
     "placeholders": {
@@ -235,5 +241,75 @@
   "selectCategoryFirst": "Pick a category to continue.",
   "@selectCategoryFirst": {
     "description": "Inline message under the category chips in the add-feed sheet when the user tries to add a feed without choosing a category."
+  },
+  "alertsTab": "Alerts",
+  "@alertsTab": {
+    "description": "Label of the pill that switches the feed list to the keyword-alert snapshots."
+  },
+  "alertsTabEmpty": "No alerts yet.\nArticles matching your alert keywords will appear here.",
+  "alertsFilterAll": "All",
+  "@alertsFilterAll": {
+    "description": "The keyword filter chip that clears the filter and shows every alert."
+  },
+  "alertsManageKeywords": "Manage keywords",
+  "alertsRemove": "Remove",
+  "@alertsRemove": {
+    "description": "Deletes one article's alert snapshot from the Alerts tab. Distinct from the generic remove because it removes a saved match, not a feed."
+  },
+  "alertsRemovedBanner": "Removed from Alerts",
+  "alertsMarkAllReadBanner": "All alerts marked as read",
+  "alertsArticleGone": "That article is no longer in your feed",
+  "@alertsArticleGone": {
+    "description": "Shown when an alert snapshot outlives its article row, so an action that needs the article — bookmarking it — has nothing to act on."
+  },
+  "alertsMoreKeywords": "+{count}",
+  "@alertsMoreKeywords": {
+    "description": "Overflow badge on an alert card that carries more keywords than the card has room to name.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "deleteAlertKeywordTitle": "Delete \"{keyword}\"?",
+  "@deleteAlertKeywordTitle": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "deleteAlertKeywordBody": "{count, plural, one{1 article will disappear from the Alerts tab.} other{{count} articles will disappear from the Alerts tab.}}",
+  "@deleteAlertKeywordBody": {
+    "description": "Counts only the articles that would be orphaned — matches carrying another keyword too stay in the tab.",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "alertNotificationTitle": "Flash — keyword alert",
+  "alertNotificationFirst": "\"{keyword}\" appeared in an article",
+  "@alertNotificationFirst": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
+  "alertNotificationCount": "{count, plural, one{1 article matched \"{keyword}\"} other{{count} articles matched \"{keyword}\"}}",
+  "@alertNotificationCount": {
+    "placeholders": {
+      "count": { "type": "int" },
+      "keyword": { "type": "String" }
+    }
+  },
+  "alertNotificationCombined": "{count, plural, one{1 article triggered with the words {keywords}} other{{count} articles triggered with the words {keywords}}}",
+  "@alertNotificationCombined": {
+    "description": "Body for an article that hit two or more keywords at once, which used to be attributed to only the first one.",
+    "placeholders": {
+      "count": { "type": "int" },
+      "keywords": { "type": "String" }
+    }
+  },
+  "keywordListSeparator": ", ",
+  "@keywordListSeparator": {
+    "description": "Joins all but the last two keywords when a notification names several."
+  },
+  "keywordListAnd": " and ",
+  "@keywordListAnd": {
+    "description": "Joins the last two keywords when a notification names several."
   }
 }

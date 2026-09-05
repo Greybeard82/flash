@@ -5,6 +5,7 @@ import '../utils/diag_log.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
@@ -18,6 +19,7 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _repo = ArticleRepository();
+  final _alertMatchRepo = AlertMatchRepository();
   final _controller = TextEditingController();
   List<Article> _results = [];
   bool _loading = false;
@@ -59,6 +61,10 @@ class _SearchScreenState extends State<SearchScreen> {
     if (!article.isRead && article.id != null) {
       DiagLog.read(id: article.id!, trigger: 'tap:search', offset: -1);
       await _repo.markAsRead(article.id!);
+      // Mirrored into the alert snapshot, which keeps its own is_read — see
+      // the same call in bookmarks_screen.dart.
+      await _alertMatchRepo
+          .setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {

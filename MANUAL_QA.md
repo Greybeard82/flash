@@ -410,3 +410,82 @@ have stopped offering.
 | Check the list | The articles the feeds still carry are back, as **unread** |
 | Check your bookmarks, categories, feeds and keyword blocklist | All completely unchanged — recovery clears tombstones and nothing else |
 | Scroll past an article older than seven days, then recover | It does **not** come back. Outside the fetch window there is nothing to re-insert |
+
+---
+
+## 31. The Alerts tab
+
+An alert match is now a row of its own in `alert_matches`, not a column on the
+article. That is the whole point: the article can be read, retired, cleaned up
+and tombstoned, and the alert card stays. Most of this list is really one
+question asked from several directions — *did the snapshot survive?*
+
+The single most important invariant: `runCleanup`, `retireAllRead`, the
+tombstone system, the display-age filter and the per-feed article cap must all
+leave `alert_matches` completely untouched.
+
+### 31.1 The pill and the badges
+
+| Step | Expected |
+|------|----------|
+| Fresh install, add two feeds, add alert keyword `the` (guaranteed hits) | The **Alerts** pill appears at the far right of the pill row with a non-zero count. Scroll the row right if it is off screen |
+| Add a second keyword overlapping the first on at least one article | That card shows **two** badges |
+| Read the filter strip | Counts are correct, and **All** is *lower* than the sum of the two keyword counts — that difference is de-duplication working |
+| Add a keyword long enough to truncate ("Nintendo Switch 2 Pro") | The badge ellipsises, stays centred, nothing overflows the card |
+| Find an article matching four keywords | Three chips plus `+1` |
+| Compare a read card with an unread one | Badge height is identical. Read state changes colour and opacity only — never layout |
+
+### 31.2 Notifications
+
+| Step | Expected |
+|------|----------|
+| Refresh with a new matching article | A notification arrives |
+| Refresh again with nothing new | **No** notification |
+| Two different keywords hit in one refresh | **Two separate** notifications side by side in the shade. Neither replaces the other |
+| Tap a notification from a cold start | The app opens on the Alerts tab |
+| Post an alert, then tap a *second* notification without restarting | Still opens the Alerts tab. Posting an alert used to silently de-register the tap handler |
+| Switch the phone to German and trigger an alert | The notification body is German, matching the rest of the app |
+
+### 31.3 Read state
+
+| Step | Expected |
+|------|----------|
+| Open an alert article from the Alerts tab | It dims but **stays**. Back out; still there, scroll position preserved |
+| Scroll the Alerts tab top to bottom without tapping anything | **Nothing dims.** Mark-read-on-scroll is deliberately off here — it is the only list where "seen" and "not yet seen" is the whole point |
+| Mark all read on the Alerts tab | All dim, **none disappear**, the pill count is unchanged |
+| Mark the same article read from the All tab, switch tabs to flush, return to Alerts | Entry still present, now dimmed |
+| Open an alert-matched article from **Bookmarks**, return to Alerts | Dimmed there too |
+| Open one from **Search**, return to Alerts | Dimmed there too |
+
+### 31.4 Survival — the invariant
+
+| Step | Expected |
+|------|----------|
+| Mark a whole folder read so its articles retire | Every alert card from that folder is still on the Alerts tab, dimmed, count unchanged |
+| Set the display age filter to its minimum and cold-restart | Old alert entries are still present |
+| Delete the feed an alert came from | The card stays, still naming that feed and showing its icon — the snapshot does not join back to `feeds` |
+| Delete **every** feed | The Alerts pill is still there and the tab still opens. The history must not become unreachable |
+| Long-press an Alerts card whose article has been retired and tap **Bookmark** | A banner: *That article is no longer in your feed*. No crash, the card stays |
+| Restore a backup, then refresh | Alert cards are **not** duplicated and no notification re-fires for articles already alerted |
+
+### 31.5 The radial menu
+
+| Step | Expected |
+|------|----------|
+| Long-press a card in the Alerts tab | **Four** buttons — Bookmark, Share, Summary, Remove — all fully on screen, nothing clipped, labels legible |
+| Repeat in German | Still four, still nothing clipped. German's *Zusammenfassung* is what used to push Remove off the edge |
+| Tap **Remove** | The card goes, a banner shows, counts update. The **article itself stays** in its category tab and no tombstone is written |
+| Long-press a card in the All tab | **Three** buttons, visually identical to before this change |
+
+### 31.6 Managing keywords
+
+| Step | Expected |
+|------|----------|
+| Alerts tab → **Manage keywords** | A flat list: one row per keyword with its match count and a bin. No expanding, no article lists — that is the tab's job |
+| Delete a keyword that has matches | A confirmation appears **inline in the panel**, states the correct count, and its buttons actually work. A dialog here renders under the bubble's own scrim and cannot be tapped |
+| Confirm | Those entries go. Entries also matched by a surviving keyword remain, one badge lighter |
+| Delete a keyword **while its chip is the selected filter** | The tab falls back to All rather than rendering an empty list under a chip that no longer exists |
+| Delete the last keyword | The Alerts pill disappears and the view falls back to All without a crash |
+| Long-press a keyword and rename it to a keyword that **already exists** | A banner says it already exists. Nothing is deleted — the old behaviour destroyed the snapshots and then threw silently |
+| Add a keyword that already exists | Same banner. No silent re-backfill with the wrong whole-word setting |
+| Repeat the delete confirmation in German | Longest strings; the dialog still fits and reads correctly |

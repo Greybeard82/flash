@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
@@ -21,6 +22,7 @@ class BookmarksScreen extends StatefulWidget {
 
 class _BookmarksScreenState extends State<BookmarksScreen> {
   final _articleRepo = ArticleRepository();
+  final _alertMatchRepo = AlertMatchRepository();
   final _shareService = ShareService();
 
   List<Article> _articles = [];
@@ -69,7 +71,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Future<void> _openArticle(Article article) async {
     if (article.id != null) {
       DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
-    await _articleRepo.markAsRead(article.id!);
+      await _articleRepo.markAsRead(article.id!);
+      // The alert snapshot owns its own is_read, so every place that marks an
+      // article read has to mirror it or the Alerts tab keeps showing the card
+      // as unread forever. A no-op when this article matched no keyword.
+      await _alertMatchRepo
+          .setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -105,6 +112,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     if (article.id == null) return;
     DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
     await _articleRepo.markAsRead(article.id!);
+    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
     ReadStateNotifier.instance.articleReadStateChanged();
     HapticFeedback.lightImpact();
     if (mounted) {
@@ -119,6 +127,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
   Future<void> _markUnread(Article article) async {
     if (article.id == null) return;
     await _articleRepo.markAsUnread(article.id!);
+    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
     // markAsUnread clears read_at, so the article leaves the show-read window
     // as well as the unread count. Ping so the feed's badges re-query.
     ReadStateNotifier.instance.articleReadStateChanged();

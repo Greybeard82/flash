@@ -128,6 +128,24 @@ class BackupSerializer {
     final now = DateTime.now().millisecondsSinceEpoch;
 
     final feedCount = await db.transaction<int>((txn) async {
+      // Read before the wipe: which feed id each alert snapshot is keyed to.
+      //
+      // `alert_matches` deliberately has no foreign key on feed_id, so it
+      // survives the cascade below — that is the point of the table. But
+      // feeds.id is AUTOINCREMENT, so a feed re-inserted from the backup comes
+      // back under a *new* id, and the snapshot's identity is
+      // (feed_id, guid, keyword). Left alone, every alert card would be
+      // orphaned onto a feed that no longer exists and the next fetch of the
+      // same feed would write a second, duplicate set of rows under the new id
+      // — doubling the Alerts tab and re-notifying the user about articles
+      // they were alerted about before the restore. feeds.url is UNIQUE, so it
+      // is the stable identity to re-key through.
+      final previousFeeds =
+          await txn.query(TableNames.feeds, columns: ['id', 'url']);
+      final oldFeedIdByUrl = {
+        for (final row in previousFeeds) row['url'] as String: row['id'] as int,
+      };
+
       // Wipe existing — folder cascade deletes feeds + articles via FK.
       await txn.delete(TableNames.folders);
       await txn.delete(TableNames.feeds);
@@ -158,7 +176,21 @@ class BackupSerializer {
           position: f['position'] as int? ?? 0,
           createdAt: now,
         );
-        await txn.insert(TableNames.feeds, feed.toMap());
+        final newFeedId = await txn.insert(TableNames.feeds, feed.toMap());
+        // Re-point this feed's alert snapshots at the id it came back under,
+        // and at the folder it came back in — the snapshot's folder_id is what
+        // mark-folder-read and folder scoping read. AUTOINCREMENT never reuses
+        // an id, so newFeedId is greater than every id in oldFeedIdByUrl and
+        // this can never collide with a feed that has not been re-keyed yet.
+        final oldFeedId = oldFeedIdByUrl[feed.url];
+        if (oldFeedId != null && oldFeedId != newFeedId) {
+          await txn.update(
+            TableNames.alertMatches,
+            {'feed_id': newFeedId, 'folder_id': folderId},
+            where: 'feed_id = ?',
+            whereArgs: [oldFeedId],
+          );
+        }
         inserted++;
       }
 

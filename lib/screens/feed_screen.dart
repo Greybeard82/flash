@@ -5,14 +5,18 @@ import 'package:flutter/services.dart';
 import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
+import '../models/alert_entry.dart';
 import '../models/article.dart';
 import '../models/folder.dart';
 import '../models/settings.dart';
 import '../models/unread_counts.dart';
+import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
+import '../repositories/keyword_alert_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/alert_navigation_intent.dart';
 import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
@@ -27,6 +31,7 @@ import '../utils/resume_refresh_policy.dart';
 import '../reading/read_gate.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
+import '../widgets/alert_keyword_strip.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
@@ -66,6 +71,8 @@ class _FeedScreenState extends State<FeedScreen>
     with WidgetsBindingObserver {
   // ── Repos & services ───────────────────────────────────────────────────────
   final _articleRepo = ArticleRepository();
+  final _alertMatchRepo = AlertMatchRepository();
+  final _keywordAlertRepo = KeywordAlertRepository();
   final _feedRepo = FeedRepository();
   final _folderRepo = FolderRepository();
   final _settingsRepo = SettingsRepository();
@@ -73,6 +80,12 @@ class _FeedScreenState extends State<FeedScreen>
 
   // ── Scroll ─────────────────────────────────────────────────────────────────
   final ScrollController _scrollController = ScrollController();
+
+  /// The Alerts list scrolls on its own controller, which is the mechanism —
+  /// not merely a tidiness — behind mark-read-on-scroll being off there:
+  /// [_onScroll] listens to [_scrollController] alone, so it never sees this
+  /// list move. See [_buildAlertsContent].
+  final ScrollController _alertsScrollController = ScrollController();
   /// Where each tab was, remembered as *an article* rather than a pixel
   /// offset.
   ///
@@ -122,6 +135,60 @@ class _FeedScreenState extends State<FeedScreen>
   UnreadCounts _counts = const UnreadCounts.empty();
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
+
+  // ── Alerts tab ─────────────────────────────────────────────────────────────
+
+  /// Whether the Alerts pill is offered at all.
+  ///
+  /// Driven by whether any alert keyword is configured, not by whether
+  /// anything has matched: a keyword that has caught nothing yet is exactly
+  /// the case where the user wants somewhere to go and check. Recomputed
+  /// whenever the keyword panel closes, since it can add or delete the last
+  /// one while it is open.
+  bool _alertsTabVisible = false;
+
+  /// Alerts is always appended after the folders, so folder index i keeps
+  /// meaning `_folders[i - 1]` and nothing downstream has to renumber.
+  int get _alertsTabIndex => _folders.length + 1;
+
+  /// Whether the Alerts tab is the selected one.
+  ///
+  /// `>` rather than `==` on purpose: a `_selectedTabIndex` left pointing past
+  /// the end by a folder deletion must not fall through to
+  /// `_folders[index - 1]` and throw.
+  bool get _isAlertsTab =>
+      _alertsTabVisible && _selectedTabIndex > _folders.length;
+
+  /// The tab whose *article* list the ordinary machinery should work with.
+  ///
+  /// Alerts is not one of them — it has no entry in [_tabArticlesCache], no
+  /// display filters and no anchor — so every path that re-queries or probes
+  /// "the current tab" falls back to All rather than indexing [_folders] one
+  /// past its end.
+  int get _articleTabIndex => _isAlertsTab ? 0 : _selectedTabIndex;
+
+  /// Cards on the Alerts tab: **total entries, read or unread**.
+  ///
+  /// Deliberately not part of [UnreadCounts] and deliberately absent from
+  /// [AppBadgePlus.updateBadge], both of which mean "left to read". Alerts is
+  /// a permanent record, so a count that drained to zero as the user worked
+  /// through it would read as "your alerts were deleted".
+  int _alertsCount = 0;
+
+  /// The cards currently on the Alerts tab, already narrowed by
+  /// [_alertKeywordFilter].
+  List<AlertEntry> _alertEntries = const [];
+
+  /// The keyword chip the user has selected, or null for All.
+  ///
+  /// Transient by design: it narrows one list rather than choosing a mode, so
+  /// leaving the tab resets it.
+  String? _alertKeywordFilter;
+
+  /// Entry count per keyword for the filter strip. Includes configured
+  /// keywords that have matched nothing — see
+  /// [AlertMatchRepository.countsByKeyword].
+  Map<String, int> _alertKeywordCounts = const {};
 
   /// One page per tab, in the tab strip's order. Only the selected page holds
   /// the live list (and the one shared _scrollController); every other page
@@ -267,10 +334,21 @@ class _FeedScreenState extends State<FeedScreen>
     return deleted;
   }
 
-  /// The scope the selected tab represents, for [_zeroedScopes].
-  int get _currentScope => _selectedTabIndex == 0
-      ? kAllScope
-      : (_folders[_selectedTabIndex - 1].id ?? kAllScope);
+  /// The scope the selected tab represents, for [_zeroedScopes] and
+  /// [_tabAnchors].
+  ///
+  /// Alerts gets [kAlertsScope] rather than being folded into [kAllScope]: it
+  /// keeps no anchor and can never be zeroed — nothing on that tab is an
+  /// unread count — and sharing All's scope id would let it overwrite All's
+  /// remembered position. The index bound is checked before [_folders] is
+  /// touched, since the Alerts index sits one past the last folder.
+  int get _currentScope {
+    if (_isAlertsTab) return kAlertsScope;
+    if (_selectedTabIndex == 0 || _selectedTabIndex > _folders.length) {
+      return kAllScope;
+    }
+    return _folders[_selectedTabIndex - 1].id ?? kAllScope;
+  }
 
   void _clearZeroedScopes() => _zeroedScopes.clear();
 
@@ -332,7 +410,11 @@ class _FeedScreenState extends State<FeedScreen>
     });
 
     if (!filtersChanged) return;
-    final refreshed = await _articlesForTab(_selectedTabIndex, _folders);
+    // The Alerts tab answers to neither slider — an alert is permanent, so the
+    // age cutoff and the per-feed cap are not its business — but the list
+    // sitting behind it still is, so the re-query runs against All rather than
+    // being skipped.
+    final refreshed = await _articlesForTab(_articleTabIndex, _folders);
     if (!mounted) return;
     setState(() {
       _setArticles(refreshed);
@@ -370,6 +452,11 @@ class _FeedScreenState extends State<FeedScreen>
     // otherwise never reach here. (Feed/folder structure changes use
     // FeedsChangedNotifier instead — see _consumeFeedsChange.)
     SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
+    // A tapped keyword-alert notification asks for the Alerts pill. The
+    // request latches, so this covers both the cold start — where it was set
+    // in main() long before this screen existed, and is consumed by _boot —
+    // and a tap while the app is already running.
+    AlertNavigationIntent.instance.addListener(_onAlertNavigationRequested);
     _boot();
   }
 
@@ -404,6 +491,13 @@ class _FeedScreenState extends State<FeedScreen>
     } else {
       // Removed, moved or renamed — everything needed is already local.
       await _loadArticles();
+      // The Alerts tab too. A backup restore comes through here, and it
+      // re-keys alert_matches onto the ids the feeds came back under — so the
+      // _alertEntries held in memory are addressing feed ids that no longer
+      // exist, and every bin, bookmark and read on those cards would quietly
+      // match nothing. Deleting a feed lands here as well, and its snapshots
+      // survive by design and have to keep rendering.
+      await _refreshAlertsState();
       _resetScrollToTop();
     }
   }
@@ -414,11 +508,13 @@ class _FeedScreenState extends State<FeedScreen>
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
+    AlertNavigationIntent.instance.removeListener(_onAlertNavigationRequested);
     _scrollDebounce?.cancel();
     _pageController.dispose();
     _fabFade.dispose();
     if (_openBubble?.mounted ?? false) _openBubble!.remove();
     _scrollController.dispose();
+    _alertsScrollController.dispose();
     super.dispose();
   }
 
@@ -517,8 +613,16 @@ class _FeedScreenState extends State<FeedScreen>
     await _loadArticles();
     if (mounted) setState(() => _booting = false);
     _scrollController.addListener(_onScroll);
+    // The Alerts list has no read bookkeeping to drive, but the floating
+    // buttons still have to get out of the way while it moves.
+    _alertsScrollController.addListener(_fabFade.onScroll);
 
-    // 3. Fetch in the background.
+    // 3. Whether the Alerts pill exists at all, and what it says. Also where a
+    //    tapped notification's latched request is finally acted on — it needs
+    //    to know the tab exists before it can select it.
+    await _refreshAlertsState();
+
+    // 4. Fetch in the background.
     unawaited(_backgroundRefresh());
   }
 
@@ -559,9 +663,14 @@ class _FeedScreenState extends State<FeedScreen>
     if (!mounted) return;
     final deleted = ownLaunchReturn ? 0 : await _flushRead('resumeFetch');
     if (!mounted) return;
+    // Unconditional, and before the "did anything move" question below: a
+    // fetch writes alert matches whatever tab is on screen, and the pill's
+    // count is the only place the user sees that from another tab.
+    await _refreshAlertsState();
+    if (!mounted) return;
     final folders = await _folderRepo.getAll();
     if (!mounted) return;
-    final probe = await _articlesForTab(_selectedTabIndex, folders);
+    final probe = await _articlesForTab(_articleTabIndex, folders);
     final hasNew = probe.any((a) => !beforeIds.contains(a.id));
 
     // Two independent reasons to rebuild: something new arrived, or the
@@ -595,10 +704,18 @@ class _FeedScreenState extends State<FeedScreen>
       _feedRepo.getAll(),
     ).wait;
 
-    final safeTab = _selectedTabIndex.clamp(0, folders.length);
+    // The clamp used to end at folders.length, which is one short of the
+    // Alerts index: every reload would have quietly dragged the user off the
+    // Alerts tab and back to All. The extra slot exists only while the pill
+    // does, so a keyword deleted elsewhere still clamps them back.
+    final safeTab =
+        _selectedTabIndex.clamp(0, folders.length + (_alertsTabVisible ? 1 : 0));
+    // Alerts is fed by alert_matches, not by this query; it is the All list
+    // that keeps loading behind it.
+    final articleTab = safeTab > folders.length ? 0 : safeTab;
 
     final (articles, folderCounts, allCount) = await (
-      _articlesForTab(safeTab, folders),
+      _articlesForTab(articleTab, folders),
       _articleRepo.getAllFolderUnreadCounts(windowDays: _displayAgeDays),
       _articleRepo.getTotalUnreadCount(windowDays: _displayAgeDays),
     ).wait;
@@ -707,6 +824,12 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// The one place articles enter this screen, so ordering is applied here and
   /// every path — boot, reload, tab switch, refresh — gets it for free.
+  ///
+  /// Never called with the Alerts index. `tab - 1` would run off the end of
+  /// [folders], and the answer would be wrong even if it didn't: the Alerts
+  /// tab is built from `alert_matches` and deliberately skips both display
+  /// filters. Callers go through [_articleTabIndex] rather than
+  /// `_selectedTabIndex` for exactly this reason.
   Future<List<Article>> _articlesForTab(int tab, List<Folder> folders) async {
     final articles = tab == 0
         ? await _articleRepo.getAllArticles(showRead: _showRead)
@@ -732,19 +855,28 @@ class _FeedScreenState extends State<FeedScreen>
     _articles = articles;
     _rows = groupByDay(articles, now: DateTime.now());
     _syncCardKeys(articles);
-    _tabArticlesCache[_selectedTabIndex] = articles;
+    // Filed under [_articleTabIndex], not the selected index: while Alerts is
+    // selected the list being assigned is All's, and caching it under the
+    // Alerts index would hand that page a set of ordinary articles the moment
+    // it was swiped past.
+    _tabArticlesCache[_articleTabIndex] = articles;
   }
 
   /// Loads every tab's articles into [_tabArticlesCache]. Cheap for a
   /// personal reader's folder count, and it is what lets a swipe land on real
   /// content instead of a placeholder.
+  ///
+  /// The bound stops at the last folder, so the Alerts index is never warmed:
+  /// it has no article list to warm, and [_buildAlertsContent] draws it from
+  /// [_alertEntries] whether or not it is the selected page.
   Future<void> _warmTabCache(List<Folder> folders) async {
     for (var i = 0; i <= folders.length; i++) {
       if (!mounted) return;
       final articles = await _articlesForTab(i, folders);
       if (!mounted) return;
-      // Never overwrite the live tab from a stale read.
-      if (i == _selectedTabIndex) continue;
+      // Never overwrite the live tab from a stale read — which, on the Alerts
+      // tab, is the All list rather than the selected index.
+      if (i == _articleTabIndex) continue;
       _tabArticlesCache[i] = articles;
     }
     if (mounted) setState(() {});
@@ -900,6 +1032,16 @@ class _FeedScreenState extends State<FeedScreen>
     HapticFeedback.lightImpact();
     setState(() => _refreshing = true);
 
+    if (_isAlertsTab) {
+      // No flush and no cleanup. Both are article-lifecycle work, and the
+      // Alerts list is a permanent record that a fetch can only ever add to —
+      // running a deletion pass here would be the old behaviour creeping back
+      // in through the one gesture that looks harmless.
+      await _refreshAlertsFetch();
+      if (mounted) setState(() => _refreshing = false);
+      return;
+    }
+
     // The refresh FAB and pull-to-refresh are separate gestures but the same
     // code path, so one deletion serves both. App-wide and unconditional.
     final deleted = await _flushRead('refresh');
@@ -919,10 +1061,13 @@ class _FeedScreenState extends State<FeedScreen>
         }
         _lastFetchAt = DateTime.now();
 
+        // A fetch can have written alert matches; the pill has to say so.
+        await _refreshAlertsState();
+
         // Same conditional rule as _fetchAndApply: nothing arrived, nothing
         // moves. The user pulled to check, not to be relocated.
         if (!mounted) return;
-        final probe = await _articlesForTab(_selectedTabIndex, _folders);
+        final probe = await _articlesForTab(_articleTabIndex, _folders);
         final hasNew = probe.any((a) => !beforeIds.contains(a.id));
         // The user pressed refresh expecting read articles to clear. Rebuild
         // if the flush removed anything, whether or not the fetch found new
@@ -971,13 +1116,22 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _onTabSelectedBody(int index) async {
     _captureAnchor();
     final gen = ++_tabGeneration;
+    final leavingAlerts = _isAlertsTab;
+    final enteringAlerts = _alertsTabVisible && index == _alertsTabIndex;
     // The page the user just landed on was already showing this tab's cached
     // rows. Make them the live list now rather than dropping to a shimmer
     // while the flush and re-query below run — that shimmer was the flash.
     final cached = _tabArticlesCache[index];
     setState(() {
       _selectedTabIndex = index;
-      if (cached != null) {
+      // The keyword chips narrow one list; they are not a mode. Coming back to
+      // Alerts with the last selection still applied would look like matches
+      // had gone missing.
+      if (leavingAlerts) _alertKeywordFilter = null;
+      if (enteringAlerts) {
+        // Nothing to do to _articles: the list behind Alerts stays exactly as
+        // it was, and _buildAlertsContent never reads it.
+      } else if (cached != null) {
         _setArticles(cached);
       } else {
         _loading = true;
@@ -990,6 +1144,14 @@ class _FeedScreenState extends State<FeedScreen>
     await _flushRead('tabSwitch');
     await _refreshCountsFromDb();
     ReadStateNotifier.instance.articleReadStateChanged();
+
+    if (enteringAlerts) {
+      // Rebuilt from alert_matches on every arrival rather than cached, which
+      // is also what picks up whatever a background fetch matched while
+      // another tab was on screen. No anchor restore: Alerts keeps none.
+      await _refreshAlertsState();
+      return;
+    }
 
     final articles = await _articlesForTab(index, _folders);
     if (!mounted || gen != _tabGeneration) return;
@@ -1105,6 +1267,11 @@ class _FeedScreenState extends State<FeedScreen>
         DiagLog.read(id: id, trigger: 'scroll', offset: offset);
       }
       _articleRepo.markManyRead(toWrite);
+      // Mirrored into the snapshots. Without this, scrolling past an alerted
+      // article in a category tab marks it read everywhere except the Alerts
+      // tab, which keeps showing it bold for good — the one list where the
+      // difference between seen and unseen is the whole point.
+      _alertMatchRepo.setReadForArticleIds(toWrite, isRead: true);
       _counts = _counts.applyManyRead(readFolderIds);
       AppBadgePlus.updateBadge(_counts.all);
     }
@@ -1139,6 +1306,12 @@ class _FeedScreenState extends State<FeedScreen>
     if (wasUnread) {
       DiagLog.read(id: article.id!, trigger: 'tap', offset: scrollOffset);
       await _articleRepo.markAsRead(article.id!);
+      // The two tables own their read flags separately — `alert_matches` has
+      // to, because the articles row behind an entry is often already gone —
+      // so the mirror is composed here rather than inside either repository.
+      // A no-op for the overwhelming majority of articles, which matched no
+      // keyword at all.
+      await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
 
       if (mounted) {
         setState(() {
@@ -1184,6 +1357,7 @@ class _FeedScreenState extends State<FeedScreen>
       offset: _scrollController.hasClients ? _scrollController.offset : -1,
     );
     await _articleRepo.markAsRead(article.id!);
+    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
 
     HapticFeedback.lightImpact();
     if (!mounted) return;
@@ -1200,6 +1374,9 @@ class _FeedScreenState extends State<FeedScreen>
   Future<void> _markUnread(Article article) async {
     if (article.id == null || !article.isRead) return;
     await _articleRepo.markAsUnread(article.id!);
+    // Both directions, or an article deliberately put back to unread would
+    // stay dimmed in the Alerts tab.
+    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
     HapticFeedback.lightImpact();
     if (!mounted) return;
     setState(() {
@@ -1305,11 +1482,42 @@ class _FeedScreenState extends State<FeedScreen>
     final settings = await _settingsRepo.getAll();
     final cleanupDays = settings.cleanupAgeDays;
 
+    if (_isAlertsTab) {
+      // Marks the record read and nothing else: no retire, no cleanup, no
+      // fetch. Every one of those is a deletion or a refetch of *articles*,
+      // and the Alerts tab is the one list in the app that no deletion path is
+      // allowed to touch — running them here would put back, through the FAB,
+      // exactly the loss `alert_matches` exists to prevent.
+      await _alertMatchRepo.setAllRead();
+      // Mirrored onto whichever articles rows are still there, so an entry the
+      // user just cleared here is not still bold in the ordinary feed. Read
+      // unfiltered rather than from _alertEntries: setAllRead covered every
+      // row, including the ones the keyword chips are currently hiding.
+      for (final entry in await _alertMatchRepo.getEntries()) {
+        final row = await _articleRepo.findByGuid(entry.feedId, entry.guid);
+        if (row?.id != null && !row!.isRead) {
+          await _articleRepo.markAsRead(row.id!);
+        }
+      }
+
+      await _refreshAlertsState();
+      await _refreshCountsFromDb();
+      ReadStateNotifier.instance.articleReadStateChanged();
+      if (!mounted) return;
+      _bannerKey.currentState
+          ?.show(AppLocalizations.of(context)!.alertsMarkAllReadBanner);
+      return;
+    }
+
     if (_selectedTabIndex == 0) {
       // All tab: mark all read, retire them outright, run cleanup, then a
       // cold-start fetch. This path rebuilds the list from scratch behind
       // _booting, so retiring here cannot move anything on screen.
       await _articleRepo.markAllAsRead();
+      // The snapshots go with them. `alert_matches` owns its own flag, so
+      // without this the Alerts tab would be the one place still claiming
+      // there is something left to read.
+      await _alertMatchRepo.setAllRead();
       await _flushRead('markAllRead:all');
       await _articleRepo.runCleanup(days: cleanupDays);
 
@@ -1326,6 +1534,7 @@ class _FeedScreenState extends State<FeedScreen>
         _reportRefreshFailure();
       }
       await _loadArticles();
+      await _refreshAlertsState();
       if (mounted) setState(() => _booting = false);
     } else {
       // Category tab: mark read, forget this tab's IDs, cleanup, refresh folder.
@@ -1334,6 +1543,11 @@ class _FeedScreenState extends State<FeedScreen>
       if (mounted) setState(() => _counts = _counts.clearedFolder(folderId));
 
       await _articleRepo.markAllAsReadByFolder(folderId);
+      // Snapshots carry the folder they were taken from, so the same scoping
+      // applies. A snapshot whose feed has since moved or been deleted holds
+      // null there and is simply skipped rather than being swept up by a
+      // folder it no longer belongs to.
+      await _alertMatchRepo.setReadByFolder(folderId);
       await _flushRead('markAllRead:folder', folderId: folderId);
       await _articleRepo.runCleanup(folderId: folderId, days: cleanupDays);
 
@@ -1360,12 +1574,269 @@ class _FeedScreenState extends State<FeedScreen>
       });
       _resetScrollToTop();
       AppBadgePlus.updateBadge(allCount);
+      await _refreshAlertsState();
+      if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
       // The mark-all-read itself succeeded either way; say so, but don't
       // claim the feeds refreshed when they didn't.
       _bannerKey.currentState
           ?.show(refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead);
     }
+  }
+
+  // ── Alerts tab ─────────────────────────────────────────────────────────────
+
+  /// Re-reads everything the Alerts tab and its pill are drawn from.
+  ///
+  /// One call rather than four, because the four answers have to agree: the
+  /// pill's total, the strip's per-keyword counts, the visible cards and
+  /// whether the tab exists at all are the same query result seen from
+  /// different angles, and refreshing them separately is how a strip ends up
+  /// promising "zelda (3)" above an empty list.
+  ///
+  /// Visibility follows the *configured keywords*, not the matches. A keyword
+  /// that has caught nothing yet is exactly when the user wants somewhere to
+  /// go and check, and hiding the tab until the first match would make a
+  /// freshly added alert look like it had not saved.
+  Future<void> _refreshAlertsState() async {
+    final (keywords, counts, total) = await (
+      _keywordAlertRepo.getAll(),
+      _alertMatchRepo.countsByKeyword(),
+      _alertMatchRepo.totalEntryCount(),
+    ).wait;
+
+    // A filter the strip no longer offers cannot stay selected. Deleting or
+    // renaming the keyword whose chip is active leaves _alertKeywordFilter
+    // pointing at a name with no rows and no chip, and the query below would
+    // then draw the empty state over a tab that is not empty — with no chip
+    // lit up to explain why. countsByKeyword() enumerates the keyword table,
+    // so a keyword missing from it is a keyword that no longer exists.
+    final filter =
+        (_alertKeywordFilter != null && !counts.containsKey(_alertKeywordFilter))
+            ? null
+            : _alertKeywordFilter;
+    final entries = await _alertMatchRepo.getEntries(keyword: filter);
+    if (!mounted) return;
+
+    final visible = keywords.isNotEmpty;
+    // The panel can delete the last keyword while the user is standing on the
+    // tab it belongs to. The pill goes, the PageView loses a page, and a
+    // _selectedTabIndex one past the last folder would then address nothing.
+    final fellBack = !visible && _selectedTabIndex > _folders.length;
+
+    setState(() {
+      _alertsTabVisible = visible;
+      _alertKeywordCounts = counts;
+      _alertsCount = total;
+      _alertEntries = entries;
+      _alertKeywordFilter = filter;
+      if (fellBack) {
+        _selectedTabIndex = 0;
+        _alertKeywordFilter = null;
+      }
+    });
+
+    if (fellBack) {
+      // jumpToPage fires onPageChanged, which early-returns because
+      // _selectedTabIndex already agrees; the reload is what actually puts All
+      // back on screen.
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
+      await _loadArticles();
+      return;
+    }
+
+    await _consumeAlertNavigation();
+  }
+
+  /// Reloads only the cards, for the paths that already know the counts are
+  /// current — a keyword chip changing which subset is shown.
+  Future<void> _reloadAlertEntries() async {
+    final entries = await _alertMatchRepo.getEntries(keyword: _alertKeywordFilter);
+    if (!mounted) return;
+    setState(() => _alertEntries = entries);
+  }
+
+  /// Pull-to-refresh and the refresh FAB on the Alerts tab.
+  ///
+  /// A plain fetch and a reload. Deliberately none of [_refreshCurrentTab]'s
+  /// article bookkeeping: no read flush, no probe for "did anything new
+  /// arrive", no scroll reset. New matches are appended by the fetch itself
+  /// and the list is ordered newest-matched-first, so they arrive at the top
+  /// without the position having to be thrown away.
+  Future<void> _refreshAlertsFetch() async {
+    try {
+      await RefreshService(_settingsRepo).refreshAll();
+      _lastFetchAt = DateTime.now();
+    } catch (_) {
+      _reportRefreshFailure();
+    }
+    if (!mounted) return;
+    await _refreshAlertsState();
+    await _refreshCountsFromDb();
+  }
+
+  /// The pull gesture, which owns the `_refreshing` flag the FAB also uses so
+  /// the two cannot run a fetch at once.
+  Future<void> _onAlertsPullToRefresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    await _refreshAlertsFetch();
+    if (mounted) setState(() => _refreshing = false);
+  }
+
+  void _onAlertKeywordSelected(String? keyword) {
+    setState(() => _alertKeywordFilter = keyword);
+    unawaited(_reloadAlertEntries());
+  }
+
+  /// A tapped keyword-alert notification.
+  ///
+  /// The request is only consumed once there is a tab to honour it with. A
+  /// user who tapped a notification and then deleted every keyword before the
+  /// app came up has nowhere to be sent, and clearing the flag on the way past
+  /// would silently swallow the request instead of leaving it latched for the
+  /// moment a keyword exists again.
+  void _onAlertNavigationRequested() {
+    if (!mounted) return;
+    unawaited(_consumeAlertNavigation());
+  }
+
+  Future<void> _consumeAlertNavigation() async {
+    if (!mounted || !_alertsTabVisible) return;
+    if (!AlertNavigationIntent.instance.consumePending()) return;
+    if (_selectedTabIndex == _alertsTabIndex) return;
+    _onTabSelected(_alertsTabIndex);
+  }
+
+  /// Opens an entry, then launches exactly as [_openArticle] does.
+  ///
+  /// The read is written to both tables, in that order and independently: the
+  /// snapshot always, the articles row only if it is still there. It usually
+  /// is not — retirement, cleanup and the tombstone all take it, which is the
+  /// whole reason `alert_matches.is_read` is a column rather than something
+  /// read through a join.
+  ///
+  /// The entry stays in the list. It dims, and that is all: the tab is a
+  /// permanent record of what the keywords caught, so an entry that vanished
+  /// on being read would empty the tab out as the user worked through it.
+  Future<void> _openAlertEntry(Article snapshot) async {
+    await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid, isRead: true);
+    final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
+    if (row?.id != null && !row!.isRead) {
+      await _articleRepo.markAsRead(row.id!);
+      ReadStateNotifier.instance.articleReadStateChanged();
+    }
+    if (!mounted) return;
+    await _reloadAlertEntries();
+    unawaited(_refreshCountsFromDb());
+
+    if (!mounted) return;
+    final uri = Uri.tryParse(snapshot.url);
+    if (uri == null) return;
+
+    // No anchor capture: the Alerts list keeps none, because ScrollAnchor is
+    // keyed on article.id and an entry has none.
+    _returningFromArticleOpen = true;
+    var launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+    if (!launched) _returningFromArticleOpen = false;
+  }
+
+  /// The radial menu's read/unread arms on the Alerts tab.
+  ///
+  /// Both sides again, and the articles row only when it survives.
+  Future<void> _setAlertEntryRead(Article snapshot,
+      {required bool isRead}) async {
+    await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid,
+        isRead: isRead);
+    final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
+    if (row?.id != null && row!.isRead != isRead) {
+      if (isRead) {
+        await _articleRepo.markAsRead(row.id!);
+      } else {
+        await _articleRepo.markAsUnread(row.id!);
+      }
+      ReadStateNotifier.instance.articleReadStateChanged();
+    }
+    HapticFeedback.lightImpact();
+    if (!mounted) return;
+    await _reloadAlertEntries();
+    unawaited(_refreshCountsFromDb());
+  }
+
+  /// Bookmarking from the Alerts tab.
+  ///
+  /// The button is shown on every card and says so afterwards when there is
+  /// nothing to bookmark, rather than being hidden when the articles row has
+  /// gone. Hiding it would reflow the radial menu from four buttons to three
+  /// on exactly the cards whose article has been cleaned up — moving Share and
+  /// Summary under the user's thumb for reasons they cannot see. This is the
+  /// accepted simple behaviour, not an oversight.
+  ///
+  /// The icon the menu draws comes from the snapshot, which carries no saved
+  /// flag, so it always reads as un-bookmarked here. Mirroring `is_saved` into
+  /// `alert_matches` would be a second copy of state to keep honest for the
+  /// sake of one icon, and the bolted-on `is_saved` is precisely what this
+  /// rework removed.
+  Future<void> _toggleSavedFromAlerts(Article snapshot) async {
+    final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
+    if (!mounted) return;
+    if (row?.id == null) {
+      _bannerKey.currentState
+          ?.show(AppLocalizations.of(context)!.alertsArticleGone);
+      return;
+    }
+    await _toggleSaved(row!);
+  }
+
+  /// Dismisses one card, from the radial menu's bin.
+  ///
+  /// No confirmation and no undo, matching mark-all-read's existing stance.
+  /// Every keyword row behind the card goes with it — a leftover row would
+  /// rebuild the same card at the next read. The haptic and the menu's own
+  /// dismissal happen in [RadialMenu] before this is called, which is why
+  /// there is neither here.
+  Future<void> _deleteAlertEntry(Article snapshot) async {
+    await _alertMatchRepo.deleteEntry(snapshot.feedId, snapshot.guid);
+    if (!mounted) return;
+
+    // Removed from the list first, so the card goes the moment the menu
+    // closes rather than after the counts have come back from the database.
+    setState(() {
+      _alertEntries = [
+        for (final e in _alertEntries)
+          if (e.feedId != snapshot.feedId || e.guid != snapshot.guid) e,
+      ];
+    });
+
+    final (counts, total) = await (
+      _alertMatchRepo.countsByKeyword(),
+      _alertMatchRepo.totalEntryCount(),
+    ).wait;
+    if (!mounted) return;
+    setState(() {
+      _alertKeywordCounts = counts;
+      _alertsCount = total;
+    });
+    _bannerKey.currentState
+        ?.show(AppLocalizations.of(context)!.alertsRemovedBanner);
+  }
+
+  /// The keyword panel, wrapped so the pill and the strip find out what the
+  /// user did in it. See [_AlertPanelHost].
+  Widget _alertKeywordsPanel() =>
+      _AlertPanelHost(onClosed: () => unawaited(_refreshAlertsState()));
+
+  /// The strip's "Manage keywords" chip. Grows out of the Filter button, the
+  /// same anchor the Filter bubble's own route into the panel uses, so the
+  /// panel appears in one place however it was reached.
+  void _openAlertKeywordsPanel() {
+    if (_openBubble?.mounted ?? false) return;
+    _reopenAsKeywordPanel(_alertKeywordsPanel());
   }
 
   // ── Top bubbles ────────────────────────────────────────────────────────────
@@ -1395,7 +1866,7 @@ class _FeedScreenState extends State<FeedScreen>
           initial: settings,
           onOpenBlocklist: () =>
               _reopenAsKeywordPanel(const KeywordBlocklistPanel()),
-          onOpenAlerts: () => _reopenAsKeywordPanel(const KeywordAlertsPanel()),
+          onOpenAlerts: () => _reopenAsKeywordPanel(_alertKeywordsPanel()),
         ),
       );
 
@@ -1431,7 +1902,11 @@ class _FeedScreenState extends State<FeedScreen>
       appBar: AppBar(
         title: _newspaperMode ? _NewspaperMasthead() : Text(l10n.appTitle),
         centerTitle: false,
-        bottom: _hasFeeds && _folders.length > 1
+        // The pill row used to be hidden below two folders, which for a
+        // one-folder library would have made the Alerts tab exist and be
+        // unreachable. It now also appears for the Alerts pill alone.
+        bottom: (_hasFeeds || _alertsTabVisible) &&
+                (_folders.length > 1 || _alertsTabVisible)
             ? FolderTabBar(
                 folders: _folders,
                 selectedIndex: _selectedTabIndex,
@@ -1439,6 +1914,8 @@ class _FeedScreenState extends State<FeedScreen>
                 allUnreadCount: _counts.all,
                 onTabSelected: _onTabSelected,
                 onMarkAllRead: _markAllRead,
+                alertsVisible: _alertsTabVisible,
+                alertsCount: _alertsCount,
               )
             : null,
         actions: [
@@ -1527,6 +2004,17 @@ class _FeedScreenState extends State<FeedScreen>
           Column(
             children: [
               NotificationBanner(key: _bannerKey),
+              // In the body rather than in AppBar.bottom, which would change
+              // the bar's preferredSize on every tab switch and jolt the whole
+              // layout down and back up again as the user swiped past Alerts.
+              if (_isAlertsTab)
+                AlertKeywordStrip(
+                  countsByKeyword: _alertKeywordCounts,
+                  totalEntryCount: _alertsCount,
+                  selectedKeyword: _alertKeywordFilter,
+                  onSelected: _onAlertKeywordSelected,
+                  onManageKeywords: _openAlertKeywordsPanel,
+                ),
               Expanded(
                 child: NotificationListener<ScrollNotification>(
                   // Notifications bubble up past this listener from the
@@ -1549,13 +2037,32 @@ class _FeedScreenState extends State<FeedScreen>
                   },
                   child: PageView.builder(
                     controller: _pageController,
-                    // With a single tab there is nothing to page to.
-                    physics: _hasFeeds && _folders.length > 1
+                    // With a single tab there is nothing to page to — but the
+                    // Alerts pill is a second tab in its own right, so it has
+                    // to widen this the same way it widens the pill row.
+                    // Gated on `_hasFeeds || _alertsTabVisible`, not on
+                    // _hasFeeds alone. An alert snapshot deliberately outlives
+                    // the feed it arrived on — that is the entire point of
+                    // alert_matches — so a user who deletes their last feed
+                    // still has an alert history, and gating on feeds alone
+                    // left it in the database with no route to it: no pill, a
+                    // one-page PageView, and swiping switched off.
+                    physics: (_hasFeeds || _alertsTabVisible) &&
+                            (_folders.length > 1 || _alertsTabVisible)
                         ? const PageScrollPhysics()
                         : const NeverScrollableScrollPhysics(),
                     onPageChanged: _onPageChanged,
-                    itemCount: _hasFeeds ? 1 + _folders.length : 1,
+                    itemCount: _hasFeeds || _alertsTabVisible
+                        ? 1 + _folders.length + (_alertsTabVisible ? 1 : 0)
+                        : 1,
                     itemBuilder: (_, i) {
+                      // Checked before the selected-page branch: Alerts draws
+                      // itself from _alertEntries whether or not it is the
+                      // selected page, so it is never a cached article list
+                      // and never goes through _buildContent.
+                      if (_alertsTabVisible && i == _alertsTabIndex) {
+                        return _buildAlertsContent();
+                      }
                       if (i == _selectedTabIndex) return _buildContent();
                       final cached = _tabArticlesCache[i];
                       return cached == null
@@ -1617,6 +2124,138 @@ class _FeedScreenState extends State<FeedScreen>
           ],
         );
       },
+    );
+  }
+
+  /// The Alerts list as day-headered rows.
+  ///
+  /// [groupByDay] keys on `published_at`, and an alert has to be filed under
+  /// the day it *matched*: adding a keyword backfills it against everything
+  /// already on the device, so a brand-new alert routinely lands on a
+  /// month-old article and grouping it by its publication date would bury the
+  /// newest thing on the tab under an "older" header. The proxies exist only
+  /// to choose the headers; the rows themselves carry the real article, so the
+  /// card still shows the publication date it always did.
+  List<FeedRow> _alertRows(List<AlertEntry> entries) {
+    final articles = [for (final e in entries) e.toArticle()];
+    final proxies = [
+      for (var i = 0; i < entries.length; i++)
+        articles[i].copyWith(publishedAt: entries[i].matchedAt),
+    ];
+    final rows = groupByDay(proxies, now: DateTime.now());
+    var next = 0;
+    return [
+      for (final row in rows)
+        if (row is ArticleRow) ArticleRow(articles[next++]) else row,
+    ];
+  }
+
+  /// Every entry's full keyword set, by (feedId, guid).
+  ///
+  /// The rows carry [Article]s, which have no idea what matched them, and the
+  /// pair is the only identity a snapshot still shares with one. Joined on
+  /// NUL for the same reason the repository does it: no guid can contain one,
+  /// so two pairs cannot flatten onto the same string.
+  Map<String, List<String>> _alertKeywordsByPair() => {
+        for (final e in _alertEntries) '${e.feedId}\u0000${e.guid}': e.keywords,
+      };
+
+  /// The Alerts tab.
+  ///
+  /// A separate build path, and every one of the things it does not use is
+  /// load-bearing rather than an omission:
+  ///
+  /// [_applyDisplayFilters] imposes the Article age cutoff and the per-feed
+  /// cap. An alert is permanent — the entire point of `alert_matches` is that
+  /// it survives every rule that removes an article — so a display filter here
+  /// would reintroduce the disappearing-alert bug at the very last step, in
+  /// the one place nothing else guards against it.
+  ///
+  /// [_flushRead], [_onScrollEnd] and the retirement bookkeeping are
+  /// article-lifecycle machinery, and an entry has no lifecycle: it arrives
+  /// when a keyword matches and leaves only when the user dismisses it.
+  ///
+  /// [_cardKeys], [_measuredHeights] and [ScrollAnchor] all key on
+  /// `article.id`, which is null for an [AlertEntry] by design — a snapshot
+  /// has no `articles` identity, and inventing one would point every id-keyed
+  /// operation at whatever article happens to hold that rowid now.
+  ///
+  /// Mark-read-on-scroll is off for a reason of its own. Alerts is a review
+  /// surface the user returns to deliberately, and auto-dimming everything on
+  /// the first scroll-through would destroy the only signal separating "seen"
+  /// from "not yet seen". The tab's own [_alertsScrollController] is what
+  /// enforces it: [_onScroll] listens to [_scrollController] alone.
+  Widget _buildAlertsContent() {
+    final l10n = AppLocalizations.of(context)!;
+    final scheme = Theme.of(context).colorScheme;
+
+    if (_alertEntries.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _onAlertsPullToRefresh,
+        backgroundColor: scheme.surface,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.35),
+            Text(
+              l10n.alertsTabEmpty,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: scheme.onSurface.withValues(alpha: 0.5),
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final rows = _alertRows(_alertEntries);
+    final keywordsByPair = _alertKeywordsByPair();
+
+    return RefreshIndicator(
+      onRefresh: _onAlertsPullToRefresh,
+      backgroundColor: scheme.surface,
+      child: ListView.builder(
+        controller: _alertsScrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: _listTopPadding,
+        cacheExtent: 500,
+        itemCount: rows.length,
+        itemBuilder: (context, i) {
+          final row = rows[i];
+          if (row is DayHeaderRow) return DayHeader(row: row);
+
+          final article = (row as ArticleRow).article;
+          final needsDivider = i > 0 && rows[i - 1] is ArticleRow;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (needsDivider)
+                const Divider(height: 1, indent: 16, endIndent: 16),
+              ArticleCard(
+                article: article,
+                // Mandatory, not a style choice: the Dismissible keys on
+                // ValueKey('article_${article.id}') and an entry's id is null,
+                // so a swipe-enabled card here is a crash rather than a
+                // gesture. Horizontal drags page between tabs anyway.
+                enableSwipeActions: false,
+                alertKeywords:
+                    keywordsByPair['${article.feedId}\u0000${article.guid}'] ??
+                        const [],
+                onTap: () => _openAlertEntry(article),
+                onMarkRead: () => _setAlertEntryRead(article, isRead: true),
+                onMarkUnread: () => _setAlertEntryRead(article, isRead: false),
+                onShare: () => _shareService.shareArticle(article),
+                onBookmark: () => _toggleSavedFromAlerts(article),
+                // The bin is offered here and nowhere else. An alert match
+                // outlives every path that deletes an article, so dismissing
+                // it by hand is the only way one ever leaves the list.
+                onDelete: () => _deleteAlertEntry(article),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -1751,6 +2390,36 @@ class _FeedScreenState extends State<FeedScreen>
       ),
     );
   }
+}
+
+/// Hosts [KeywordAlertsPanel] so the Alerts pill can find out what the user
+/// did in it.
+///
+/// The panel adds, edits and deletes keywords, and the first or last of those
+/// makes the pill appear or disappear — but the panel is a const widget with
+/// nothing to report through, and it is shown in an overlay rather than pushed
+/// as a route, so there is no pop result to await either. Something whose
+/// disposal is observable is the smallest honest signal available: the pill
+/// row sits behind the bubble while the panel is open, so recomputing when it
+/// closes is soon enough for anything the user can actually see.
+class _AlertPanelHost extends StatefulWidget {
+  final VoidCallback onClosed;
+
+  const _AlertPanelHost({required this.onClosed});
+
+  @override
+  State<_AlertPanelHost> createState() => _AlertPanelHostState();
+}
+
+class _AlertPanelHostState extends State<_AlertPanelHost> {
+  @override
+  void dispose() {
+    widget.onClosed();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const KeywordAlertsPanel();
 }
 
 class _NewspaperMasthead extends StatelessWidget {

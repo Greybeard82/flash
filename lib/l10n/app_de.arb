@@ -88,6 +88,12 @@
   "matchingAnywhere": "Übereinstimmung irgendwo im Text",
   "allTab": "Alle",
   "allMarkedRead": "Alles als gelesen markiert",
+  "alertKeywordExists": "\"{keyword}\" ist bereits ein Alarm-Stichwort",
+  "@alertKeywordExists": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
   "keywordRemoved": "\"{keyword}\" entfernt",
   "share": "Teilen",
   "markRead": "Als gelesen markieren",
@@ -171,5 +177,28 @@
   "dayYesterday": "Gestern",
   "dontShowAgain": "Nicht mehr anzeigen",
   "confirmMarkAllRead": "Alle als gelesen bestätigen",
-  "selectCategoryFirst": "Wähle eine Kategorie, um fortzufahren."
+  "selectCategoryFirst": "Wähle eine Kategorie, um fortzufahren.",
+  "alertsTab": "Benachrichtigungen",
+  "alertsTabEmpty": "Noch keine Treffer.\nArtikel, die deine Stichwörter enthalten, erscheinen hier.",
+  "alertsFilterAll": "Alle",
+  "alertsManageKeywords": "Stichwörter verwalten",
+  "alertsRemove": "Entfernen",
+  "alertsRemovedBanner": "Aus Benachrichtigungen entfernt",
+  "alertsMarkAllReadBanner": "Alle Benachrichtigungen als gelesen markiert",
+  "alertsArticleGone": "Dieser Artikel ist nicht mehr in deinem Feed",
+  "alertsMoreKeywords": "+{count}",
+  "@alertsMoreKeywords": { "placeholders": { "count": { "type": "int" } } },
+  "deleteAlertKeywordTitle": "\"{keyword}\" löschen?",
+  "@deleteAlertKeywordTitle": { "placeholders": { "keyword": { "type": "String" } } },
+  "deleteAlertKeywordBody": "{count, plural, one{1 Artikel verschwindet aus dem Tab Benachrichtigungen.} other{{count} Artikel verschwinden aus dem Tab Benachrichtigungen.}}",
+  "@deleteAlertKeywordBody": { "placeholders": { "count": { "type": "int" } } },
+  "alertNotificationTitle": "Flash — Stichwort-Treffer",
+  "alertNotificationFirst": "\"{keyword}\" ist in einem Artikel aufgetaucht",
+  "@alertNotificationFirst": { "placeholders": { "keyword": { "type": "String" } } },
+  "alertNotificationCount": "{count, plural, one{1 Artikel enthält \"{keyword}\"} other{{count} Artikel enthalten \"{keyword}\"}}",
+  "@alertNotificationCount": { "placeholders": { "count": { "type": "int" }, "keyword": { "type": "String" } } },
+  "alertNotificationCombined": "{count, plural, one{1 Artikel enthält die Wörter {keywords}} other{{count} Artikel enthalten die Wörter {keywords}}}",
+  "@alertNotificationCombined": { "placeholders": { "count": { "type": "int" }, "keywords": { "type": "String" } } },
+  "keywordListSeparator": ", ",
+  "keywordListAnd": " und "
 }

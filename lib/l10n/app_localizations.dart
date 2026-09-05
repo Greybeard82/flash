@@ -626,6 +626,12 @@ abstract class AppLocalizations {
   /// **'All marked as read'**
   String get allMarkedRead;
 
+  /// No description provided for @alertKeywordExists.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{keyword}\" is already an alert keyword'**
+  String alertKeywordExists(String keyword);
+
   /// No description provided for @keywordRemoved.
   ///
   /// In en, this message translates to:
@@ -1081,6 +1087,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a category to continue.'**
   String get selectCategoryFirst;
+
+  /// Label of the pill that switches the feed list to the keyword-alert snapshots.
+  ///
+  /// In en, this message translates to:
+  /// **'Alerts'**
+  String get alertsTab;
+
+  /// No description provided for @alertsTabEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No alerts yet.\nArticles matching your alert keywords will appear here.'**
+  String get alertsTabEmpty;
+
+  /// The keyword filter chip that clears the filter and shows every alert.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get alertsFilterAll;
+
+  /// No description provided for @alertsManageKeywords.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage keywords'**
+  String get alertsManageKeywords;
+
+  /// Deletes one article's alert snapshot from the Alerts tab. Distinct from the generic remove because it removes a saved match, not a feed.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get alertsRemove;
+
+  /// No description provided for @alertsRemovedBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from Alerts'**
+  String get alertsRemovedBanner;
+
+  /// No description provided for @alertsMarkAllReadBanner.
+  ///
+  /// In en, this message translates to:
+  /// **'All alerts marked as read'**
+  String get alertsMarkAllReadBanner;
+
+  /// Shown when an alert snapshot outlives its article row, so an action that needs the article — bookmarking it — has nothing to act on.
+  ///
+  /// In en, this message translates to:
+  /// **'That article is no longer in your feed'**
+  String get alertsArticleGone;
+
+  /// Overflow badge on an alert card that carries more keywords than the card has room to name.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count}'**
+  String alertsMoreKeywords(int count);
+
+  /// No description provided for @deleteAlertKeywordTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{keyword}\"?'**
+  String deleteAlertKeywordTitle(String keyword);
+
+  /// Counts only the articles that would be orphaned — matches carrying another keyword too stay in the tab.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 article will disappear from the Alerts tab.} other{{count} articles will disappear from the Alerts tab.}}'**
+  String deleteAlertKeywordBody(int count);
+
+  /// No description provided for @alertNotificationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Flash — keyword alert'**
+  String get alertNotificationTitle;
+
+  /// No description provided for @alertNotificationFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{keyword}\" appeared in an article'**
+  String alertNotificationFirst(String keyword);
+
+  /// No description provided for @alertNotificationCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 article matched \"{keyword}\"} other{{count} articles matched \"{keyword}\"}}'**
+  String alertNotificationCount(int count, String keyword);
+
+  /// Body for an article that hit two or more keywords at once, which used to be attributed to only the first one.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 article triggered with the words {keywords}} other{{count} articles triggered with the words {keywords}}}'**
+  String alertNotificationCombined(int count, String keywords);
+
+  /// Joins all but the last two keywords when a notification names several.
+  ///
+  /// In en, this message translates to:
+  /// **', '**
+  String get keywordListSeparator;
+
+  /// Joins the last two keywords when a notification names several.
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get keywordListAnd;
 }
 
 class _AppLocalizationsDelegate

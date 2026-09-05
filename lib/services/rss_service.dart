@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'package:dart_rss/dart_rss.dart';
 import 'package:http/http.dart' as http;
+import '../models/alert_match.dart';
 import '../models/article.dart';
 import '../models/feed.dart';
 import '../models/keyword_alert.dart';
 import '../models/keyword_block.dart';
+import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/keyword_alert_repository.dart';
@@ -15,6 +17,7 @@ import '../utils/html_utils.dart';
 class RssService {
   final ArticleRepository _articleRepo;
   final FeedRepository _feedRepo;
+  final AlertMatchRepository _alertMatchRepo = AlertMatchRepository();
 
   RssService(this._articleRepo, this._feedRepo);
 
@@ -70,7 +73,7 @@ class RssService {
 
   // ── Fetch and store ────────────────────────────────────────────────────────
 
-  Future<({Feed feed, int newCount, List<String> newlyMatchedAlertKeywords})>
+  Future<({Feed feed, int newCount, List<AlertMatch> newAlertMatches})>
       fetchAndStore(
     Feed feed, {
     List<KeywordBlock> keywords = const [],
@@ -100,31 +103,10 @@ class RssService {
         }).toList();
       }
 
-      if (alerts.isNotEmpty) {
-        articles = articles.map((a) {
-          // The blocklist wins: an alert firing on an article the user asked
-          // to have hidden would be confusing, not helpful.
-          if (a.isBlocked) return a;
-          final match = KeywordAlertRepository.findMatch(a.title, a.description, alerts);
-          // Auto-bookmarked so the match survives: matched_alert_keyword only
-          // exists as long as the row does, and every read/unsaved article is
-          // deleted app-wide at the next lifecycle boundary. is_saved is
-          // already exempt from every one of those deletion paths, so this
-          // reuses that exemption instead of adding a second one. Interim,
-          // per David: matched articles land in Bookmarks mixed in with
-          // deliberately-saved ones, and un-bookmarking one makes it
-          // deletable again.
-          if (match != null) {
-            return a.copyWith(matchedAlertKeyword: match.keyword, isSaved: true);
-          }
-          return a;
-        }).toList();
-      }
-
       // What insertArticles actually wrote as new this pass — not every
       // parsed-and-thresholded article, most of which are the feed re-serving
       // items it already offered on the last fetch. newCount and the alert
-      // keywords below both depend on this, which is what stops an alert
+      // matches below both depend on this, which is what stops an alert
       // re-firing on the same article every refresh forever.
       final newArticles = await _articleRepo.insertArticles(feed.id!, articles);
 
@@ -136,11 +118,28 @@ class RssService {
         isDead: false,
       );
 
-      final newlyMatchedAlertKeywords = newArticles
-          .where((a) => a.matchedAlertKeyword != null)
-          .map((a) => a.matchedAlertKeyword!)
-          .toSet()
-          .toList();
+      // Alert matching runs *after* the insert, and the order is the whole
+      // mechanism rather than an implementation detail: "genuinely new" is
+      // something only insertArticles can answer, and it is the one thing
+      // standing between a single notification per article and one per refresh
+      // for as long as the feed keeps re-serving it. The article itself is not
+      // touched — no keyword column, no auto-bookmark — because the match is
+      // now its own row in `alert_matches`, which is what makes it survive
+      // retirement and cleanup instead of needing is_saved to shelter it.
+      //
+      // Accepted limitation: applyFetchThresholds has already run above, so an
+      // article dropped by the per-feed cap or the 7-day fetch window never
+      // reaches this point and never produces an alert at all. The snapshot
+      // protects a match from being deleted later; it cannot recover one that
+      // was never made.
+      final newAlertMatches = <AlertMatch>[];
+      if (alerts.isNotEmpty) {
+        // Only what the insert reports as actually written counts as new: it
+        // is this list the notification planner fires on.
+        newAlertMatches.addAll(await _alertMatchRepo.insertMatches(
+            buildAlertCandidates(
+                feed: feed, articles: articles, alerts: alerts, now: now)));
+      }
 
       return (
         feed: feed.copyWith(
@@ -150,7 +149,7 @@ class RssService {
           isDead: false,
         ),
         newCount: newArticles.length,
-        newlyMatchedAlertKeywords: newlyMatchedAlertKeywords,
+        newAlertMatches: newAlertMatches,
       );
     } catch (e) {
       final failures = feed.consecutiveFailures + 1;
@@ -169,7 +168,7 @@ class RssService {
           isDead: isDead,
         ),
         newCount: 0,
-        newlyMatchedAlertKeywords: <String>[],
+        newAlertMatches: const <AlertMatch>[],
       );
     }
   }
@@ -356,4 +355,51 @@ class RssService {
       return null;
     }
   }
+}
+
+/// Every (article, keyword) pair in this batch that deserves an alert row.
+///
+/// Pulled out of [RssService.fetchAndStore] so the one rule it enforces can be
+/// tested without an HTTP round trip: **the blocklist wins.** An alert firing
+/// on an article the user asked to have hidden would be confusing, not
+/// helpful. That used to be true only on this path — `getAlertMatches` and the
+/// retroactive matcher both ignored `is_blocked`, so a blocked article was
+/// hidden everywhere except the alerts panel. This rework settles it the same
+/// way in every path: here, in [AlertMatchRepository.backfillKeyword], and in
+/// the v16 migration.
+///
+/// One article can yield several rows — one per matching keyword — which is
+/// the whole reason matches stopped being a single column on the article.
+List<AlertMatch> buildAlertCandidates({
+  required Feed feed,
+  required List<Article> articles,
+  required List<KeywordAlert> alerts,
+  required int now,
+}) {
+  final candidates = <AlertMatch>[];
+  for (final article in articles) {
+    if (article.isBlocked) continue;
+    for (final alert in KeywordAlertRepository.findAllMatches(
+        article.title, article.description, alerts)) {
+      candidates.add(AlertMatch(
+        feedId: feed.id!,
+        guid: article.guid,
+        keyword: alert.keyword,
+        title: article.title,
+        url: article.url,
+        description: article.description,
+        thumbnailUrl: article.thumbnailUrl,
+        thumbnailPath: article.thumbnailPath,
+        // Feed identity is copied from the Feed in hand rather than joined
+        // back later: the snapshot has to keep naming its source after the
+        // feed is renamed, moved between folders, or deleted.
+        feedTitle: feed.title,
+        feedFaviconPath: feed.faviconPath,
+        folderId: feed.folderId,
+        publishedAt: article.publishedAt,
+        matchedAt: now,
+      ));
+    }
+  }
+  return candidates;
 }

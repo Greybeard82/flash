@@ -88,6 +88,12 @@
   "matchingAnywhere": "Corrispondenza ovunque nel testo",
   "allTab": "Tutti",
   "allMarkedRead": "Tutto segnato come letto",
+  "alertKeywordExists": "\"{keyword}\" è già una parola chiave di avviso",
+  "@alertKeywordExists": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
   "keywordRemoved": "\"{keyword}\" rimossa",
   "share": "Condividi",
   "markRead": "Segna come letto",
@@ -171,5 +177,28 @@
   "dayYesterday": "Ieri",
   "dontShowAgain": "Non mostrare più",
   "confirmMarkAllRead": "Conferma segna tutto come letto",
-  "selectCategoryFirst": "Scegli una categoria per continuare."
+  "selectCategoryFirst": "Scegli una categoria per continuare.",
+  "alertsTab": "Avvisi",
+  "alertsTabEmpty": "Nessun avviso ancora.\nGli articoli che contengono le tue parole chiave compariranno qui.",
+  "alertsFilterAll": "Tutti",
+  "alertsManageKeywords": "Gestisci parole chiave",
+  "alertsRemove": "Rimuovi",
+  "alertsRemovedBanner": "Rimosso dagli avvisi",
+  "alertsMarkAllReadBanner": "Tutti gli avvisi segnati come letti",
+  "alertsArticleGone": "Questo articolo non è più nel tuo feed",
+  "alertsMoreKeywords": "+{count}",
+  "@alertsMoreKeywords": { "placeholders": { "count": { "type": "int" } } },
+  "deleteAlertKeywordTitle": "Eliminare \"{keyword}\"?",
+  "@deleteAlertKeywordTitle": { "placeholders": { "keyword": { "type": "String" } } },
+  "deleteAlertKeywordBody": "{count, plural, one{1 articolo scomparirà dalla scheda Avvisi.} other{{count} articoli scompariranno dalla scheda Avvisi.}}",
+  "@deleteAlertKeywordBody": { "placeholders": { "count": { "type": "int" } } },
+  "alertNotificationTitle": "Flash — avviso parola chiave",
+  "alertNotificationFirst": "\"{keyword}\" è apparsa in un articolo",
+  "@alertNotificationFirst": { "placeholders": { "keyword": { "type": "String" } } },
+  "alertNotificationCount": "{count, plural, one{1 articolo contiene \"{keyword}\"} other{{count} articoli contengono \"{keyword}\"}}",
+  "@alertNotificationCount": { "placeholders": { "count": { "type": "int" }, "keyword": { "type": "String" } } },
+  "alertNotificationCombined": "{count, plural, one{1 articolo contiene le parole {keywords}} other{{count} articoli contengono le parole {keywords}}}",
+  "@alertNotificationCombined": { "placeholders": { "count": { "type": "int" }, "keywords": { "type": "String" } } },
+  "keywordListSeparator": ", ",
+  "keywordListAnd": " e "
 }

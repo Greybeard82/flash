@@ -379,7 +379,11 @@ void main() {
                 'for a set that already has one, and the two notifications '
                 'then sit in the shade as duplicates of each other');
       }
-      expect(totals.calls, contains(['mario', 'zelda']));
+      // `contains(equals(...))`, not `contains([...])`: Dart lists compare by
+      // identity, so the bare-list form can never match a list that was built
+      // rather than passed through, and the assertion would pass vacuously
+      // only in the sense that it could never pass at all.
+      expect(totals.calls, contains(equals(['mario', 'zelda'])));
     });
   });
 

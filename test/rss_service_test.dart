@@ -4,6 +4,7 @@ import 'package:flash/db/database.dart';
 import 'package:flash/db/schema.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/models/feed.dart';
+import 'package:flash/models/keyword_alert.dart';
 import 'package:flash/repositories/article_repository.dart';
 import 'package:flash/repositories/feed_repository.dart';
 import 'package:flash/services/rss_service.dart';
@@ -410,6 +411,73 @@ void main() {
       final after =
           (await db.rawQuery('SELECT COUNT(*) AS c FROM ${TableNames.articles}')).first['c'];
       expect(after, before);
+    });
+  });
+
+  group('the blocklist wins over an alert', () {
+    // Guards the `if (article.isBlocked) continue;` in buildAlertCandidates.
+    // Nothing covered it before: every alert fixture in the suite hardcoded
+    // is_blocked = 0, so the guard could be deleted with the whole suite
+    // green. An alert row is permanent — no cleanup, retirement or tombstone
+    // reaches the Alerts tab — so one written for a blocked article would be
+    // a hidden article the user cannot get rid of.
+    const feed = Feed(
+      id: 7,
+      folderId: 3,
+      title: 'Feed A',
+      url: 'https://a.example/feed',
+      faviconPath: '/icons/a.png',
+      createdAt: 0,
+    );
+    const alerts = [
+      KeywordAlert(keyword: 'zelda', wholeWord: false, createdAt: 0),
+    ];
+
+    Article article(String guid, String title, {bool blocked = false}) =>
+        Article(
+          feedId: 7,
+          guid: guid,
+          title: title,
+          url: 'https://example.com/$guid',
+          fetchedAt: 0,
+          isBlocked: blocked,
+          blockedKeyword: blocked ? 'nintendo' : null,
+        );
+
+    test('a blocked article produces no candidate, however well it matches',
+        () {
+      final candidates = buildAlertCandidates(
+        feed: feed,
+        articles: [
+          article('a1', 'Nintendo teases new Zelda game', blocked: true),
+          article('a2', 'Zelda 40th anniversary announced'),
+        ],
+        alerts: alerts,
+        now: 1000,
+      );
+
+      expect([for (final c in candidates) c.guid], ['a2'],
+          reason: 'the block decides. An article the user asked to have hidden '
+              'must not come back through the Alerts tab');
+    });
+
+    test('an unblocked article still yields one candidate per keyword', () {
+      final candidates = buildAlertCandidates(
+        feed: feed,
+        articles: [article('a3', 'Zelda and Mario team up')],
+        alerts: [
+          ...alerts,
+          const KeywordAlert(keyword: 'mario', wholeWord: false, createdAt: 0),
+        ],
+        now: 1000,
+      );
+
+      expect([for (final c in candidates) c.keyword], ['zelda', 'mario'],
+          reason: 'the guard must not have cost the multi-keyword behaviour '
+              'the whole table exists for');
+      expect(candidates.first.feedTitle, 'Feed A');
+      expect(candidates.first.folderId, 3);
+      expect(candidates.first.matchedAt, 1000);
     });
   });
 }

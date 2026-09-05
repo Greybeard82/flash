@@ -159,6 +159,7 @@ Future<int> _insertArticle(
   String? description,
   bool isRead = false,
   bool isSaved = false,
+  bool isBlocked = false,
 }) {
   return _db.insert(TableNames.articles, {
     'feed_id': feedId ?? _feedA,
@@ -169,7 +170,7 @@ Future<int> _insertArticle(
     'published_at': _now,
     'fetched_at': _now,
     'is_read': isRead ? 1 : 0,
-    'is_blocked': 0,
+    'is_blocked': isBlocked ? 1 : 0,
     'is_saved': isSaved ? 1 : 0,
   });
 }
@@ -693,7 +694,69 @@ void main() {
     });
   });
 
+  group('a block applied after the match', () {
+    test('hides the card, and unblocking brings it back', () async {
+      // Blocking is retroactive — retroactivelyBlock sets is_blocked on
+      // articles already stored — and it does not touch alert_matches. The
+      // card is filtered out at read time rather than deleted: rule 3.4 allows
+      // only the bin, a keyword deletion and a keyword edit to remove a match,
+      // and a blocklist entry is a reversible setting.
+      await _insertArticle('k1', 'Nintendo teases new Zelda game');
+      await _repo.insertMatches([_match('k1', 'zelda')]);
+      expect(await _repo.getEntries(), hasLength(1));
+
+      await _db.update(TableNames.articles, {'is_blocked': 1},
+          where: 'guid = ?', whereArgs: ['k1']);
+
+      expect(await _repo.getEntries(), isEmpty,
+          reason: 'the blocklist wins — an article hidden from the feed, '
+              'bookmarks and search must not still be on the Alerts tab');
+      expect(await _repo.totalEntryCount(), 0);
+      // Null rather than 0: 'zelda' has no keyword_alerts row in this
+      // fixture, so with its only card hidden it drops out of the map
+      // entirely — which is what makes its chip disappear from the strip.
+      expect((await _repo.countsByKeyword())['zelda'] ?? 0, 0);
+      expect(await _rows(), hasLength(1),
+          reason: 'and the row itself is untouched, so this is reversible');
+
+      await _db.update(TableNames.articles, {'is_blocked': 0},
+          where: 'guid = ?', whereArgs: ['k1']);
+      expect(await _repo.getEntries(), hasLength(1),
+          reason: 'unblocking restores the card');
+    });
+
+    test('a snapshot whose article is gone stays visible', () async {
+      // NOT EXISTS, not a join: the whole point of the snapshot is that it
+      // outlives the article. No row means not blocked.
+      await _repo.insertMatches([_match('k2', 'zelda')]);
+
+      expect(await _repo.getEntries(), hasLength(1));
+      expect(await _repo.totalEntryCount(), 1);
+    });
+  });
+
   group('backfillKeyword', () {
+    test('a blocked article never becomes an alert, however well it matches',
+        () async {
+      // The blocklist wins over an alert. Nothing asserted this before: every
+      // alert fixture in the suite hardcoded is_blocked = 0, so deleting the
+      // `WHERE a.is_blocked = 0` guard here left the whole suite green. A user
+      // who blocks a word and alerts on another is entitled to have the block
+      // decide.
+      await _insertArticle('b1', 'Nintendo teases new Zelda game',
+          isBlocked: true);
+      await _insertArticle('b2', 'Zelda 40th anniversary announced');
+
+      final written =
+          await _repo.backfillKeyword('zelda', false);
+
+      expect(written, 1,
+          reason: 'only the unblocked article counts towards the total');
+      expect([for (final m in await _rows()) m['guid']], ['b2'],
+          reason: 'the blocked article must leave no row at all — a match it '
+              'cannot be shown for is a permanent, invisible entry');
+    });
+
     test('records a match for every article whose title contains the keyword',
         () async {
       await _insertArticle('x1', 'Nintendo teases new Zelda game');

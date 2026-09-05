@@ -88,6 +88,12 @@
   "matchingAnywhere": "Correspondance n'importe où dans le texte",
   "allTab": "Tout",
   "allMarkedRead": "Tout marqué comme lu",
+  "alertKeywordExists": "« {keyword} » est déjà un mot-clé d’alerte",
+  "@alertKeywordExists": {
+    "placeholders": {
+      "keyword": { "type": "String" }
+    }
+  },
   "keywordRemoved": "\"{keyword}\" supprimé",
   "share": "Partager",
   "markRead": "Marquer comme lu",
@@ -171,5 +177,28 @@
   "dayYesterday": "Hier",
   "dontShowAgain": "Ne plus afficher",
   "confirmMarkAllRead": "Confirmer tout marquer comme lu",
-  "selectCategoryFirst": "Choisissez une catégorie pour continuer."
+  "selectCategoryFirst": "Choisissez une catégorie pour continuer.",
+  "alertsTab": "Alertes",
+  "alertsTabEmpty": "Aucune alerte pour le moment.\nLes articles correspondant à vos mots-clés apparaîtront ici.",
+  "alertsFilterAll": "Toutes",
+  "alertsManageKeywords": "Gérer les mots-clés",
+  "alertsRemove": "Retirer",
+  "alertsRemovedBanner": "Retiré des alertes",
+  "alertsMarkAllReadBanner": "Toutes les alertes marquées comme lues",
+  "alertsArticleGone": "Cet article n'est plus dans votre flux",
+  "alertsMoreKeywords": "+{count}",
+  "@alertsMoreKeywords": { "placeholders": { "count": { "type": "int" } } },
+  "deleteAlertKeywordTitle": "Supprimer \"{keyword}\" ?",
+  "@deleteAlertKeywordTitle": { "placeholders": { "keyword": { "type": "String" } } },
+  "deleteAlertKeywordBody": "{count, plural, one{{count} article disparaîtra de l'onglet Alertes.} other{{count} articles disparaîtront de l'onglet Alertes.}}",
+  "@deleteAlertKeywordBody": { "placeholders": { "count": { "type": "int" } } },
+  "alertNotificationTitle": "Flash — alerte mot-clé",
+  "alertNotificationFirst": "\"{keyword}\" est apparu dans un article",
+  "@alertNotificationFirst": { "placeholders": { "keyword": { "type": "String" } } },
+  "alertNotificationCount": "{count, plural, one{{count} article correspond à \"{keyword}\"} other{{count} articles correspondent à \"{keyword}\"}}",
+  "@alertNotificationCount": { "placeholders": { "count": { "type": "int" }, "keyword": { "type": "String" } } },
+  "alertNotificationCombined": "{count, plural, one{{count} article contient les mots {keywords}} other{{count} articles contiennent les mots {keywords}}}",
+  "@alertNotificationCombined": { "placeholders": { "count": { "type": "int" }, "keywords": { "type": "String" } } },
+  "keywordListSeparator": ", ",
+  "keywordListAnd": " et "
 }

@@ -111,6 +111,23 @@ class ArticleCard extends StatelessWidget {
   /// no tabs and where swipe is the main way to toggle read state.
   final bool enableSwipeActions;
 
+  /// Alert keywords this article matched, badged under the title.
+  ///
+  /// Empty everywhere but the Alerts tab, and empty by default so no existing
+  /// construction site changes shape. An article can carry several: matching
+  /// used to stop at the first hit and file the article under that one
+  /// keyword alone, which is exactly the misattribution these badges exist to
+  /// make visible.
+  final List<String> alertKeywords;
+
+  /// Dismisses this card, offered as a fourth button in the long-press radial
+  /// menu when non-null.
+  ///
+  /// Only the Alerts tab supplies one. An alert match has no article row
+  /// behind it and survives every path that removes an article, so by-hand
+  /// dismissal is the only way one ever leaves the list.
+  final VoidCallback? onDelete;
+
   const ArticleCard({
     super.key,
     required this.article,
@@ -120,6 +137,8 @@ class ArticleCard extends StatelessWidget {
     required this.onShare,
     required this.onBookmark,
     this.enableSwipeActions = true,
+    this.alertKeywords = const [],
+    this.onDelete,
   });
 
   @override
@@ -205,6 +224,13 @@ class ArticleCard extends StatelessWidget {
                   maxLines: 3,
                   child: Text(article.title),
                 ),
+                if (alertKeywords.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  _AlertKeywordBadges(
+                    keywords: alertKeywords,
+                    dimmed: isRead,
+                  ),
+                ],
               ],
             ),
           ),
@@ -233,6 +259,7 @@ class ArticleCard extends StatelessWidget {
         onShare: onShare,
         onBookmark: onBookmark,
         article: article,
+        onDelete: onDelete,
       ),
       child: InkWell(onTap: onTap, child: content),
     );
@@ -290,6 +317,113 @@ class ArticleCard extends StatelessWidget {
       alignment: alignment,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Icon(icon, color: iconColor, size: 28),
+    );
+  }
+}
+
+/// The alert keywords an article matched, as a single row of small chips
+/// under its title.
+///
+/// Everything here is pinned so the row's height cannot vary with content or
+/// with read state. That is the same rule the title's constant fontWeight
+/// obeys, and for the same reason: mark-read-on-scroll fires while the user is
+/// still scrolling, so any card whose height depends on `isRead` drags every
+/// card below it out from under their finger, with no gesture to explain the
+/// jump. Colour and opacity may change when the article is read; height and
+/// line count may not. Hence a fixed chip height, exactly one line, and a
+/// [_DimTransition] — a filter and an opacity, both layout-neutral — rather
+/// than swapping in smaller or fewer chips.
+class _AlertKeywordBadges extends StatelessWidget {
+  /// Chip height, fixed rather than derived from the text so a font with
+  /// taller metrics cannot reflow the card.
+  static const double _chipHeight = 20;
+
+  /// Beyond three the row stops being scannable and starts being a wall, and
+  /// on a narrow phone the fourth chip is what pushes the third to a single
+  /// ellipsised glyph. The rest are summarised as "+N".
+  static const int _maxChips = 3;
+
+  /// Longer keywords are cut here rather than being allowed to eat the row.
+  /// Truncation happens before layout so the chip that gets shortened is the
+  /// long one, not whichever one happens to sit last.
+  static const int _maxKeywordChars = 14;
+
+  final List<String> keywords;
+  final bool dimmed;
+
+  const _AlertKeywordBadges({required this.keywords, required this.dimmed});
+
+  static String _truncate(String keyword) => keyword.length <= _maxKeywordChars
+      ? keyword
+      : '${keyword.substring(0, _maxKeywordChars)}…';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    // Sorted, so which three survive the cut is a property of the keyword set
+    // and not of the row order the query happened to return — the same card
+    // must not show "zelda, mario" one refresh and "mario, zelda" the next.
+    final sorted = [...keywords]..sort();
+    final shown = sorted.take(_maxChips).toList();
+    final overflow = sorted.length - shown.length;
+
+    return _DimTransition(
+      dimmed: dimmed,
+      child: SizedBox(
+        height: _chipHeight,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            for (var i = 0; i < shown.length; i++) ...[
+              if (i > 0) const SizedBox(width: 4),
+              // Flexible, never a fixed width: a keyword long enough to
+              // overrun the card has to shrink and ellipsise, and a hardcoded
+              // chip width is exactly what a long word spills out of.
+              Flexible(child: _chip(theme, _truncate(shown[i]))),
+            ],
+            // The overflow chip is short and known, so it keeps its full width
+            // while the keyword chips give theirs up.
+            if (overflow > 0) ...[
+              const SizedBox(width: 4),
+              _chip(theme, l10n.alertsMoreKeywords(overflow)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(ThemeData theme, String label) {
+    return Container(
+      height: _chipHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      // Center with widthFactor 1.0, not `alignment:` on the Container. A
+      // Container's alignment installs a plain Align, which grows to the
+      // largest size its constraints allow — and the constraints here are
+      // loose from Flexible, so a single chip stretched the full width of the
+      // card and read as a banner rather than a badge. widthFactor: 1.0 sizes
+      // the width to the label while the height stays pinned to _chipHeight.
+      child: Center(
+        widthFactor: 1.0,
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          // Only bites when Flexible has squeezed the chip narrower than its
+          // label; at natural width the chip already hugs the text.
+          textAlign: TextAlign.center,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onPrimaryContainer,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
     );
   }
 }

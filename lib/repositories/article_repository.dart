@@ -60,9 +60,8 @@ class ArticleRepository {
       batch.rawInsert('''
         INSERT OR IGNORE INTO ${TableNames.articles}
         (feed_id, guid, title, url, description, thumbnail_url, thumbnail_path,
-         published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword,
-         matched_alert_keyword)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?
+         published_at, fetched_at, is_read, is_blocked, is_saved, blocked_keyword)
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
         WHERE NOT EXISTS (
           SELECT 1 FROM ${TableNames.deletedArticles}
           WHERE feed_id = ? AND guid = ?
@@ -78,11 +77,8 @@ class ArticleRepository {
         a.publishedAt,
         fetchedAt,
         a.isBlocked ? 1 : 0,
-        // Almost always false on insert — true only when an alert keyword
-        // matched this article and auto-bookmarked it (see rss_service.dart).
         a.isSaved ? 1 : 0,
         a.blockedKeyword,
-        a.matchedAlertKeyword,
         feedId,
         a.guid,
       ]);
@@ -169,18 +165,26 @@ class ArticleRepository {
     return rows.map(Article.fromMap).toList();
   }
 
-  /// Articles a keyword alert matched, for the Keyword Alerts panel — the
-  /// alert-side counterpart to [getBlocked].
-  Future<List<Article>> getAlertMatches() async {
+  /// The articles row behind an alert snapshot, or null once it has gone.
+  ///
+  /// Keyed on (feed_id, guid) because that is the only identity an
+  /// [AlertMatch] still shares with `articles`: the snapshot carries no
+  /// article id, and the row it was taken from may have been retired, cleaned
+  /// up or tombstoned since. Callers are expected to handle null — a missing
+  /// row is the ordinary case on the Alerts tab, not an error.
+  ///
+  /// Blocked rows are included. This is an identity lookup, not a list query,
+  /// and hiding the row would make an entry that *does* exist look gone.
+  Future<Article?> findByGuid(int feedId, String guid) async {
     final db = await _db;
     final rows = await db.rawQuery('''
       SELECT a.*, f.title AS feed_title, f.favicon_path AS feed_favicon_path
       FROM ${TableNames.articles} a
       JOIN ${TableNames.feeds} f ON a.feed_id = f.id
-      WHERE a.matched_alert_keyword IS NOT NULL
-      ORDER BY a.fetched_at DESC
-    ''');
-    return rows.map(Article.fromMap).toList();
+      WHERE a.feed_id = ? AND a.guid = ?
+      LIMIT 1
+    ''', [feedId, guid]);
+    return rows.isEmpty ? null : Article.fromMap(rows.first);
   }
 
   Future<List<Article>> search(String query) async {
@@ -324,6 +328,12 @@ class ArticleRepository {
   /// a different outcome. With the toggle off nothing is read by the time this
   /// runs, so it is a cheap no-op — call it unconditionally rather than
   /// branching on the setting.
+  ///
+  /// `alert_matches` is deliberately left alone, here and in [runCleanup] and
+  /// the tombstone methods. An alert used to be a column on the article row, so
+  /// retirement destroyed it and only an auto-bookmark kept it on screen;
+  /// outliving retirement is the entire reason the snapshot table exists, and
+  /// anything that starts deleting from it on the way past undoes the fix.
   Future<int> retireAllRead({int? folderId}) async {
     final db = await _db;
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -492,55 +502,6 @@ class ArticleRepository {
       TableNames.articles,
       {'is_blocked': 0, 'blocked_keyword': null},
       where: 'blocked_keyword = ?',
-      whereArgs: [keyword],
-    );
-  }
-
-  // ── Keyword alerts ─────────────────────────────────────────────────────────
-
-  /// Alert-side counterpart to [retroactivelyBlock]: matches [keyword]
-  /// against every article not already claimed by another alert, and
-  /// auto-bookmarks each match — see the note in `rss_service.dart` on why
-  /// alerts piggyback on `is_saved` for now. Restricted to
-  /// `matched_alert_keyword IS NULL` so this never overwrites an article
-  /// another alert already claimed, mirroring `retroactivelyBlock`'s
-  /// `is_blocked = 0` restriction.
-  Future<void> retroactivelyMatchAlert(String keyword, bool wholeWord) async {
-    final db = await _db;
-    final rows = await db.query(
-      TableNames.articles,
-      columns: ['id', 'title', 'description'],
-      where: 'matched_alert_keyword IS NULL',
-    );
-    final batch = db.batch();
-    for (final row in rows) {
-      final haystack = KeywordMatcher.buildHaystack(
-        row['title'] as String,
-        row['description'] as String?,
-      );
-      if (KeywordMatcher.matches(keyword, haystack, wholeWord: wholeWord)) {
-        batch.update(
-          TableNames.articles,
-          {'matched_alert_keyword': keyword, 'is_saved': 1},
-          where: 'id = ?',
-          whereArgs: [row['id']],
-        );
-      }
-    }
-    await batch.commit(noResult: true);
-  }
-
-  /// Alert-side counterpart to [unblockByKeyword]. Deliberately leaves
-  /// `is_saved` alone: the article may have been bookmarked deliberately
-  /// too, or by another alert on the same row in the past, and there is no
-  /// way to tell "why" a single boolean is set. An article this un-matches
-  /// stays bookmarked until the user removes it themselves.
-  Future<void> clearAlertMatchesByKeyword(String keyword) async {
-    final db = await _db;
-    await db.update(
-      TableNames.articles,
-      {'matched_alert_keyword': null},
-      where: 'matched_alert_keyword = ?',
       whereArgs: [keyword],
     );
   }

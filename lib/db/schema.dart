@@ -7,6 +7,8 @@ class TableNames {
   static const String articleSummaries = 'article_summaries';
   static const String settings = 'settings';
   static const String deletedArticles = 'deleted_articles';
+  static const String alertMatches = 'alert_matches';
+  static const String alertNotificationIds = 'alert_notification_ids';
 }
 
 class SchemaStatements {
@@ -57,8 +59,7 @@ class SchemaStatements {
       is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
       is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
       is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
-      blocked_keyword TEXT,
-      matched_alert_keyword TEXT
+      blocked_keyword TEXT
     )
   ''';
 
@@ -72,6 +73,39 @@ class SchemaStatements {
   /// migrated database against a freshly created one, so drift fails the
   /// build rather than silently shipping.
   static const String createArticlesRebuildV13 = '''
+    CREATE TABLE articles_new (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      feed_id        INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      guid           TEXT    NOT NULL,
+      title          TEXT    NOT NULL,
+      url            TEXT    NOT NULL,
+      description    TEXT,
+      thumbnail_url  TEXT,
+      thumbnail_path TEXT,
+      published_at   INTEGER,
+      fetched_at     INTEGER NOT NULL,
+      is_read        INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+      is_blocked     INTEGER NOT NULL DEFAULT 0 CHECK(is_blocked IN (0,1)),
+      is_saved       INTEGER NOT NULL DEFAULT 0 CHECK(is_saved IN (0,1)),
+      blocked_keyword TEXT
+    )
+  ''';
+
+  /// The v16 `articles` table under a temporary name, for the v16 migration's
+  /// table rebuild.
+  ///
+  /// Spelled out for the same reason [createArticlesRebuildV13] is, and
+  /// deliberately not reusing it even though the two currently agree
+  /// character for character: that constant is pinned to the shape v13
+  /// actually produced by a test, so the day a column is added it stops
+  /// describing the live table and starts describing history. Substituting it
+  /// here would silently rebuild a user's library into the wrong shape.
+  ///
+  /// The difference from [createArticles] is the absence of
+  /// `matched_alert_keyword`, which v16 drops — the match now lives in
+  /// [createAlertMatches]. A test compares a migrated database's column list
+  /// against a freshly created one, so drift between the two fails the build.
+  static const String createArticlesRebuildV16 = '''
     CREATE TABLE articles_new (
       id             INTEGER PRIMARY KEY AUTOINCREMENT,
       feed_id        INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
@@ -129,6 +163,85 @@ class SchemaStatements {
       keyword    TEXT    NOT NULL UNIQUE,
       whole_word INTEGER NOT NULL DEFAULT 0 CHECK(whole_word IN (0,1)),
       created_at INTEGER NOT NULL
+    )
+  ''';
+
+  /// One alert match, as a row of its own rather than a column on the article
+  /// it arrived on.
+  ///
+  /// `articles.matched_alert_keyword` gave a match no existence apart from the
+  /// article row, so everything that removes an article removed the alert with
+  /// it: retirement deleted the row, cleanup deleted the row on age, and the
+  /// tombstone written on the way out stopped the next refresh bringing it
+  /// back. The thing the user explicitly asked to be told about was the thing
+  /// that quietly deleted itself. The interim patch — forcing `is_saved = 1`
+  /// on every match — kept it on screen only by filing it in Bookmarks next to
+  /// deliberately saved articles, indistinguishable from them, and one
+  /// un-bookmark away from deletion.
+  ///
+  /// So every field the Alerts card renders is copied in here at match time.
+  /// This is a snapshot, not a view: it has to keep rendering after the
+  /// article row is gone and after the feed is gone too, which is why
+  /// `feed_id` carries NO foreign key and `folder_id` is a point-in-time copy
+  /// rather than a live lookup. A stale `folder_id` naming a folder that no
+  /// longer exists must read as "no folder", never as a crash or a cascade.
+  /// [createDeletedArticles] is the precedent: it outlives the article it
+  /// names for exactly the same reason.
+  ///
+  /// UNIQUE(feed_id, guid, keyword) is the whole of the dedup story. It makes
+  /// INSERT OR IGNORE the only write the match path needs, so a re-seen
+  /// article cannot add a second copy or notify twice, and an article hitting
+  /// three keywords is three rows — the attribution first-match-wins used to
+  /// throw away.
+  static const String createAlertMatches = '''
+    CREATE TABLE alert_matches (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      feed_id           INTEGER NOT NULL,
+      guid              TEXT    NOT NULL,
+      keyword           TEXT    NOT NULL,
+      title             TEXT    NOT NULL,
+      url               TEXT    NOT NULL,
+      description       TEXT,
+      thumbnail_url     TEXT,
+      thumbnail_path    TEXT,
+      feed_title        TEXT,
+      feed_favicon_path TEXT,
+      folder_id         INTEGER,
+      published_at      INTEGER,
+      matched_at        INTEGER NOT NULL,
+      is_read           INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1))
+    )
+  ''';
+
+  static const String createAlertMatchesUniqueIndex = '''
+    CREATE UNIQUE INDEX idx_alert_matches_unique
+      ON alert_matches(feed_id, guid, keyword)
+  ''';
+
+  static const String createAlertMatchesKeywordIndex = '''
+    CREATE INDEX idx_alert_matches_keyword ON alert_matches(keyword)
+  ''';
+
+  static const String createAlertMatchesMatchedAtIndex = '''
+    CREATE INDEX idx_alert_matches_matched_at ON alert_matches(matched_at DESC)
+  ''';
+
+  /// A stable notification id per set of keywords, allocated by rowid.
+  ///
+  /// Every alert notification used to be posted under the hardcoded id 2, so
+  /// each new alert replaced the previous one in the shade and a user who was
+  /// away for an hour found a single notification standing for everything they
+  /// had missed. The id has to be stable across posts for one keyword set —
+  /// otherwise the same alert stacks up again on every refresh — and different
+  /// between sets, which is more state than a pure function can carry.
+  ///
+  /// `key` is the sorted keywords joined by NUL, a character no keyword can
+  /// contain, so one set cannot forge another's id. Rows are never deleted:
+  /// re-adding a keyword should reuse the id it had, not consume a new one.
+  static const String createAlertNotificationIds = '''
+    CREATE TABLE alert_notification_ids (
+      id  INTEGER PRIMARY KEY AUTOINCREMENT,
+      key TEXT NOT NULL UNIQUE
     )
   ''';
 

@@ -292,6 +292,11 @@ class AppLocalizationsEs extends AppLocalizations {
   String get allMarkedRead => 'Todo marcado como leído';
 
   @override
+  String alertKeywordExists(String keyword) {
+    return '\"$keyword\" ya es una palabra clave de alerta';
+  }
+
+  @override
   String keywordRemoved(String keyword) {
     return '\"$keyword\" eliminada';
   }
@@ -552,4 +557,87 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get selectCategoryFirst => 'Elige una categoría para continuar.';
+
+  @override
+  String get alertsTab => 'Alertas';
+
+  @override
+  String get alertsTabEmpty =>
+      'Aún no hay alertas.\nLos artículos que coincidan con tus palabras clave aparecerán aquí.';
+
+  @override
+  String get alertsFilterAll => 'Todas';
+
+  @override
+  String get alertsManageKeywords => 'Gestionar palabras clave';
+
+  @override
+  String get alertsRemove => 'Quitar';
+
+  @override
+  String get alertsRemovedBanner => 'Eliminado de Alertas';
+
+  @override
+  String get alertsMarkAllReadBanner =>
+      'Todas las alertas marcadas como leídas';
+
+  @override
+  String get alertsArticleGone => 'Ese artículo ya no está en tu feed';
+
+  @override
+  String alertsMoreKeywords(int count) {
+    return '+$count';
+  }
+
+  @override
+  String deleteAlertKeywordTitle(String keyword) {
+    return '¿Eliminar \"$keyword\"?';
+  }
+
+  @override
+  String deleteAlertKeywordBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count artículos desaparecerán de la pestaña Alertas.',
+      one: '1 artículo desaparecerá de la pestaña Alertas.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get alertNotificationTitle => 'Flash — alerta de palabra clave';
+
+  @override
+  String alertNotificationFirst(String keyword) {
+    return '\"$keyword\" apareció en un artículo';
+  }
+
+  @override
+  String alertNotificationCount(int count, String keyword) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count artículos coinciden con \"$keyword\"',
+      one: '1 artículo coincide con \"$keyword\"',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String alertNotificationCombined(int count, String keywords) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count artículos contienen las palabras $keywords',
+      one: '1 artículo contiene las palabras $keywords',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get keywordListSeparator => ', ';
+
+  @override
+  String get keywordListAnd => ' y ';
 }

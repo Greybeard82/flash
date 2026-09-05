@@ -146,18 +146,14 @@ void main() {
       });
     });
 
-    test('matched_alert_keyword is written and read back through the row',
-        () async {
-      final a = _art(6, published: _recent).copyWith(
-          matchedAlertKeyword: 'zelda');
-      await _repo.insertArticles(1, [a]);
-
-      final row = await _row('guid-6');
-      expect(row?['matched_alert_keyword'], 'zelda');
-
-      final matches = await _repo.getAlertMatches();
-      expect(matches.map((m) => m.guid), contains('guid-6'));
-    });
+    // A test round-tripping matched_alert_keyword through the article row
+    // stood here. The column is gone: as a column a match had no existence
+    // apart from the article, so retirement, cleanup and the tombstone system
+    // all destroyed it. A match is now a row in alert_matches carrying its own
+    // snapshot, and insertArticles has nothing to say about it. What this
+    // proved is covered by test/alert_match_repository_test.dart (the write
+    // and read-back) and test/alert_persistence_test.dart (surviving the
+    // deletion paths that used to take it).
   });
 
   group('markAsRead / markAsUnread', () {
@@ -262,11 +258,32 @@ void main() {
       expect(await _count(), 1);
     });
 
-    test('does not delete unread articles regardless of age', () async {
+    // Extended rather than renamed. This was one test called "does not delete
+    // unread articles regardless of age", and its fixture could not prove that
+    // claim: `_old` is 8 days, while runCleanup's unread branch only deletes
+    // past the fixed kUnreadRetentionDays floor of 15, so the branch it named
+    // never ran. Both halves are worth pinning, so it is now two tests — the
+    // original assertion under an honest name, plus the case that actually
+    // crosses the floor and shows "regardless of age" was never true.
+    test('an unread article is exempt from the read cutoff', () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
       // Do NOT mark as read.
       await _repo.runCleanup();
       expect(await _count(), 1);
+    });
+
+    test('an unread article past the fixed retention floor is deleted',
+        () async {
+      final beyondFloor =
+          _now.subtract(const Duration(days: kUnreadRetentionDays + 1));
+      await _repo.insertArticles(1, [_art(1, published: beyondFloor)]);
+
+      await _repo.runCleanup();
+
+      expect(await _count(), 0,
+          reason: 'past kUnreadRetentionDays no Article age setting can bring '
+              'it back into the list, so leaving it in the table only keeps '
+              'inflating the unread badge with articles nobody can reach');
     });
 
     test('returns the number of rows deleted', () async {
@@ -282,7 +299,11 @@ void main() {
 
     test('does not delete saved articles even if old and read', () async {
       await _repo.insertArticles(1, [_art(1, published: _old)]);
-      // Mark saved via the dedicated method (insertArticles always sets is_saved=0).
+      // Saved through setSaved rather than on the way in: insertArticles binds
+      // a.isSaved, so the fixture could set it itself — it is is_read that the
+      // insert hardcodes to 0. Going through the real method is still the
+      // right call here, because setSaved is what the bookmark button uses and
+      // this test is about what cleanup does to a bookmark.
       final db = await AppDatabase.instance.database;
       final id =
           (await db.query(TableNames.articles, limit: 1)).first['id'] as int;
@@ -395,96 +416,18 @@ void main() {
     });
   });
 
-  group('keyword alerts', () {
-    setUp(_setUp);
-    tearDown(_tearDown);
-
-    Future<int> insertWithTitle(String guid, String title) async {
-      final db = await AppDatabase.instance.database;
-      return db.insert(TableNames.articles, {
-        'feed_id': 1,
-        'guid': guid,
-        'title': title,
-        'url': 'https://example.com/$guid',
-        'fetched_at': 0,
-        'is_read': 0,
-        'is_blocked': 0,
-        'is_saved': 0,
-      });
-    }
-
-    group('retroactivelyMatchAlert', () {
-      test('matches an existing article and auto-bookmarks it', () async {
-        await insertWithTitle('z1', 'Nintendo teases new Zelda game');
-
-        await _repo.retroactivelyMatchAlert('zelda', false);
-
-        final row = await _row('z1');
-        expect(row?['matched_alert_keyword'], 'zelda');
-        expect(row?['is_saved'], 1,
-            reason: 'the bookmark is the only thing keeping this article '
-                'from being deleted by the next read-flush or cleanup');
-      });
-
-      test('does not touch an article that does not match', () async {
-        await insertWithTitle('z2', 'Completely unrelated tech news');
-
-        await _repo.retroactivelyMatchAlert('zelda', false);
-
-        final row = await _row('z2');
-        expect(row?['matched_alert_keyword'], isNull);
-        expect(row?['is_saved'], 0);
-      });
-
-      test('does not reassign an article another alert already claimed',
-          () async {
-        await insertWithTitle('z3', 'Zelda and Mario team up');
-        await _repo.retroactivelyMatchAlert('mario', false);
-        expect((await _row('z3'))?['matched_alert_keyword'], 'mario');
-
-        await _repo.retroactivelyMatchAlert('zelda', false);
-
-        expect((await _row('z3'))?['matched_alert_keyword'], 'mario',
-            reason: 'the first match wins; a second alert must not steal an '
-                'article already attributed to another keyword');
-      });
-
-      test('respects whole-word matching', () async {
-        await insertWithTitle('z4', 'A cryptocurrency explainer');
-
-        await _repo.retroactivelyMatchAlert('crypto', true);
-
-        expect((await _row('z4'))?['matched_alert_keyword'], isNull);
-      });
-    });
-
-    group('clearAlertMatchesByKeyword', () {
-      test('clears the match but leaves is_saved untouched', () async {
-        await insertWithTitle('z5', 'Zelda 40th anniversary');
-        await _repo.retroactivelyMatchAlert('zelda', false);
-        expect((await _row('z5'))?['is_saved'], 1);
-
-        await _repo.clearAlertMatchesByKeyword('zelda');
-
-        final row = await _row('z5');
-        expect(row?['matched_alert_keyword'], isNull);
-        expect(row?['is_saved'], 1,
-            reason: 'there is no way to tell whether is_saved was set by '
-                'this match alone or also by a deliberate bookmark, so '
-                'clearing the match must not unsave the article');
-      });
-
-      test('only clears articles matching that exact keyword', () async {
-        await insertWithTitle('z6', 'Zelda news');
-        await insertWithTitle('z7', 'Mario news');
-        await _repo.retroactivelyMatchAlert('zelda', false);
-        await _repo.retroactivelyMatchAlert('mario', false);
-
-        await _repo.clearAlertMatchesByKeyword('zelda');
-
-        expect((await _row('z6'))?['matched_alert_keyword'], isNull);
-        expect((await _row('z7'))?['matched_alert_keyword'], 'mario');
-      });
-    });
-  });
+  // A 'keyword alerts' group covering retroactivelyMatchAlert and
+  // clearAlertMatchesByKeyword stood here. Both methods are gone with the
+  // column they wrote, and two of the decisions those tests pinned are ones
+  // this rework deliberately reverses: the `is_saved = 1` auto-bookmark that
+  // kept a match alive by parking it in Bookmarks, and first-match-wins, which
+  // threw away the second keyword an article matched. Keeping them adapted
+  // would have preserved exactly the behaviour the new table exists to undo.
+  //
+  // The behaviour that is still wanted moved with the code:
+  // backfillKeyword and deleteByKeyword are covered by
+  // test/alert_match_repository_test.dart, whole-word matching by
+  // test/keyword_matcher_test.dart, and the guarantee that a match survives
+  // cleanup and retirement — which the auto-bookmark was standing in for — by
+  // test/alert_persistence_test.dart.
 }

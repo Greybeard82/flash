@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flash/db/database.dart';
+import 'package:flash/db/schema.dart';
 import 'package:flash/models/feed.dart';
 import 'package:flash/models/folder.dart';
 import 'package:flash/models/keyword_block.dart';
@@ -165,6 +166,115 @@ void main() {
     });
 
     tearDown(() async => AppDatabase.instance.close());
+
+    test('alert snapshots follow their feed to its new id', () async {
+      // A restore wipes folders and feeds and re-inserts them, and feeds.id is
+      // AUTOINCREMENT — so the same feed comes back under a new id. The alert
+      // snapshot survives the wipe by design (no FK on feed_id) but is keyed
+      // by (feed_id, guid, keyword), so without re-keying the card is orphaned
+      // onto a dead id and the next fetch writes a duplicate under the new one.
+      final db = await AppDatabase.instance.database;
+      final folderId = await db.insert(TableNames.folders,
+          {'name': 'Tech', 'position': 0, 'created_at': 0});
+      final oldFeedId = await db.insert(TableNames.feeds, {
+        'folder_id': folderId,
+        'title': 'Wired',
+        'url': 'https://wired.com/rss',
+        'consecutive_failures': 0,
+        'is_dead': 0,
+        'position': 0,
+        'created_at': 0,
+      });
+      await db.insert(TableNames.alertMatches, {
+        'feed_id': oldFeedId,
+        'guid': 'g1',
+        'keyword': 'zelda',
+        'title': 'Zelda news',
+        'url': 'https://example.com/g1',
+        'feed_title': 'Wired',
+        'folder_id': folderId,
+        'matched_at': 10,
+        'is_read': 0,
+      });
+
+      final map = BackupSerializer.toMap(
+        folders: [_folder(folderId, 'Tech')],
+        feeds: [
+          _feed(
+              id: oldFeedId,
+              folderId: folderId,
+              title: 'Wired',
+              url: 'https://wired.com/rss'),
+        ],
+        keywords: [],
+      );
+      await BackupSerializer.restoreFromMap(map);
+
+      final feeds = await db.query(TableNames.feeds);
+      final newFeedId = feeds.single['id'] as int;
+      final newFolderId = feeds.single['folder_id'] as int;
+      expect(newFeedId, isNot(oldFeedId),
+          reason: 'AUTOINCREMENT must not reuse the id, or this proves '
+              'nothing');
+
+      final matches = await db.query(TableNames.alertMatches);
+      expect(matches, hasLength(1),
+          reason: 'the snapshot survives the wipe — that is what the missing '
+              'foreign key is for');
+      expect(matches.single['feed_id'], newFeedId,
+          reason: 'and it is re-keyed onto the restored feed, so the next '
+              'fetch matches it instead of inserting a duplicate');
+      expect(matches.single['folder_id'], newFolderId,
+          reason: 'folder scoping and mark-folder-read read this copy');
+    });
+
+    test('a snapshot whose feed is not in the backup keeps its old id',
+        () async {
+      // Nothing to re-key onto. The row must survive untouched rather than be
+      // deleted or pointed at some other feed: an alert outliving the feed it
+      // arrived on is the behaviour alert_matches exists to provide.
+      final db = await AppDatabase.instance.database;
+      final folderId = await db.insert(TableNames.folders,
+          {'name': 'Tech', 'position': 0, 'created_at': 0});
+      final goneFeedId = await db.insert(TableNames.feeds, {
+        'folder_id': folderId,
+        'title': 'Gone',
+        'url': 'https://gone.example/rss',
+        'consecutive_failures': 0,
+        'is_dead': 0,
+        'position': 0,
+        'created_at': 0,
+      });
+      await db.insert(TableNames.alertMatches, {
+        'feed_id': goneFeedId,
+        'guid': 'g2',
+        'keyword': 'zelda',
+        'title': 'Zelda news',
+        'url': 'https://example.com/g2',
+        'feed_title': 'Gone',
+        'folder_id': folderId,
+        'matched_at': 10,
+        'is_read': 0,
+      });
+
+      await BackupSerializer.restoreFromMap(BackupSerializer.toMap(
+        folders: [_folder(folderId, 'Tech')],
+        feeds: [
+          _feed(
+              id: 99,
+              folderId: folderId,
+              title: 'Wired',
+              url: 'https://wired.com/rss'),
+        ],
+        keywords: [],
+      ));
+
+      final matches = await db.query(TableNames.alertMatches);
+      expect(matches, hasLength(1));
+      expect(matches.single['feed_id'], goneFeedId);
+      expect(matches.single['feed_title'], 'Gone',
+          reason: 'the snapshot still names the source it actually came from');
+    });
 
     test('returns correct feed count', () async {
       final map = BackupSerializer.toMap(

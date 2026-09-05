@@ -868,6 +868,14 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               await widget.faviconService.fetchAndCache(domain, feed.id!);
           if (faviconPath != null) {
             await widget.feedRepo.updateFaviconPath(feed.id!, faviconPath);
+            // The DB write alone left the local `feed` holding a null
+            // faviconPath, and the very next statement hands that same object
+            // to fetchAndStore — which now copies the feed's identity into
+            // every alert snapshot it writes. Without this line a feed's
+            // first-ever fetch produced alert matches with no favicon: a blank
+            // icon on exactly the newest feeds, and permanently, since a
+            // snapshot is never re-joined against `feeds`.
+            feed = feed.copyWith(faviconPath: faviconPath);
           }
         }
       }

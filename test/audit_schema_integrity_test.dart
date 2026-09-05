@@ -17,9 +17,17 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flash/db/database.dart';
 import 'package:flash/repositories/settings_repository.dart';
 
-/// Kept in sync by hand with the `version:` passed to openDatabase in
-/// database.dart. Bump both together when adding a migration.
-const int kExpectedSchemaVersion = 15;
+/// Kept in sync by hand with the schema version literal, which is written out
+/// in three places, not two: the `version:` passed to openDatabase in
+/// database.dart, the `newVersion` argument `AppDatabase.migrateForTesting`
+/// hardcodes when it calls `_onUpgrade`, and this constant. All three move
+/// together when a migration is added.
+///
+/// The middle one is the dangerous one. If migrateForTesting is left behind,
+/// every migration test in this suite quietly stops one version short of the
+/// step it was written to exercise and still reports green — the new
+/// `if (oldVersion < n)` block simply never runs.
+const int kExpectedSchemaVersion = 16;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();
