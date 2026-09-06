@@ -23,6 +23,24 @@ const Map<String, Color> kPaletteSeeds = {
   'teal_orange': Color(0xFF00695C),
 };
 
+/// Second-hue seeds, one per palette above, applied the same way
+/// `teal_orange`'s orange half always has been — see
+/// [_applyAccentOverride]. `teal_orange` is included here too (unchanged
+/// from its own seed) so every palette goes through the same lookup in
+/// [paletteColorScheme] rather than one of the five being a special case.
+///
+/// Picked as a deliberate contrast to each primary rather than a nearby
+/// tint: gold against green, terracotta against blue, indigo against red,
+/// forest green against orange — the same "two hues, not one hue's shades"
+/// character `teal_orange` already had.
+const Map<String, Color> kPaletteAccentSeeds = {
+  'green': Color(0xFFF9A825),
+  'blue': Color(0xFFD84315),
+  'red': Color(0xFF283593),
+  'orange': Color(0xFF1B5E20),
+  'teal_orange': Color(0xFFE07A1F),
+};
+
 const String kDefaultPalette = 'orange';
 
 /// [ColorScheme.fromSeed]'s own default is [DynamicSchemeVariant.tonalSpot]
@@ -32,18 +50,26 @@ const String kDefaultPalette = 'orange';
 /// weak. `vibrant` is the same algorithm at a higher, still-bounded chroma —
 /// a step up applied identically everywhere, rather than five hand-tuned
 /// seed hexes that would each need re-tuning (and could each drift out of
-/// step with the others) the next time a palette changes. Used at both call
-/// sites in this file so the `teal_orange` override's orange half moves by
-/// the same amount as every primary hue does.
+/// step with the others) the next time a palette changes. Used everywhere
+/// [ColorScheme.fromSeed] is called in this file — every primary hue and
+/// every accent hue below — so no half of any palette moves by a different
+/// amount than the rest.
 const DynamicSchemeVariant kPaletteSchemeVariant = DynamicSchemeVariant.vibrant;
 
-/// Applies the two-hue override for the `teal_orange` palette: `secondary`
-/// and `onSecondary` come from a full scheme generated off the orange seed,
-/// at the same brightness, rather than a hand-picked pair — so the override
-/// gets the same guaranteed on-color contrast as the primary hue did.
-ColorScheme _applyTealOrangeAccent(ColorScheme scheme, Brightness brightness) {
+/// Applies a two-hue override: `secondary` and `onSecondary` come from a
+/// full scheme generated off [accentSeed], at the same brightness, rather
+/// than a hand-picked pair — so the override gets the same guaranteed
+/// on-color contrast [ColorScheme.fromSeed] already gives the primary hue.
+/// Was `_applyTealOrangeAccent`, hardcoded to the one palette that had an
+/// accent at all; every palette does now, so this takes the seed as a
+/// parameter instead of reaching into [kPaletteSeeds] itself.
+ColorScheme _applyAccentOverride(
+  ColorScheme scheme,
+  Brightness brightness,
+  Color accentSeed,
+) {
   final accent = ColorScheme.fromSeed(
-    seedColor: kPaletteSeeds['orange']!,
+    seedColor: accentSeed,
     brightness: brightness,
     dynamicSchemeVariant: kPaletteSchemeVariant,
   );
@@ -98,11 +124,11 @@ const PageTransitionsTheme kFlashPageTransitions = PageTransitionsTheme(
 // is its generated `colorScheme.surface`, applied once the first frame lands.
 const Color darkBg = Color(0xFF0D1B2A);
 
-/// The generated [ColorScheme] for [palette] at [brightness], including the
-/// `teal_orange` two-hue override. Exposed separately from
-/// [flashPaletteTheme] so a caller that only needs the colors — like the
-/// Quick Settings palette picker's own preview swatches — isn't stuck
-/// building a whole [ThemeData] just to read them off it.
+/// The generated [ColorScheme] for [palette] at [brightness], including its
+/// two-hue accent override. Exposed separately from [flashPaletteTheme] so a
+/// caller that only needs the colors — like the Quick Settings palette
+/// picker's own preview swatches — isn't stuck building a whole [ThemeData]
+/// just to read them off it.
 ColorScheme paletteColorScheme({
   required String palette,
   required Brightness brightness,
@@ -113,9 +139,15 @@ ColorScheme paletteColorScheme({
     brightness: brightness,
     dynamicSchemeVariant: kPaletteSchemeVariant,
   );
-  return palette == 'teal_orange'
-      ? _applyTealOrangeAccent(scheme, brightness)
-      : scheme;
+  // Every current palette has an accent seed, but this stays a lookup with
+  // a fallback rather than an assumption that always holds — an
+  // unrecognised palette key already falls back to kDefaultPalette above
+  // for its primary seed, and this keeps that same "never throw on an
+  // unfamiliar key" stance for the accent half too.
+  final accentSeed = kPaletteAccentSeeds[palette];
+  return accentSeed == null
+      ? scheme
+      : _applyAccentOverride(scheme, brightness, accentSeed);
 }
 
 /// Builds a palette's [ThemeData] for one brightness. Replaces the old
