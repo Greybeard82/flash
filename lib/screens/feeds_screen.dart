@@ -220,6 +220,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       padding: const EdgeInsets.only(bottom: 80),
       buildDefaultDragHandles: false,
       onReorder: _onReorderFolders,
+      proxyDecorator: _dragProxyDecorator,
       children: [
         for (int i = 0; i < _folders.length; i++)
           _FolderSection(
@@ -260,6 +261,39 @@ class _FeedsScreenState extends State<FeedsScreen> {
       _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
       await _load();
     }
+  }
+
+  /// The lifted item's own look while a drag is in progress.
+  ///
+  /// `ReorderableListView`'s default is a small, easy-to-miss shadow bump —
+  /// barely visible against this app's flat card style, where `cardTheme`
+  /// itself favours a border over elevation (`app_theme.dart`). A category
+  /// row has no card of its own to lift, so the drag scales it up slightly
+  /// and raises it onto a `Material` with the same elevation the Quick
+  /// Settings/Filter bubbles use (`bubble_panel.dart`'s `_BubblePanel`,
+  /// `elevation: 6`) — enough to read as "this is what's moving" without it
+  /// turning into a celebration.
+  Widget _dragProxyDecorator(
+    Widget child,
+    int index,
+    Animation<double> animation,
+  ) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = Curves.easeOut.transform(animation.value);
+        return Transform.scale(
+          scale: 1.0 + 0.03 * t,
+          child: Material(
+            elevation: 6 * t,
+            borderRadius: BorderRadius.circular(16),
+            color: Theme.of(context).colorScheme.surface,
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
   }
 
   Widget _emptyFeedsState() {

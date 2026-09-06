@@ -13,9 +13,8 @@ import '../services/read_state_notifier.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/share_service.dart';
-import '../utils/day_grouping.dart';
+import '../utils/alert_grouping.dart';
 import '../widgets/article_card.dart';
-import '../widgets/day_header.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/keyword_alerts_panel.dart';
 import '../widgets/mark_all_read_confirm.dart';
@@ -121,6 +120,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   List<AlertEntry> _entries = const [];
   bool _loading = true;
+
+  /// Which keyword sections are collapsed. In-memory only — this screen is
+  /// kept alive in the app's `IndexedStack`, so "resets on next launch"
+  /// means "reset in `initState`," which an empty set here already is:
+  /// nothing collapsed is exactly "everything expanded."
+  final Set<String> _collapsedKeywords = {};
+
+  /// Entry order *within* each keyword section — which keyword's section
+  /// comes first is a separate, unrelated ordering (see
+  /// [_keywordSections]). In-memory only, same scope as
+  /// [_collapsedKeywords].
+  bool _newestFirst = true;
 
   @override
   void initState() {
@@ -291,28 +302,17 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
-  /// Grouped by the day the keyword *matched*, not the day the article was
-  /// published: the list is a log of what the alerts caught, so an article
-  /// published last month that matched this morning belongs under today.
-  List<FeedRow> _rows() {
-    final articles = [for (final e in _entries) e.toArticle()];
-    final proxies = [
-      for (var i = 0; i < _entries.length; i++)
-        articles[i].copyWith(publishedAt: _entries[i].matchedAt),
-    ];
-    final rows = groupByDay(proxies, now: DateTime.now());
-    var next = 0;
-    return [
-      for (final row in rows)
-        if (row is ArticleRow) ArticleRow(articles[next++]) else row,
-    ];
+  void _toggleKeywordCollapsed(String keyword) {
+    setState(() {
+      if (!_collapsedKeywords.add(keyword)) {
+        _collapsedKeywords.remove(keyword);
+      }
+    });
   }
 
-  /// Keyed on the same NUL-joined pair the rest of the alerts code uses, so a
-  /// guid containing a space cannot collide with its neighbour.
-  Map<String, List<String>> _keywordsByPair() => {
-        for (final e in _entries) '${e.feedId} ${e.guid}': e.keywords,
-      };
+  void _toggleSortOrder() {
+    setState(() => _newestFirst = !_newestFirst);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -323,7 +323,20 @@ class _AlertsScreenState extends State<AlertsScreen> {
       appBar: AppBar(
         title: Text(l10n.alertsTab),
         centerTitle: false,
-        actions: const [QuickSettingsAction()],
+        actions: [
+          // Alerts-specific, so it sits to the left of QuickSettingsAction
+          // rather than displacing it — that one button is reached from all
+          // four top-level screens and always sits rightmost on every one of
+          // them. Tooltip names the destination state (what tapping switches
+          // *to*), matching how a mute/play toggle names its own action
+          // rather than the state it's currently in.
+          IconButton(
+            onPressed: _toggleSortOrder,
+            tooltip: _newestFirst ? l10n.oldestFirst : l10n.newestFirst,
+            icon: const Icon(Icons.swap_vert_rounded),
+          ),
+          const QuickSettingsAction(),
+        ],
       ),
       // Bottom-right, mini, ScrollFade-wrapped, 8dp apart: the same cluster
       // Flash puts in the same corner, so the two screens do not disagree
@@ -394,8 +407,11 @@ class _AlertsScreenState extends State<AlertsScreen> {
       );
     }
 
-    final rows = _rows();
-    final keywordsByPair = _keywordsByPair();
+    final rows = alertRows(
+      _entries,
+      collapsedKeywords: _collapsedKeywords,
+      newestFirst: _newestFirst,
+    );
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -407,10 +423,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
         itemCount: rows.length,
         itemBuilder: (context, i) {
           final row = rows[i];
-          if (row is DayHeaderRow) return DayHeader(row: row);
+          if (row is KeywordHeaderRow) {
+            return _KeywordSectionHeader(
+              keyword: row.keyword,
+              count: row.count,
+              collapsed: row.collapsed,
+              onTap: () => _toggleKeywordCollapsed(row.keyword),
+            );
+          }
 
-          final article = (row as ArticleRow).article;
-          final needsDivider = i > 0 && rows[i - 1] is ArticleRow;
+          final entry = (row as KeywordEntryRow).entry;
+          final article = entry.toArticle();
+          final needsDivider = i > 0 && rows[i - 1] is KeywordEntryRow;
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -423,9 +447,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 // swipe-enabled card is a duplicate-key crash rather than a
                 // gesture.
                 enableSwipeActions: false,
-                alertKeywords:
-                    keywordsByPair['${article.feedId} ${article.guid}'] ??
-                        const [],
+                alertKeywords: entry.keywords,
                 onTap: () => _openEntry(article),
                 onMarkRead: () => _setEntryRead(article, isRead: true),
                 onMarkUnread: () => _setEntryRead(article, isRead: false),
@@ -439,6 +461,55 @@ class _AlertsScreenState extends State<AlertsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// One collapsible section's header: the keyword, how many entries it has
+/// caught, and a chevron matching the Categories screen's own folder
+/// chevron — collapsed points right (-0.25 turn), expanded points down.
+class _KeywordSectionHeader extends StatelessWidget {
+  final String keyword;
+  final int count;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  const _KeywordSectionHeader({
+    required this.keyword,
+    required this.count,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '$keyword ($count)',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            AnimatedRotation(
+              turns: collapsed ? -0.25 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              child: Icon(Icons.expand_more_rounded,
+                  size: 20,
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+            ),
+          ],
+        ),
       ),
     );
   }

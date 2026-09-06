@@ -32,6 +32,22 @@ bool dismissTopBubblePanel() {
   return true;
 }
 
+/// Adds [onBack] to the same stack [showBubblePanel] registers its own
+/// panels on, so a system back press can reach it too — for an
+/// `Overlay.of(context).insert` popup that isn't a `_BubblePanel` itself
+/// (too small, or anchored differently, to want the blurred-backdrop
+/// full-panel presentation) but still needs to behave like one for back
+/// handling. [onBack] should close the popup when called; nothing here
+/// removes it from the stack automatically — the same contract
+/// [_BubblePanelState] follows for its own handler, via [unregisterBackDismiss]
+/// from its `dispose`.
+void registerBackDismiss(VoidCallback onBack) => _openBubblePanels.add(onBack);
+
+/// Undoes [registerBackDismiss]. Safe to call unconditionally from a
+/// `dispose`, whether or not a back press ever actually consumed [onBack].
+void unregisterBackDismiss(VoidCallback onBack) =>
+    _openBubblePanels.remove(onBack);
+
 OverlayEntry showBubblePanel({
   required BuildContext context,
   required GlobalKey anchorKey,

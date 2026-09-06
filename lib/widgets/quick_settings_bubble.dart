@@ -63,7 +63,8 @@ class QuickSettingsBubble extends StatefulWidget {
   State<QuickSettingsBubble> createState() => _QuickSettingsBubbleState();
 }
 
-class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
+class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
+    with SingleTickerProviderStateMixin {
   final _repo = SettingsRepository();
 
   late String _theme;
@@ -73,6 +74,15 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   late bool _markAllReadConfirm;
   late bool _iconBadge;
   late int _refreshIntervalMinutes;
+
+  /// Collapsed by default — see the picker's own row for why.
+  bool _paletteExpanded = false;
+
+  /// Drives the chevron's rotation. Same duration and the same
+  /// begin/end turns as the Categories screen's folder chevron
+  /// (`_FolderSectionState._chevronController` in `feeds_screen.dart`), so
+  /// the two collapse affordances feel like the same control.
+  late final AnimationController _paletteChevronController;
 
   @override
   void initState() {
@@ -84,6 +94,26 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
     _markAllReadConfirm = widget.initial.markAllReadConfirm;
     _iconBadge = widget.initial.unreadBadgeNotification;
     _refreshIntervalMinutes = widget.initial.refreshIntervalMinutes;
+    _paletteChevronController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+      value: 0.0, // starts collapsed, matching _paletteExpanded
+    );
+  }
+
+  @override
+  void dispose() {
+    _paletteChevronController.dispose();
+    super.dispose();
+  }
+
+  void _togglePaletteExpanded() {
+    setState(() => _paletteExpanded = !_paletteExpanded);
+    if (_paletteExpanded) {
+      _paletteChevronController.forward();
+    } else {
+      _paletteChevronController.reverse();
+    }
   }
 
   Future<void> _setTheme(String value) async {
@@ -94,7 +124,13 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   }
 
   Future<void> _setPalette(String value) async {
-    setState(() => _palette = value);
+    // Collapses back down on the same tap that picks one — the picker opens
+    // to make a choice, and once it's made there is nothing left to compare.
+    setState(() {
+      _palette = value;
+      _paletteExpanded = false;
+    });
+    _paletteChevronController.reverse();
     widget.onPaletteChanged?.call(value);
     await _repo.set('color_palette', value);
     SettingsNotifier.instance.settingsChanged();
@@ -200,19 +236,62 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
                 const SizedBox(height: 16),
                 Text(l10n.colorPalette, style: theme.textTheme.bodyMedium),
                 const SizedBox(height: 8),
-                // Previewed at the currently active brightness — Theme.of
-                // already resolved System/Light/Dark against live OS state by
-                // the time this builds, so this is exactly the brightness the
-                // person is looking at right now, not a guess.
-                ...kPaletteKeys.map((key) => _PaletteRow(
-                      selected: _palette == key,
-                      label: _paletteLabel(l10n, key),
-                      scheme: paletteColorScheme(
-                        palette: key,
-                        brightness: theme.brightness,
+                // Collapsed to just the current palette by default — five full
+                // rows (each its own swatch strip) pushed everything below
+                // them, including the refresh interval this panel opens the
+                // most, a full page-scroll down. The chevron is the only way
+                // back to comparing all five; picking one while expanded
+                // (_setPalette) collapses it again on the same tap.
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      // AnimatedSize so the panel's own height eases into the
+                      // change rather than snapping — `_BubblePanel` sizes
+                      // itself to this content via a plain
+                      // SingleChildScrollView with no size animation of its
+                      // own, so without this the one-to-five-row jump (and
+                      // back) would be an instant cut.
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.topCenter,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Previewed at the currently active brightness —
+                            // Theme.of already resolved System/Light/Dark
+                            // against live OS state by the time this builds,
+                            // so this is exactly the brightness the person is
+                            // looking at right now, not a guess.
+                            for (final key
+                                in _paletteExpanded ? kPaletteKeys : [_palette])
+                              _PaletteRow(
+                                selected: _palette == key,
+                                label: _paletteLabel(l10n, key),
+                                scheme: paletteColorScheme(
+                                  palette: key,
+                                  brightness: theme.brightness,
+                                ),
+                                onTap: () => _setPalette(key),
+                              ),
+                          ],
+                        ),
                       ),
-                      onTap: () => _setPalette(key),
-                    )),
+                    ),
+                    IconButton(
+                      onPressed: _togglePaletteExpanded,
+                      visualDensity: VisualDensity.compact,
+                      icon: RotationTransition(
+                        turns: Tween(begin: -0.25, end: 0.0)
+                            .animate(_paletteChevronController),
+                        child: Icon(Icons.expand_more_rounded,
+                            color: theme.colorScheme.onSurface
+                                .withValues(alpha: 0.7)),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -234,21 +313,9 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
         // changes what the device does while the app is closed.
         Text(l10n.backgroundRefreshInterval, style: theme.textTheme.bodyMedium),
         const SizedBox(height: 4),
-        DropdownButton<int>(
+        _RefreshIntervalField(
           value: _refreshIntervalMinutes,
-          isExpanded: true,
-          underline: const SizedBox.shrink(),
-          items: [
-            DropdownMenuItem(value: 15, child: Text(l10n.every15Minutes)),
-            DropdownMenuItem(value: 30, child: Text(l10n.every30Minutes)),
-            DropdownMenuItem(value: 60, child: Text(l10n.everyHour)),
-            DropdownMenuItem(value: 180, child: Text(l10n.every3Hours)),
-            DropdownMenuItem(value: 360, child: Text(l10n.every6Hours)),
-            DropdownMenuItem(value: 0, child: Text(l10n.manualOnly)),
-          ],
-          onChanged: (v) {
-            if (v != null) _setRefreshInterval(v);
-          },
+          onChanged: _setRefreshInterval,
         ),
 
         const SizedBox(height: 8),
@@ -405,6 +472,232 @@ class _PaletteSwatchStrip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// (minutes, label) pairs, in the order both the field and its menu list
+/// them — identical to the original `DropdownMenuItem` list.
+List<(int, String)> _refreshIntervalOptions(AppLocalizations l10n) => [
+      (15, l10n.every15Minutes),
+      (30, l10n.every30Minutes),
+      (60, l10n.everyHour),
+      (180, l10n.every3Hours),
+      (360, l10n.every6Hours),
+      (0, l10n.manualOnly),
+    ];
+
+/// The background-refresh-interval selector.
+///
+/// Was a plain `DropdownButton<int>`, then briefly a `PopupMenuButton` with
+/// `useRootNavigator: true`. Neither worked. On-device testing (an
+/// accessibility dump taken at the same instant as a screenshot) found both
+/// popups genuinely opening — every option present and focusable, a
+/// full-screen dismiss barrier and all — while painting nothing: the popup
+/// rendered underneath this bubble's own `OverlayEntry`
+/// (`bubble_panel.dart`'s `showBubblePanel`, a manual `Overlay.insert`
+/// rather than a route). `useRootNavigator` didn't change that, because this
+/// app has exactly one `Navigator` — routing "through the root" is the same
+/// Navigator either way, and that Navigator inserts a newly pushed route's
+/// entries relative to *its own* bookkeeping, immediately above whatever it
+/// last knew was on top. It has no idea the bubble's raw entry got appended
+/// afterward by a completely different mechanism, so the new route lands
+/// below it regardless of which Navigator pushed it. And because the popup
+/// was a route while the bubble is not, dismissing the bubble did not close
+/// it either: the route stayed alive, and reappeared — now unobscured, so
+/// visible for the first time — floating over whatever screen came next,
+/// still eating the tap after that.
+///
+/// The fix is to stop using a route at all. This is its own small overlay
+/// entry, opened and positioned the same way `showBubblePanel` opens the
+/// bubble that hosts it (`Overlay.of(context).insert`, anchored to this
+/// field's own on-screen rect) — so it is guaranteed to paint above the
+/// bubble by construction: it is inserted after the bubble's entry, into
+/// the same `Overlay`, the same way the bubble itself was inserted after
+/// whatever screen was already showing. `registerBackDismiss` gives it the
+/// same back-press reach every `_BubblePanel` already has, for the same
+/// reason [dismissTopBubblePanel] exists at all.
+class _RefreshIntervalField extends StatefulWidget {
+  final int value;
+  final ValueChanged<int> onChanged;
+
+  const _RefreshIntervalField({required this.value, required this.onChanged});
+
+  @override
+  State<_RefreshIntervalField> createState() => _RefreshIntervalFieldState();
+}
+
+class _RefreshIntervalFieldState extends State<_RefreshIntervalField> {
+  final _fieldKey = GlobalKey();
+  OverlayEntry? _menu;
+
+  @override
+  void dispose() {
+    // The overlay outlives this State otherwise — same reasoning as
+    // QuickSettingsAction's own dispose, for the same kind of leak.
+    if (_menu?.mounted ?? false) _menu!.remove();
+    super.dispose();
+  }
+
+  void _closeMenu(OverlayEntry entry) {
+    if (entry.mounted) entry.remove();
+    if (identical(_menu, entry)) _menu = null;
+  }
+
+  void _openMenu() {
+    if (_menu?.mounted ?? false) return;
+    final box = _fieldKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final anchor = box.localToGlobal(Offset.zero) & box.size;
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _RefreshIntervalMenu(
+        anchor: anchor,
+        value: widget.value,
+        onSelected: (v) {
+          widget.onChanged(v);
+          _closeMenu(entry);
+        },
+        onDismiss: () => _closeMenu(entry),
+      ),
+    );
+    Overlay.of(context).insert(entry);
+    _menu = entry;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final options = _refreshIntervalOptions(l10n);
+    final currentLabel = options.firstWhere((o) => o.$1 == widget.value).$2;
+
+    // The same full-width, underline-free look `isExpanded: true` gave the
+    // DropdownButton this replaced.
+    return InkWell(
+      key: _fieldKey,
+      borderRadius: BorderRadius.circular(8),
+      onTap: _openMenu,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(currentLabel, style: theme.textTheme.titleMedium),
+            ),
+            Icon(Icons.arrow_drop_down_rounded,
+                color: theme.colorScheme.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The interval menu's own overlay content: a full-screen, invisible
+/// tap-to-dismiss layer behind a compact option list anchored to
+/// [anchor] — [_RefreshIntervalField]'s own on-screen rect at the moment it
+/// was tapped, the same "measure once, position from that" approach
+/// `_BubblePanel` takes with its anchor button.
+class _RefreshIntervalMenu extends StatefulWidget {
+  final Rect anchor;
+  final int value;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onDismiss;
+
+  const _RefreshIntervalMenu({
+    required this.anchor,
+    required this.value,
+    required this.onSelected,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_RefreshIntervalMenu> createState() => _RefreshIntervalMenuState();
+}
+
+class _RefreshIntervalMenuState extends State<_RefreshIntervalMenu> {
+  /// Registered for the lifetime of this overlay, so a system back press
+  /// closes the menu instead of walking past it — the same problem
+  /// `_BubblePanel` solves for itself, for the same reason (an
+  /// `OverlayEntry` has no `ModalRoute` of its own for `PopScope` to answer
+  /// to).
+  late final VoidCallback _backHandler;
+
+  @override
+  void initState() {
+    super.initState();
+    _backHandler = widget.onDismiss;
+    registerBackDismiss(_backHandler);
+  }
+
+  @override
+  void dispose() {
+    unregisterBackDismiss(_backHandler);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+    final options = _refreshIntervalOptions(l10n);
+
+    return Stack(
+      children: [
+        // No dimming — a dropdown, not a modal. Its only job is to catch the
+        // outside tap that closes the menu without it also reaching whatever
+        // is underneath.
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.onDismiss,
+          ),
+        ),
+        Positioned(
+          left: widget.anchor.left,
+          top: widget.anchor.bottom + 4,
+          width: widget.anchor.width,
+          child: Material(
+            color: theme.colorScheme.surfaceContainerHighest,
+            elevation: 6,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (minutes, label) in options)
+                  InkWell(
+                    onTap: () => widget.onSelected(minutes),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              label,
+                              style: minutes == widget.value
+                                  ? theme.textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.primary,
+                                    )
+                                  : theme.textTheme.bodyLarge,
+                            ),
+                          ),
+                          if (minutes == widget.value)
+                            Icon(Icons.check_rounded,
+                                size: 18, color: theme.colorScheme.primary),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

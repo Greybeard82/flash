@@ -25,6 +25,18 @@ const Map<String, Color> kPaletteSeeds = {
 
 const String kDefaultPalette = 'orange';
 
+/// [ColorScheme.fromSeed]'s own default is [DynamicSchemeVariant.tonalSpot]
+/// — deliberately pastel, low-saturation, and applied uniformly regardless
+/// of seed. That default is why every one of the five palettes above reads
+/// as muted: it is one systemic knob, not five seeds that each happen to be
+/// weak. `vibrant` is the same algorithm at a higher, still-bounded chroma —
+/// a step up applied identically everywhere, rather than five hand-tuned
+/// seed hexes that would each need re-tuning (and could each drift out of
+/// step with the others) the next time a palette changes. Used at both call
+/// sites in this file so the `teal_orange` override's orange half moves by
+/// the same amount as every primary hue does.
+const DynamicSchemeVariant kPaletteSchemeVariant = DynamicSchemeVariant.vibrant;
+
 /// Applies the two-hue override for the `teal_orange` palette: `secondary`
 /// and `onSecondary` come from a full scheme generated off the orange seed,
 /// at the same brightness, rather than a hand-picked pair — so the override
@@ -33,6 +45,7 @@ ColorScheme _applyTealOrangeAccent(ColorScheme scheme, Brightness brightness) {
   final accent = ColorScheme.fromSeed(
     seedColor: kPaletteSeeds['orange']!,
     brightness: brightness,
+    dynamicSchemeVariant: kPaletteSchemeVariant,
   );
   return scheme.copyWith(
     secondary: accent.primary,
@@ -95,7 +108,11 @@ ColorScheme paletteColorScheme({
   required Brightness brightness,
 }) {
   final seed = kPaletteSeeds[palette] ?? kPaletteSeeds[kDefaultPalette]!;
-  final scheme = ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+  final scheme = ColorScheme.fromSeed(
+    seedColor: seed,
+    brightness: brightness,
+    dynamicSchemeVariant: kPaletteSchemeVariant,
+  );
   return palette == 'teal_orange'
       ? _applyTealOrangeAccent(scheme, brightness)
       : scheme;
