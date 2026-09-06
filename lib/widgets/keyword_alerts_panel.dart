@@ -8,7 +8,7 @@ import '../repositories/alert_match_repository.dart';
 import '../repositories/keyword_alert_repository.dart';
 import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
-import 'fetching_indicator.dart';
+import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
 
 /// Manages the alert keywords themselves: add, edit, delete, and how many
@@ -436,9 +436,11 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             ),
           ),
         if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: FetchingIndicator(size: 28)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+                child: SpinningRefreshIcon(
+                    size: 28, color: theme.colorScheme.primary)),
           )
         else if (_keywords.isEmpty)
           _buildEmptyState(l10n, theme)

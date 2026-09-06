@@ -1,13 +1,19 @@
-// Where the two loading indicators sit, and which glyph each one uses.
+// The app's one loading indicator: how it behaves, and where it sits.
 //
-// Both of these were reported from the device rather than found in a test:
+// Both placements were reported from the device rather than found in a test:
 // the refresh button replaced its own icon with the app's bolt for the
 // duration of a refresh, and the global bolt was pinned to the top *centre*
 // of the whole screen stack — which on a phone is directly under the camera
 // cut-out.
 //
-// Neither uses pumpAndSettle: FetchingIndicator and SpinningRefreshIcon both
-// drive `..repeat()` controllers, so nothing ever settles.
+// The rotating bolt is gone entirely now, so the assertions worth keeping
+// from its own deleted suite live here: that it turns, that it turns at a
+// *constant* rate (the bolt's whole character was the opposite — a flick and
+// a drift — so this is the assertion that has changed sign, not merely moved
+// house), that an explicit size is honoured, and that its ticker is released.
+//
+// Nothing here uses pumpAndSettle: SpinningRefreshIcon drives a `..repeat()`
+// controller, so nothing ever settles.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -77,6 +83,93 @@ void main() {
       expect(tester.widget<Icon>(find.byType(Icon)).size, isNull,
           reason: 'a hardcoded size here would diverge from the resting icon');
       expect(tester.getSize(find.byType(Icon)).width, 33);
+    });
+
+    testWidgets('leaves its colour to the FAB when none is given',
+        (tester) async {
+      // The refresh button is the one call site that passes no colour, so the
+      // FAB's own foreground applies. An override here would be invisible in
+      // the default palette and wrong in every other one.
+      await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(body: Center(child: SpinningRefreshIcon())),
+      ));
+      await tester.pump();
+
+      expect(tester.widget<Icon>(find.byType(Icon)).color, isNull);
+    });
+  });
+
+  group('the glyph itself', () {
+    Future<void> pump(WidgetTester tester,
+        {double? size, Color? color}) async {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: Center(child: SpinningRefreshIcon(size: size, color: color)),
+        ),
+      ));
+      await tester.pump();
+    }
+
+    double turns(WidgetTester tester) => tester
+        .widget<RotationTransition>(find.descendant(
+          of: find.byType(SpinningRefreshIcon),
+          matching: find.byType(RotationTransition),
+        ))
+        .turns
+        .value;
+
+    testWidgets('renders at the size it was given', (tester) async {
+      // The former bolt sites pass explicit sizes from 16 to 40, so this is
+      // no longer only an IconTheme story.
+      await pump(tester, size: 40);
+      expect(tester.getSize(find.byType(Icon)).width, 40);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('paints the colour it was given', (tester) async {
+      await pump(tester, size: 28, color: const Color(0xFF00695C));
+      expect(tester.widget<Icon>(find.byType(Icon)).color,
+          const Color(0xFF00695C));
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('turns at a constant rate, not in flicks', (tester) async {
+      // Inherited, inverted, from the deleted bolt suite, which asserted the
+      // fastest slice outran the slowest by 2x. A control the user pressed
+      // that speeds up and slows down reads as the app stuttering.
+      await pump(tester, size: 24);
+
+      // Six 100ms slices inside the 900ms period, so no sample crosses the
+      // loop boundary — a wrap would show up as one huge negative delta and
+      // say nothing about the easing.
+      const slice = Duration(milliseconds: 100);
+      var previous = turns(tester);
+      final deltas = <double>[];
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(slice);
+        final now = turns(tester);
+        deltas.add(now - previous);
+        previous = now;
+      }
+
+      expect(deltas.every((d) => d > 0), isTrue,
+          reason: 'turns increasing is clockwise, the way the arrowhead '
+              'already points');
+
+      final fastest = deltas.reduce((a, b) => a > b ? a : b);
+      final slowest = deltas.reduce((a, b) => a < b ? a : b);
+      expect(fastest, lessThan(slowest * 1.2),
+          reason: 'every equal slice of time should cover an equal part of '
+              'the turn; the bolt this replaced varied by more than 2x');
+
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('disposes its controller without leaking a ticker',
+        (tester) async {
+      await pump(tester, size: 24);
+      await tester.pumpWidget(const MaterialApp(home: Scaffold()));
+      expect(tester.takeException(), isNull);
     });
   });
 

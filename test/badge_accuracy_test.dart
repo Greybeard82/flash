@@ -210,13 +210,15 @@ void main() {
         publishedAt: _daysAgo(1), read: true, saved: true);
 
     final visible = _displayed(await _repo.getAllArticles(showRead: false), 7);
-    expect(visible.length, 1,
-        reason: 'saved articles stay in the list once read — they are exempt '
-            'from retirement, so hiding them would make a bookmark vanish');
-    expect(await _repo.getTotalUnreadCount(windowDays: 7), 0,
-        reason: 'but it is read, so it is not *unread*. The badge counts '
-            'unread articles, not visible ones, and this is the one case '
-            'where those legitimately differ');
+    expect(visible.length, 0,
+        reason: 'a read bookmark leaves the feed. It used to be pinned there '
+            'instead, because it is exempt from retirement and the query '
+            'exempted it too, so nothing could ever remove it');
+    expect(await _repo.getTotalUnreadCount(windowDays: 7), 0);
+    // This used to be the one case where a visible article was not counted.
+    // Now the badge and the list agree here as well, which is the whole
+    // reason the badge is allowed to count rows rather than re-run the list.
+    expect(visible.length, await _repo.getTotalUnreadCount(windowDays: 7));
   });
 
   group('cleanup removes unread articles nothing can reach', () {

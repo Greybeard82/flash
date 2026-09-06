@@ -39,7 +39,6 @@ import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/keyword_blocklist_panel.dart';
 import '../widgets/quick_settings_bubble.dart';
 import '../widgets/scroll_fade.dart';
-import '../widgets/fetching_indicator.dart';
 import '../widgets/folder_tab_bar.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
@@ -1451,9 +1450,12 @@ class _FeedScreenState extends State<FeedScreen>
           AnimatedOpacity(
             opacity: _backgroundFetching ? 1.0 : 0.0,
             duration: const Duration(milliseconds: 200),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Center(child: FetchingIndicator()),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                  child: SpinningRefreshIcon(
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary)),
             ),
           ),
           // Quick settings and filter moved here from a floating cluster that

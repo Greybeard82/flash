@@ -5,7 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
-import 'fetching_indicator.dart';
+import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
 
 /// One keyword row's identity and matching settings, independent of whether
@@ -272,9 +272,11 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
             ),
           ),
         if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: FetchingIndicator(size: 28)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+                child: SpinningRefreshIcon(
+                    size: 28, color: theme.colorScheme.primary)),
           )
         else if (_keywords.isEmpty)
           Padding(

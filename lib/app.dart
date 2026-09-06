@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'repositories/settings_repository.dart';
@@ -447,14 +448,28 @@ class _AppShellState extends State<_AppShell> {
       }
 
       return PopScope(
-        canPop: _currentIndex == 0,
+        // Never true, deliberately. Flutter evaluates canPop *before* calling
+        // the callback, so the old `_currentIndex == 0` handed the pop away on
+        // the one tab that needed the callback most: Quick Settings and Filter
+        // open from Flash, which is index 0, so back closed the app with the
+        // panel still on screen and `didPop: true` made the callback return
+        // before it could ask. With canPop false every back press arrives here
+        // and is answered in order — including the exit, which is now ours to
+        // perform.
+        canPop: false,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           // A bubble panel is an overlay, not a route, so it cannot answer a
           // back press itself — without this the tab would change underneath
           // an open panel. Asked first, and swallowed if one was closed.
           if (dismissTopBubblePanel()) return;
-          setState(() => _currentIndex = 0);
+          if (_currentIndex != 0) {
+            setState(() => _currentIndex = 0);
+            return;
+          }
+          // On Flash with nothing open, back means leave. Explicit because
+          // canPop: false means Flutter did not do it for us.
+          SystemNavigator.pop();
         },
         child: shell,
       );
@@ -462,11 +477,17 @@ class _AppShellState extends State<_AppShell> {
 
     // Phone: classic bottom navigation bar
     return PopScope(
-      canPop: _currentIndex == 0,
+      // False for the same reason as the rail branch above — see the comment
+      // there. Same bug, same fix, and they have to stay in step.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (dismissTopBubblePanel()) return;
-        setState(() => _currentIndex = 0);
+        if (_currentIndex != 0) {
+          setState(() => _currentIndex = 0);
+          return;
+        }
+        SystemNavigator.pop();
       },
       child: Scaffold(
         body: _buildScreenStack(),

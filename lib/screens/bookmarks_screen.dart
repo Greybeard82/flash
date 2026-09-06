@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/fetching_indicator.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import '../utils/diag_log.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -200,7 +200,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
             )
           : null,
       body: _loading
-          ? const Center(child: FetchingIndicator(size: 40))
+          ? Center(
+              child: SpinningRefreshIcon(
+                  size: 40, color: theme.colorScheme.primary))
           : _articles.isEmpty
               ? Center(
                   child: Column(

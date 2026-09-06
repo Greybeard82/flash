@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../widgets/fetching_indicator.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
@@ -218,7 +218,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final s = _settings;
     if (s == null) {
-      return const Scaffold(body: Center(child: FetchingIndicator(size: 40)));
+      return Scaffold(
+          body: Center(
+              child: SpinningRefreshIcon(
+                  size: 40, color: Theme.of(context).colorScheme.primary)));
     }
 
     return Scaffold(
@@ -268,10 +271,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _localBusy ? null : _exportLocalBackup,
                   icon: _localBusy
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
-                          child: FetchingIndicator(size: 16))
+                          child: SpinningRefreshIcon(
+                              size: 16,
+                              color: Theme.of(context).colorScheme.primary))
                       : const Icon(Icons.upload_file_outlined),
                   label: Text(l10n.exportBackup),
                 ),
@@ -338,10 +343,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _backupBusy ? null : _backupNow,
                         icon: _backupBusy
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: FetchingIndicator(size: 16))
+                                child: SpinningRefreshIcon(
+                                    size: 16,
+                                    color: theme.colorScheme.primary))
                             : const Icon(Icons.cloud_upload_outlined),
                         label: Text(l10n.backupNow, textAlign: TextAlign.center),
                       ),

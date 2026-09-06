@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../widgets/fetching_indicator.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import '../models/feed.dart';
@@ -198,10 +198,15 @@ class _FeedsScreenState extends State<FeedsScreen> {
           NotificationBanner(key: _bannerKey),
           Expanded(
             child: _loading
-          ? const Center(child: FetchingIndicator(size: 40))
-          : _feedsByFolder.values.every((f) => f.isEmpty) && _folders.isEmpty
-              ? _emptyFeedsState()
-              : RefreshIndicator(onRefresh: _load, child: _buildList()),
+                ? Center(
+                    child: SpinningRefreshIcon(
+                        size: 40,
+                        color: Theme.of(context).colorScheme.primary))
+                : _feedsByFolder.values.every((f) => f.isEmpty) &&
+                        _folders.isEmpty
+                    ? _emptyFeedsState()
+                    : RefreshIndicator(
+                        onRefresh: _load, child: _buildList()),
           ),
         ],
       ),
@@ -1075,9 +1080,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           ],
 
           if (_searching || _adding)
-            const Padding(
-              padding: EdgeInsets.only(top: 24),
-              child: Center(child: FetchingIndicator(size: 32)),
+            Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: Center(
+                  child: SpinningRefreshIcon(
+                      size: 32, color: theme.colorScheme.primary)),
             ),
 
           if (_results.isNotEmpty)

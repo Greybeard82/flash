@@ -112,7 +112,7 @@ Future<void> _pumpPanel(WidgetTester tester) async {
 /// Two things make pumpAndSettle unusable here. The panel reads the database
 /// in initState and sqflite's FFI future only completes on the *real* event
 /// loop, which the test binding's fake async does not drive; and while it is
-/// loading the panel shows a [FetchingIndicator], whose controller is
+/// loading the panel shows a [SpinningRefreshIcon], whose controller is
 /// `..repeat()` — an animation that never ends, so pumpAndSettle would pump
 /// until it timed out even once the data had arrived.
 Future<void> _settle(WidgetTester tester) async {

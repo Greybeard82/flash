@@ -8,10 +8,13 @@
 // refresh.
 //
 // Covered behaviours:
-//  1. Show read off: unread only, plus saved-and-read
-//  2. Show read on: everything unblocked
-//  3. retireAllRead is scoped, and leaves unread alone
-//  4. Read state is global across tabs
+//  1. Show read off: unread only
+//  2. Show read on: everything unblocked, except a read bookmark
+//  3. A read bookmark leaves the feed under either setting, without being
+//     deleted — it is exempt from retirement, so the query has to be what
+//     removes it or nothing ever does
+//  4. retireAllRead is scoped, and leaves unread alone
+//  5. Read state is global across tabs
 //
 // Plain test(), not testWidgets() — this codebase never combines testWidgets()
 // with real sqflite FFI I/O (see feed_repository_test.dart).
@@ -100,15 +103,13 @@ void main() {
       expect(_guids(visible), ['unread']);
     });
 
-    test('a saved article stays visible after being read', () async {
+    test('an unread saved article is shown like any other', () async {
       await _insert(_gamingFeedId, 'unread');
-      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+      await _insert(_gamingFeedId, 'saved_unread', saved: true);
 
       final visible = await _repo.getAllArticles(showRead: false);
-      expect(_guids(visible), ['saved_read', 'unread'],
-          reason: 'saved articles are exempt from retirement, so hiding them '
-              'once read would make a bookmark vanish from the feed while '
-              'still sitting in Bookmarks');
+      expect(_guids(visible), ['saved_unread', 'unread'],
+          reason: 'bookmarking is not hiding — only reading takes it out');
     });
 
     test('an article read in All is gone from its own category too', () async {
@@ -150,6 +151,66 @@ void main() {
       final visible =
           await _repo.getArticlesByFolder(_gamingId, showRead: true);
       expect(_guids(visible), ['gaming']);
+    });
+  });
+
+  group('a read bookmark leaves the feed', () {
+    // The one article the feed could never get rid of. retireAllRead skips
+    // saved rows on purpose — deleting one would take it out of Bookmarks
+    // too, which read the same live table — so before this the row matched
+    // every feed query forever, long after an equivalent unsaved article had
+    // been retired.
+    test('with show read off', () async {
+      await _insert(_gamingFeedId, 'unread');
+      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+
+      expect(_guids(await _repo.getAllArticles(showRead: false)), ['unread']);
+    });
+
+    test('and with show read on, where nothing else would remove it',
+        () async {
+      await _insert(_gamingFeedId, 'read', read: true);
+      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+
+      expect(_guids(await _repo.getAllArticles(showRead: true)), ['read'],
+          reason: 'the plain read article is shown dimmed until the next '
+              'retirement deletes it; the saved one is never deleted, so if '
+              'the query keeps showing it, nothing ever stops');
+    });
+
+    test('in its own category too, not just All', () async {
+      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+
+      expect(await _repo.getArticlesByFolder(_gamingId, showRead: true),
+          isEmpty);
+      expect(await _repo.getArticlesByFolder(_gamingId, showRead: false),
+          isEmpty);
+    });
+
+    test('while staying in the database for Bookmarks', () async {
+      await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+
+      expect(await _remaining(), ['saved_read'],
+          reason: 'hidden from the feed by the query, not by deletion');
+      final saved = await _repo.getSaved();
+      expect(_guids(saved), ['saved_read']);
+      expect(saved.single.isRead, isTrue,
+          reason: 'and still marked read, where the user left it');
+    });
+
+    test('and comes back if it is un-bookmarked', () async {
+      final id =
+          await _insert(_gamingFeedId, 'saved_read', read: true, saved: true);
+      expect(await _repo.getAllArticles(showRead: true), isEmpty);
+
+      await _repo.setSaved(id, saved: false);
+
+      expect(_guids(await _repo.getAllArticles(showRead: true)),
+          ['saved_read'],
+          reason: 'it is an ordinary read article now, and shows as one until '
+              'the next retirement deletes it — the same lag every other '
+              'read-state change has');
+      expect(await _repo.retireAllRead(), 1);
     });
   });
 

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import '../services/loading_controller.dart';
-import 'fetching_indicator.dart';
+import 'spinning_refresh_icon.dart';
 
-/// Small spinning bolt shown in the app-bar row whenever [LoadingController]
+/// Small spinning arrow shown in the app-bar row whenever [LoadingController]
 /// is busy. The same glyph as every other loading state in the app — one
 /// indicator, not a linear bar here and a circle there. Fades in after a short
 /// delay so instant operations don't flash, and fades out smoothly when done.
+///
+/// That glyph used to be a rotating app bolt, on the argument that the mark
+/// and the spinner should be one shape. The bolt has been withdrawn from
+/// every loading state: a mark that also means "working" cannot be read at a
+/// glance, and the app already had a better picture of going round in the
+/// refresh arrow. The static bolt stays a mark, and only a mark.
 ///
 /// It sits at the top **right**, not centred. This is an overlay on the whole
 /// screen stack, so a centred one landed at the very top middle of the display
@@ -77,7 +83,10 @@ class _GlobalLoadingIndicatorState extends State<GlobalLoadingIndicator> {
               top: topInset + (kToolbarHeight - _size) / 2,
               right: _rightInset,
             ),
-            child: const FetchingIndicator(size: _size),
+            child: SpinningRefreshIcon(
+              size: _size,
+              color: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ),
       ),

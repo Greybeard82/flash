@@ -125,10 +125,20 @@ class ArticleRepository {
   /// WHERE clause and args for the visible set.
   ///
   /// With [showRead] on, every unblocked article — read ones are dimmed by the
-  /// UI and retired at the next refresh. With it off, unread only, **plus**
-  /// saved articles: those are exempt from retirement, so hiding them once read
-  /// would make a bookmark vanish from the feed while still sitting in
-  /// Bookmarks.
+  /// UI and retired at the next refresh. With it off, unread only.
+  ///
+  /// A read *and* saved article is excluded either way. Bookmarks are exempt
+  /// from [retireAllRead], so without that exclusion nothing ever took one out
+  /// of the feed: it matched this query on every load, forever, long after an
+  /// equivalent unsaved article had been retired. Reading a bookmark now
+  /// removes it from Flash exactly as if it had been retired, while the row
+  /// itself stays alive — [getSaved] is a separate query over the same table,
+  /// so the Bookmarks tab still has it, still marked read.
+  ///
+  /// Un-bookmarking a read article puts it back in scope here, as the ordinary
+  /// read article it now is, until the next [retireAllRead] deletes it for
+  /// real. That lag matches how every other read-state change reaches this
+  /// list.
   (String, List<Object?>) _visibilityClause(int? folderId, bool showRead) {
     final buf = StringBuffer();
     final args = <Object?>[];
@@ -136,8 +146,8 @@ class ArticleRepository {
       buf.write('f.folder_id = ? AND ');
       args.add(folderId);
     }
-    buf.write('a.is_blocked = 0');
-    if (!showRead) buf.write(' AND (a.is_read = 0 OR a.is_saved = 1)');
+    buf.write('a.is_blocked = 0 AND NOT (a.is_read = 1 AND a.is_saved = 1)');
+    if (!showRead) buf.write(' AND a.is_read = 0');
     return (buf.toString(), args);
   }
 

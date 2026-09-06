@@ -16,7 +16,7 @@ import '../services/share_service.dart';
 import '../utils/day_grouping.dart';
 import '../widgets/article_card.dart';
 import '../widgets/day_header.dart';
-import '../widgets/fetching_indicator.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/keyword_alerts_panel.dart';
 import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/notification_banner.dart';
@@ -363,7 +363,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
           NotificationBanner(key: _bannerKey),
           Expanded(
             child: _loading
-                ? const Center(child: FetchingIndicator(size: 40))
+                ? Center(
+                    child:
+                        SpinningRefreshIcon(size: 40, color: scheme.primary))
                 : _buildList(l10n, scheme),
           ),
         ],

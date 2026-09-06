@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../widgets/fetching_indicator.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import '../utils/diag_log.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
@@ -111,7 +111,9 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       ),
       body: _loading
-          ? const Center(child: FetchingIndicator(size: 40))
+          ? Center(
+              child: SpinningRefreshIcon(
+                  size: 40, color: theme.colorScheme.primary))
           : _lastQuery.isEmpty
               ? const SizedBox.shrink()
               : _results.isEmpty
