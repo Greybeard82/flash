@@ -1046,29 +1046,23 @@ abstract class AppLocalizations {
   /// **'Apply'**
   String get apply;
 
-  /// No description provided for @notifications.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications'**
-  String get notifications;
-
   /// No description provided for @unreadCountNotification.
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{1 unread article} other{{count} unread articles}}'**
   String unreadCountNotification(int count);
 
-  /// No description provided for @unreadCountBadge.
+  /// No description provided for @iconBadge.
   ///
   /// In en, this message translates to:
-  /// **'Unread count badge'**
-  String get unreadCountBadge;
+  /// **'Icon badge'**
+  String get iconBadge;
 
-  /// No description provided for @unreadCountBadgeSubtitle.
+  /// No description provided for @moreSettings.
   ///
   /// In en, this message translates to:
-  /// **'Show the unread count on the app icon. Android only badges an icon from a notification, so Flash keeps a silent one in the shade. Samsung shows the number; a Pixel shows a dot.'**
-  String get unreadCountBadgeSubtitle;
+  /// **'More settings'**
+  String get moreSettings;
 
   /// Label for the switch that keeps read articles in the list.
   ///

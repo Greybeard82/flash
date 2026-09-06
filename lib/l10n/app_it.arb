@@ -171,15 +171,14 @@
   "oldestFirst": "Meno recenti"
 ,
   "apply": "Applica",
-  "notifications": "Notifiche",
   "unreadCountNotification": "{count, plural, one{1 articolo non letto} other{{count} articoli non letti}}",
   "@unreadCountNotification": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "unreadCountBadge": "Contatore non letti",
-  "unreadCountBadgeSubtitle": "Mostra il numero di articoli non letti sull'icona dell'app. Android segna un'icona solo tramite una notifica, quindi Flash ne tiene una silenziosa. Samsung mostra il numero, un Pixel un puntino.",
+  "iconBadge": "Contatore icona",
+  "moreSettings": "Altre impostazioni",
   "showRead": "Mostra letti",
   "showReadSubtitle": "Mantieni gli articoli letti fino al prossimo aggiornamento",
   "dayToday": "Oggi",

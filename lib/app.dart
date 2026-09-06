@@ -5,12 +5,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'repositories/settings_repository.dart';
 import 'services/alert_navigation_intent.dart';
+import 'services/alerts_changed_notifier.dart';
+import 'repositories/alert_match_repository.dart';
 import 'services/settings_notifier.dart';
 import 'screens/feed_screen.dart';
 import 'screens/feeds_screen.dart';
+import 'screens/alerts_screen.dart';
 import 'screens/bookmarks_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/settings_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/form_factor.dart';
 import 'widgets/global_loading_indicator.dart';
@@ -259,9 +261,14 @@ class _AppShell extends StatefulWidget {
   State<_AppShell> createState() => _AppShellState();
 }
 
+/// Alerts' slot in the bottom nav and the rail — Settings' old index, now
+/// that Settings is reached from the Quick Settings panel instead.
+const int kAlertsNavIndex = 3;
+
 class _AppShellState extends State<_AppShell> {
   int _currentIndex = 0;
   bool _onboardingComplete = true; // assume complete until checked
+  int _alertsCount = 0;
 
   // Incremented each time the Feed tab is tapped while already on Feed —
   // triggers a reload via didUpdateWidget without remounting FeedScreen.
@@ -272,26 +279,41 @@ class _AppShellState extends State<_AppShell> {
     super.initState();
     _checkOnboarding();
     AlertNavigationIntent.instance.addListener(_onAlertsRequested);
+    AlertsChangedNotifier.instance.addListener(_refreshAlertsCount);
+    _refreshAlertsCount();
   }
 
   @override
   void dispose() {
     AlertNavigationIntent.instance.removeListener(_onAlertsRequested);
+    AlertsChangedNotifier.instance.removeListener(_refreshAlertsCount);
     super.dispose();
   }
 
-  /// A keyword-alert notification was tapped. The Alerts tab lives inside
-  /// FeedScreen's pill row, so this half of the journey only has to put the
-  /// Flash destination on screen; FeedScreen calls
-  /// [AlertNavigationIntent.consumePending] to select the pill itself.
+  /// A keyword-alert notification was tapped. Alerts is its own destination
+  /// now, so this puts the nav bar on it.
   ///
-  /// The flag is deliberately *not* cleared here. FeedScreen may not exist yet
-  /// on a cold start -- the tap is recorded in `main()`, before any of this is
-  /// built -- and clearing it on the way past would leave the user looking at
-  /// an ordinary feed with nothing left to say why they opened the app.
+  /// The flag is deliberately *not* cleared here. AlertsScreen calls
+  /// [AlertNavigationIntent.consumePending] to reload and scroll to the top,
+  /// and it may not exist yet on a cold start -- the tap is recorded in
+  /// `main()`, before any of this is built -- so clearing it on the way past
+  /// would land the user on an Alerts list left wherever they last scrolled
+  /// it, with nothing to say why the app opened.
   void _onAlertsRequested() {
-    if (!mounted || _currentIndex == 0) return;
-    setState(() => _currentIndex = 0);
+    if (!mounted || _currentIndex == kAlertsNavIndex) return;
+    setState(() => _currentIndex = kAlertsNavIndex);
+  }
+
+  /// The number on the Alerts destination.
+  ///
+  /// `totalEntryCount()` -- every entry, read and unread alike -- because that
+  /// is exactly what the Alerts pill showed before it became a destination.
+  /// Re-read whenever the alerts change and on every tab switch, which is the
+  /// same reach the pill had: it refreshed when FeedScreen reloaded, so a
+  /// background fetch was never live there either.
+  Future<void> _refreshAlertsCount() async {
+    final count = await AlertMatchRepository().totalEntryCount();
+    if (mounted && count != _alertsCount) setState(() => _alertsCount = count);
   }
 
   Future<void> _checkOnboarding() async {
@@ -313,6 +335,8 @@ class _AppShellState extends State<_AppShell> {
       setState(() => _feedRefreshTrigger++);
     } else {
       setState(() => _currentIndex = index);
+      // Cheap, and it is the moment the number is about to be looked at.
+      unawaited(_refreshAlertsCount());
     }
   }
 
@@ -334,10 +358,7 @@ class _AppShellState extends State<_AppShell> {
             ),
             const FeedsScreen(),
             const BookmarksScreen(),
-            SettingsScreen(
-              themeModeNotifier: widget.themeModeNotifier,
-              newspaperModeNotifier: widget.newspaperModeNotifier,
-            ),
+            const AlertsScreen(),
           ],
         ),
         const Positioned(
@@ -349,6 +370,15 @@ class _AppShellState extends State<_AppShell> {
       ],
     );
   }
+
+  /// The bell, with the entry count on it when there is one.
+  ///
+  /// The count came with the feature: the Alerts pill carried it, and moving
+  /// Alerts to the nav bar without it would have quietly dropped the only
+  /// place the app says how much the keywords have caught.
+  Widget _alertsIcon(IconData icon) => _alertsCount > 0
+      ? Badge.count(count: _alertsCount, child: Icon(icon))
+      : Icon(icon);
 
   @override
   Widget build(BuildContext context) {
@@ -374,9 +404,9 @@ class _AppShellState extends State<_AppShell> {
         label: Text(l10n.bookmarks),
       ),
       NavigationRailDestination(
-        icon: const Icon(Icons.settings_outlined),
-        selectedIcon: const Icon(Icons.settings_rounded),
-        label: Text(l10n.settings),
+        icon: _alertsIcon(Icons.notifications_none_rounded),
+        selectedIcon: _alertsIcon(Icons.notifications_active_rounded),
+        label: Text(l10n.alertsTab),
       ),
     ];
 
@@ -448,9 +478,9 @@ class _AppShellState extends State<_AppShell> {
               label: l10n.bookmarks,
             ),
             BottomNavigationBarItem(
-              icon: const Icon(Icons.settings_outlined),
-              activeIcon: const Icon(Icons.settings_rounded),
-              label: l10n.settings,
+              icon: _alertsIcon(Icons.notifications_none_rounded),
+              activeIcon: _alertsIcon(Icons.notifications_active_rounded),
+              label: l10n.alertsTab,
             ),
           ],
         ) : null,

@@ -16,6 +16,7 @@ import '../repositories/keyword_alert_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../widgets/feed_card.dart';
+import '../widgets/quick_settings_action.dart';
 import '../l10n/app_localizations.dart';
 
 class FeedsScreen extends StatefulWidget {
@@ -182,6 +183,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
       appBar: AppBar(
         title: Text(l10n.categories),
         centerTitle: false,
+        actions: const [QuickSettingsAction()],
       ),
       // One entry point. Creating a category happens inside the add-feed
       // sheet, where it is needed — a feed cannot be added without one.

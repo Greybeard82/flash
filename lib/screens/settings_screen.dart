@@ -12,19 +12,16 @@ import '../repositories/settings_repository.dart';
 import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
-import '../services/refresh_service.dart';
-import '../services/unread_badge_service.dart';
-import '../services/settings_notifier.dart';
 
+/// The full settings screen.
+///
+/// No longer a bottom-nav destination: it is pushed from "More settings" at
+/// the bottom of the Quick Settings panel, which every top-level screen can
+/// open. It took a theme and a Newspaper-mode notifier for as long as it was
+/// built by the app shell, and read neither — both are gone, so this is
+/// pushable from anywhere with nothing to thread through.
 class SettingsScreen extends StatefulWidget {
-  final ValueNotifier<String> themeModeNotifier;
-  final ValueNotifier<bool> newspaperModeNotifier;
-
-  const SettingsScreen({
-    super.key,
-    required this.themeModeNotifier,
-    required this.newspaperModeNotifier,
-  });
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -64,16 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final s = await _settingsRepo.getAll();
     if (mounted) setState(() => _settings = s);
-  }
-
-  Future<void> _save(String key, String value) async {
-    await LoadingController.instance.run(() async {
-      await _settingsRepo.set(key, value);
-      await _load();
-    }, label: 'Saving');
-    // FeedScreen is kept alive in an IndexedStack and never rebuilds on a tab
-    // switch, so it has to be told rather than left to notice.
-    SettingsNotifier.instance.settingsChanged();
   }
 
   Future<void> _connectGoogle() async {
@@ -245,43 +232,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Expanded(
             child: ListView(
         children: [
-          // ── Refresh ──
-          _sectionHeader(l10n.refresh),
-          _dropdown<int>(
-            title: l10n.backgroundRefreshInterval,
-            value: s.refreshIntervalMinutes,
-            items: [
-              DropdownMenuItem(value: 15, child: Text(l10n.every15Minutes)),
-              DropdownMenuItem(value: 30, child: Text(l10n.every30Minutes)),
-              DropdownMenuItem(value: 60, child: Text(l10n.everyHour)),
-              DropdownMenuItem(value: 180, child: Text(l10n.every3Hours)),
-              DropdownMenuItem(value: 360, child: Text(l10n.every6Hours)),
-              DropdownMenuItem(value: 0, child: Text(l10n.manualOnly)),
-            ],
-            onChanged: (v) async {
-              if (v == null) return;
-              await _save('refresh_interval_minutes', v.toString());
-              final refreshSvc = RefreshService(_settingsRepo);
-              await refreshSvc.schedulePeriodicRefresh(forceReschedule: true);
-            },
-          ),
-
-          // ── Notifications ──
-          _sectionHeader(l10n.notifications),
-          SwitchListTile(
-            title: Text(l10n.unreadCountBadge),
-            subtitle: Text(l10n.unreadCountBadgeSubtitle),
-            value: s.unreadBadgeNotification,
-            onChanged: (v) async {
-              await _save(kUnreadBadgeSettingKey, v.toString());
-              // Turning it off should take the notification down now, not at
-              // whatever point the unread count next happens to change.
-              await UnreadBadgeService.instance.onSettingChanged(enabled: v);
-            },
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          ),
-
           // ── Local backup file ──
           _sectionHeader(l10n.localBackup),
           _buildLocalBackupSection(l10n),
@@ -441,24 +391,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
-
-  Widget _dropdown<T>({
-    required String title,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return ListTile(
-      title: Text(title),
-      trailing: DropdownButton<T>(
-        value: value,
-        items: items,
-        onChanged: onChanged,
-        underline: const SizedBox.shrink(),
-        alignment: Alignment.centerRight,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-    );
-  }
-
 }

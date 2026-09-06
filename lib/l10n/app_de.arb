@@ -171,15 +171,14 @@
   "oldestFirst": "Älteste"
 ,
   "apply": "Übernehmen",
-  "notifications": "Benachrichtigungen",
   "unreadCountNotification": "{count, plural, one{1 ungelesener Artikel} other{{count} ungelesene Artikel}}",
   "@unreadCountNotification": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "unreadCountBadge": "Zähler für Ungelesene",
-  "unreadCountBadgeSubtitle": "Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Android setzt einen Zähler nur über eine Benachrichtigung, daher behält Flash eine stumme in der Leiste. Samsung zeigt die Zahl, ein Pixel einen Punkt.",
+  "iconBadge": "Symbol-Zähler",
+  "moreSettings": "Weitere Einstellungen",
   "showRead": "Gelesene anzeigen",
   "showReadSubtitle": "Gelesene Artikel bis zur nächsten Aktualisierung behalten",
   "dayToday": "Heute",

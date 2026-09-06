@@ -12,12 +12,10 @@
 //  3. Short folder names still produce a wide-enough target
 //  4. Tapping a tab reports the right index
 //  5. Unread counts render inline with the label, and hide entirely at zero
-//  6. The Alerts pill: absent unless asked for, always last when present, and
-//     an ordinary tab in every other respect
 //
-// The Alerts pill is opt-in through `alertsVisible` because it is the only tab
-// that is not a folder — FeedScreen shows it only once alerts exist, and the
-// tab bar must be indistinguishable from its old self when it is off.
+// The Alerts pill this file used to cover is gone: Alerts is a bottom-nav
+// destination now (lib/screens/alerts_screen.dart), so the tab bar is folders
+// again and nothing else.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -34,8 +32,6 @@ Widget _harness({
   int selectedIndex = 0,
   Map<int, int> folderUnreadCounts = const {},
   int allUnreadCount = 0,
-  bool alertsVisible = false,
-  int alertsCount = 0,
   ValueChanged<int>? onTabSelected,
 }) {
   return MaterialApp(
@@ -56,8 +52,6 @@ Widget _harness({
             selectedIndex: selectedIndex,
             folderUnreadCounts: folderUnreadCounts,
             allUnreadCount: allUnreadCount,
-            alertsVisible: alertsVisible,
-            alertsCount: alertsCount,
             onTabSelected: onTabSelected ?? (_) {},
           ),
         ],
@@ -119,26 +113,6 @@ void main() {
 
       // Tabs are keyed folder_tab_0 (All), folder_tab_1..n.
       for (var i = 0; i <= 3; i++) {
-        final size = tapTargetOf(tester, i);
-        expect(size.width, greaterThanOrEqualTo(48.0), reason: 'tab $i width');
-        expect(size.height, kPillHeight, reason: 'tab $i height');
-      }
-    });
-
-    testWidgets('the Alerts pill has the same tap target as every other pill',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech'), _folder(3, 'UK')],
-        alertsVisible: true,
-        alertsCount: 4,
-      ));
-      await tester.pumpAndSettle();
-
-      // The bound goes to 4 rather than 3: All, three folders, then Alerts.
-      // Looping only to 3 would have left the one new pill — the only one with
-      // an icon competing for the chip's width — as the single tab in the row
-      // nothing checked.
-      for (var i = 0; i <= 4; i++) {
         final size = tapTargetOf(tester, i);
         expect(size.width, greaterThanOrEqualTo(48.0), reason: 'tab $i width');
         expect(size.height, kPillHeight, reason: 'tab $i height');
@@ -229,103 +203,4 @@ void main() {
     });
   });
 
-  group('the Alerts pill', () {
-    testWidgets('nothing changes at all when it is off', (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        alertsVisible: false,
-        // A count is supplied deliberately: the flag decides, not the number.
-        // A pill that appeared as soon as a count arrived would show up for
-        // users who have never configured a keyword.
-        alertsCount: 9,
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Alerts'), findsNothing);
-      expect(find.textContaining('Alerts'), findsNothing);
-      expect(find.byKey(const ValueKey('folder_tab_3')), findsNothing,
-          reason: 'the row is All + two folders and stops there');
-      expect(find.byKey(const ValueKey('folder_tab_2')), findsOneWidget);
-    });
-
-    testWidgets('appears last, after every folder', (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming'), _folder(2, 'Tech')],
-        alertsVisible: true,
-      ));
-      await tester.pumpAndSettle();
-
-      // Last, not first, so folder index i keeps meaning folders[i - 1].
-      // Inserting it anywhere else renumbers every folder tab and every
-      // selectedIndex FeedScreen holds.
-      expect(find.byKey(const ValueKey('folder_tab_3')), findsOneWidget);
-      final alerts = tester.getTopLeft(find.byKey(const ValueKey('folder_tab_3')));
-      final lastFolder = tester.getTopLeft(find.byKey(const ValueKey('folder_tab_2')));
-      expect(alerts.dx, greaterThan(lastFolder.dx));
-    });
-
-    testWidgets('carries its count in the label, like every other pill',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming')],
-        alertsVisible: true,
-        alertsCount: 3,
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Alerts (3)'), findsOneWidget);
-    });
-
-    testWidgets('hides its count at zero, like every other pill',
-        (tester) async {
-      await tester.pumpWidget(_harness(
-        folders: [_folder(1, 'Gaming')],
-        alertsVisible: true,
-        alertsCount: 0,
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Alerts'), findsOneWidget);
-      expect(find.textContaining('(0)'), findsNothing);
-    });
-
-    testWidgets('tapping it reports folders.length + 1', (tester) async {
-      int? tapped;
-      final folders = [_folder(1, 'Gaming'), _folder(2, 'Tech')];
-      await tester.pumpWidget(_harness(
-        folders: folders,
-        alertsVisible: true,
-        onTabSelected: (i) => tapped = i,
-      ));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(ValueKey('folder_tab_${folders.length + 1}')));
-      await tester.pumpAndSettle();
-
-      expect(tapped, folders.length + 1,
-          reason: 'index 0 is All and 1..n are the folders, so Alerts is n+1 '
-              '— the index FeedScreen maps to kAlertsScope');
-    });
-
-    testWidgets('a user with no folders can still reach it', (tester) async {
-      // The pill row is hidden entirely for a one-folder library, so an Alerts
-      // tab that only existed alongside folders would be unreachable for
-      // exactly the smallest libraries. Here it is index 1 with no folders at
-      // all, which is the shape that case has to render.
-      int? tapped;
-      await tester.pumpWidget(_harness(
-        folders: const [],
-        alertsVisible: true,
-        alertsCount: 2,
-        onTabSelected: (i) => tapped = i,
-      ));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Alerts (2)'), findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('folder_tab_1')));
-      await tester.pumpAndSettle();
-
-      expect(tapped, 1);
-    });
-  });
 }

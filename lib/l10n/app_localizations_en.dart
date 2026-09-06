@@ -539,9 +539,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apply => 'Apply';
 
   @override
-  String get notifications => 'Notifications';
-
-  @override
   String unreadCountNotification(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -553,11 +550,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get unreadCountBadge => 'Unread count badge';
+  String get iconBadge => 'Icon badge';
 
   @override
-  String get unreadCountBadgeSubtitle =>
-      'Show the unread count on the app icon. Android only badges an icon from a notification, so Flash keeps a silent one in the shade. Samsung shows the number; a Pixel shows a dot.';
+  String get moreSettings => 'More settings';
 
   @override
   String get showRead => 'Show read';

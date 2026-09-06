@@ -12,6 +12,7 @@ import '../services/read_state_notifier.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
+import '../widgets/quick_settings_action.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -151,6 +152,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       appBar: AppBar(
         title: Text(l10n.bookmarks),
         centerTitle: false,
+        actions: const [QuickSettingsAction()],
       ),
       body: _loading
           ? const Center(child: FetchingIndicator(size: 40))

@@ -17,24 +17,6 @@ class FolderTabBar extends StatefulWidget implements PreferredSizeWidget {
   final ValueChanged<int> onTabSelected;
   final VoidCallback? onMarkAllRead;
 
-  /// Whether to append the Alerts pill after the folders.
-  ///
-  /// Off by default so every existing construction site keeps exactly the tab
-  /// set it had, and so a user with no alert keywords is not offered a tab
-  /// that can only ever be empty.
-  final bool alertsVisible;
-
-  /// Cards on the Alerts tab — **total entries, read or unread**, unlike every
-  /// other count in this bar.
-  ///
-  /// The folder pills count what is left to read, because that is the number
-  /// that says whether opening the folder is worth it. Alerts is a permanent
-  /// record of what the keywords caught, so a count that drained to zero as
-  /// the user read through it would read as "your alerts were deleted" rather
-  /// than "you are up to date". Two numbers that look alike in the same row
-  /// and mean different things, deliberately.
-  final int alertsCount;
-
   const FolderTabBar({
     super.key,
     required this.folders,
@@ -43,8 +25,6 @@ class FolderTabBar extends StatefulWidget implements PreferredSizeWidget {
     required this.allUnreadCount,
     required this.onTabSelected,
     this.onMarkAllRead,
-    this.alertsVisible = false,
-    this.alertsCount = 0,
   });
 
   @override
@@ -93,17 +73,6 @@ class _FolderTabBarState extends State<FolderTabBar> {
             label: f.name,
             count: widget.folderUnreadCounts[f.id] ?? 0,
           )),
-      // Appended last so folder indices keep meaning `folders[i - 1]` and
-      // nothing downstream has to renumber; Alerts is always the final index.
-      if (widget.alertsVisible)
-        _TabItem(
-          label: l10n.alertsTab,
-          count: widget.alertsCount,
-          // The only pill that carries an icon. Alerts is not a folder — it
-          // lists articles the folders may no longer contain — and in a row of
-          // otherwise identical chips the label alone does not say so.
-          icon: Icons.notifications_active_outlined,
-        ),
     ];
 
     // Transparent: this lives in AppBar.bottom now, and the app bar paints
@@ -123,7 +92,6 @@ class _FolderTabBarState extends State<FolderTabBar> {
               tabKey: _keyFor(i),
               label: tab.label,
               count: tab.count,
-              icon: tab.icon,
               isSelected: isSelected,
               accent: accent,
               onTap: () => widget.onTabSelected(i),
@@ -139,16 +107,14 @@ class _FolderTabBarState extends State<FolderTabBar> {
 class _TabItem {
   final String label;
   final int count;
-  final IconData? icon;
 
-  const _TabItem({required this.label, required this.count, this.icon});
+  const _TabItem({required this.label, required this.count});
 }
 
 class _FolderTab extends StatelessWidget {
   final GlobalKey tabKey;
   final String label;
   final int count;
-  final IconData? icon;
   final bool isSelected;
   final Color accent;
   final VoidCallback onTap;
@@ -159,7 +125,6 @@ class _FolderTab extends StatelessWidget {
     required this.tabKey,
     required this.label,
     required this.count,
-    this.icon,
     required this.isSelected,
     required this.accent,
     required this.onTap,
@@ -217,20 +182,7 @@ class _FolderTab extends StatelessWidget {
                 width: 1,
               ),
             ),
-            child: icon == null
-                ? text
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Sized to roughly the label's own cap height rather
-                      // than the 18–24 an icon usually gets: anything larger
-                      // stops reading as part of the label and starts reading
-                      // as a button sitting inside the pill.
-                      Icon(icon, size: 14, color: labelColor),
-                      const SizedBox(width: 5),
-                      text,
-                    ],
-                  ),
+            child: text,
           ),
         ),
       ),

@@ -544,9 +544,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get apply => 'Übernehmen';
 
   @override
-  String get notifications => 'Benachrichtigungen';
-
-  @override
   String unreadCountNotification(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -558,11 +555,10 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get unreadCountBadge => 'Zähler für Ungelesene';
+  String get iconBadge => 'Symbol-Zähler';
 
   @override
-  String get unreadCountBadgeSubtitle =>
-      'Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Android setzt einen Zähler nur über eine Benachrichtigung, daher behält Flash eine stumme in der Leiste. Samsung zeigt die Zahl, ein Pixel einen Punkt.';
+  String get moreSettings => 'Weitere Einstellungen';
 
   @override
   String get showRead => 'Gelesene anzeigen';

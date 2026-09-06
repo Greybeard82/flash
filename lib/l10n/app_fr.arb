@@ -171,15 +171,14 @@
   "oldestFirst": "Anciens"
 ,
   "apply": "Appliquer",
-  "notifications": "Notifications",
   "unreadCountNotification": "{count, plural, one{1 article non lu} other{{count} articles non lus}}",
   "@unreadCountNotification": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "unreadCountBadge": "Pastille de non-lus",
-  "unreadCountBadgeSubtitle": "Affiche le nombre d'articles non lus sur l'icône de l'app. Android ne marque une icône qu'à partir d'une notification, Flash en garde donc une silencieuse. Samsung affiche le nombre, un Pixel une pastille.",
+  "iconBadge": "Pastille de l'icône",
+  "moreSettings": "Plus de paramètres",
   "showRead": "Afficher les lus",
   "showReadSubtitle": "Garder les articles lus jusqu'à la prochaine actualisation",
   "dayToday": "Aujourd'hui",

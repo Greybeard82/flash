@@ -544,9 +544,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get apply => 'Applica';
 
   @override
-  String get notifications => 'Notifiche';
-
-  @override
   String unreadCountNotification(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -558,11 +555,10 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
-  String get unreadCountBadge => 'Contatore non letti';
+  String get iconBadge => 'Contatore icona';
 
   @override
-  String get unreadCountBadgeSubtitle =>
-      'Mostra il numero di articoli non letti sull\'icona dell\'app. Android segna un\'icona solo tramite una notifica, quindi Flash ne tiene una silenziosa. Samsung mostra il numero, un Pixel un puntino.';
+  String get moreSettings => 'Altre impostazioni';
 
   @override
   String get showRead => 'Mostra letti';

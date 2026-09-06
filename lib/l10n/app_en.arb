@@ -214,15 +214,14 @@
   "oldestFirst": "Oldest"
 ,
   "apply": "Apply",
-  "notifications": "Notifications",
   "unreadCountNotification": "{count, plural, one{1 unread article} other{{count} unread articles}}",
   "@unreadCountNotification": {
     "placeholders": {
       "count": { "type": "int" }
     }
   },
-  "unreadCountBadge": "Unread count badge",
-  "unreadCountBadgeSubtitle": "Show the unread count on the app icon. Android only badges an icon from a notification, so Flash keeps a silent one in the shade. Samsung shows the number; a Pixel shows a dot.",
+  "iconBadge": "Icon badge",
+  "moreSettings": "More settings",
   "showRead": "Show read",
   "@showRead": {
     "description": "Label for the switch that keeps read articles in the list."

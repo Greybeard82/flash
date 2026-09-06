@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../repositories/settings_repository.dart';
+import '../screens/settings_screen.dart';
+import '../services/refresh_service.dart';
 import '../services/settings_notifier.dart';
+import '../services/unread_badge_service.dart';
 import '../theme/app_theme.dart';
 import 'bubble_panel.dart';
 
@@ -68,6 +71,8 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   late String _palette;
   late bool _markReadOnScroll;
   late bool _markAllReadConfirm;
+  late bool _iconBadge;
+  late int _refreshIntervalMinutes;
 
   @override
   void initState() {
@@ -77,6 +82,8 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
     _palette = widget.initial.colorPalette;
     _markReadOnScroll = widget.initial.markReadOnScroll;
     _markAllReadConfirm = widget.initial.markAllReadConfirm;
+    _iconBadge = widget.initial.unreadBadgeNotification;
+    _refreshIntervalMinutes = widget.initial.refreshIntervalMinutes;
   }
 
   Future<void> _setTheme(String value) async {
@@ -116,6 +123,42 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
     setState(() => _markAllReadConfirm = value);
     await _repo.set('mark_all_read_confirm', value.toString());
     SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// Rescheduling is the whole point, not a side effect: the stored value is
+  /// only ever read when the periodic task is registered, so writing it
+  /// without `forceReschedule` leaves WorkManager running on the old interval
+  /// until something else happens to re-register it.
+  Future<void> _setRefreshInterval(int value) async {
+    setState(() => _refreshIntervalMinutes = value);
+    await _repo.set('refresh_interval_minutes', value.toString());
+    await RefreshService(_repo).schedulePeriodicRefresh(forceReschedule: true);
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// Turning it off takes the notification down now rather than at whatever
+  /// point the unread count next happens to change.
+  Future<void> _setIconBadge(bool value) async {
+    setState(() => _iconBadge = value);
+    await _repo.set(kUnreadBadgeSettingKey, value.toString());
+    await UnreadBadgeService.instance.onSettingChanged(enabled: value);
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// Dismisses the bubble, then pushes Settings.
+  ///
+  /// The push uses the *navigator* captured before the dismiss, not this
+  /// widget's context afterwards. Dismissing tears this subtree down, so
+  /// reaching for `context` on the far side is reading a context that may
+  /// already be unmounted — the same hazard `_reopenAsKeywordPanel` documents
+  /// in feed_screen.dart, where the fix is likewise to do the work from
+  /// something that outlives the panel.
+  void _openFullSettings() {
+    final navigator = Navigator.of(context);
+    BubblePanelScope.maybeOf(context)?.dismiss();
+    navigator.push(
+      MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+    );
   }
 
   @override
@@ -185,6 +228,29 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
             ),
           ),
 
+        const SizedBox(height: 12),
+        // Above the switches: how often the app fetches is the most
+        // consequential thing on this panel, and the only one here that
+        // changes what the device does while the app is closed.
+        Text(l10n.backgroundRefreshInterval, style: theme.textTheme.bodyMedium),
+        const SizedBox(height: 4),
+        DropdownButton<int>(
+          value: _refreshIntervalMinutes,
+          isExpanded: true,
+          underline: const SizedBox.shrink(),
+          items: [
+            DropdownMenuItem(value: 15, child: Text(l10n.every15Minutes)),
+            DropdownMenuItem(value: 30, child: Text(l10n.every30Minutes)),
+            DropdownMenuItem(value: 60, child: Text(l10n.everyHour)),
+            DropdownMenuItem(value: 180, child: Text(l10n.every3Hours)),
+            DropdownMenuItem(value: 360, child: Text(l10n.every6Hours)),
+            DropdownMenuItem(value: 0, child: Text(l10n.manualOnly)),
+          ],
+          onChanged: (v) {
+            if (v != null) _setRefreshInterval(v);
+          },
+        ),
+
         const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
@@ -212,6 +278,42 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
               Text(l10n.confirmMarkAllRead, style: theme.textTheme.bodyMedium),
           value: _markAllReadConfirm,
           onChanged: _setMarkAllReadConfirm,
+        ),
+        // No subtitle, deliberately. What the badge looks like depends on the
+        // launcher — a number on One UI, a dot on a Pixel — and explaining
+        // that here made a one-line toggle carry a paragraph about vendor
+        // launcher behaviour that nobody flicking a switch needs.
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.iconBadge, style: theme.textTheme.bodyMedium),
+          value: _iconBadge,
+          onChanged: _setIconBadge,
+        ),
+
+        const Divider(height: 20),
+        // The only way to the full Settings screen. It is reached from this
+        // panel rather than the nav bar, and this panel opens from all four
+        // top-level screens, so the route in is the same wherever you are.
+        InkWell(
+          onTap: _openFullSettings,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Row(
+              children: [
+                Icon(Icons.settings_outlined,
+                    size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(l10n.moreSettings,
+                      style: theme.textTheme.bodyMedium),
+                ),
+                Icon(Icons.chevron_right_rounded,
+                    size: 20,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+              ],
+            ),
+          ),
         ),
       ],
     );
