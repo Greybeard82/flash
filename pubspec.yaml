@@ -70,11 +70,19 @@ dev_dependencies:
   fake_async: ^1.3.1
   flutter_launcher_icons: ^0.14.3
 
+# NOT the source of the shipped launcher icon. The icon in
+# android/app/src/main/res is hand-installed vector artwork — a gradient
+# background, a foreground, and a monochrome layer for Android 13 themed
+# icons — none of which this tool can generate from a flat PNG. Running it
+# would overwrite all three with rasterised copies and drop the monochrome
+# layer. Kept, pointed at the current artwork, so that if anyone does run it
+# they at least get the right picture; see
+# icon/Modern RSS reader app design/flash-icon/README.md.
 flutter_launcher_icons:
   android: true
-  image_path: "icon/app_icon.png"
-  adaptive_icon_background: "#95D0F2"
-  adaptive_icon_foreground: "icon/app_icon_foreground.png"
+  image_path: "icon/Modern RSS reader app design/flash-icon/png/flash-teal-dark-1024.png"
+  adaptive_icon_background: "#14A08B"
+  adaptive_icon_foreground: "icon/Modern RSS reader app design/flash-icon/png/flash-teal-dark-1024.png"
   min_sdk_android: 26
 
 flutter:

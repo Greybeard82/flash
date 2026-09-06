@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#95D0F2</color>
     <!-- Matches `darkBg` in lib/theme/app_theme.dart and NormalTheme's
          windowBackground, which is already this colour in both day and night.
          MainActivity replaces it at runtime with the app's active theme. -->

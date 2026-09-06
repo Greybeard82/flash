@@ -1,11 +1,12 @@
-// The four-action radial row has to fit on a narrow phone in every language.
+// The radial row has to fit on a narrow phone in every language.
 //
 // The geometry comment in `radial_menu.dart` computes the row's width from the
-// 64dp circles alone — 4x64 + 3x12 = 292 — but a `_RadialButton` is a Column
-// whose width is `max(64, labelWidth)`, so the real width is driven by the
-// labels. German's "Zusammenfassung" is far wider than its circle, and adding
-// the fourth (Delete) button consumed the slack that kept the three-button row
-// safe: the row overflowed a 360dp screen and the Delete button was clipped.
+// 64dp circles alone, but a `_RadialButton` is a Column whose width is
+// `max(64, labelWidth)`, so the real width is driven by the labels. German's
+// labels are far wider than their circles, and a row that once held four
+// buttons overflowed a 360dp screen with the last one clipped. Summary has
+// since moved to its own button on the card and the row is down to three, but
+// the labels are still what decide the width, so this stays pinned.
 //
 // These tests pin the fix — a `FittedBox(scaleDown)` around the whole layout —
 // by asserting the thing the user actually cares about: every action is fully
@@ -93,14 +94,14 @@ void main() {
   for (final locale in const [Locale('en'), Locale('de')]) {
     final tag = locale.languageCode;
 
-    testWidgets('$tag: all four actions are fully on screen at 360dp',
+    testWidgets('$tag: all three actions are fully on screen at 360dp',
         (tester) async {
       await _pump(tester,
           withDelete: true, locale: locale, size: narrowPhone);
 
       final rects = _circleRects(tester);
-      expect(rects, hasLength(5),
-          reason: 'four actions plus the close button');
+      expect(rects, hasLength(4),
+          reason: 'Bookmark, Share, Delete, plus the close button');
 
       for (final rect in rects) {
         expect(rect.left, greaterThanOrEqualTo(0.0),
@@ -111,12 +112,13 @@ void main() {
       }
     });
 
-    testWidgets('$tag: three actions still fit, unchanged', (tester) async {
+    testWidgets('$tag: two actions still fit, unchanged', (tester) async {
       await _pump(tester,
           withDelete: false, locale: locale, size: narrowPhone);
 
       final rects = _circleRects(tester);
-      expect(rects, hasLength(4), reason: 'three actions plus close');
+      expect(rects, hasLength(3),
+          reason: 'Bookmark and Share, plus the close button');
       for (final rect in rects) {
         expect(rect.left, greaterThanOrEqualTo(0.0));
         expect(rect.right, lessThanOrEqualTo(narrowPhone.width));
@@ -124,7 +126,7 @@ void main() {
     });
   }
 
-  testWidgets('no layout overflow is reported in German with four actions',
+  testWidgets('no layout overflow is reported in German with three actions',
       (tester) async {
     await _pump(tester,
         withDelete: true, locale: const Locale('de'), size: narrowPhone);

@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
 import '../utils/form_factor.dart';
+import '../screens/article_summary_sheet.dart';
 import 'radial_menu.dart';
 
 /// Pure per-pixel desaturation (Rec. 709 luma weights), used to grey out the
@@ -148,7 +149,11 @@ class ArticleCard extends StatelessWidget {
     final isTV = FormFactor.isTV;
 
     final content = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      // Asymmetric on purpose. The summary button supplies its own 6dp of
+      // right margin from inside its touch box (see [_SummaryButton]), so the
+      // card's own right inset is zero — the alternative was padding on top of
+      // padding and a button floating well short of the edge.
+      padding: const EdgeInsets.only(left: 16, right: 0, top: 10, bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -234,13 +239,16 @@ class ArticleCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 12),
-          // Thumbnail
+          // 6, down from 12: the summary button needs the room and the
+          // tightening is wanted rather than tolerated.
+          const SizedBox(width: 6),
           _ThumbnailWidget(
             article: article,
             feedTitle: article.feedTitle ?? '',
             dimmed: isRead,
           ),
+          const SizedBox(width: 2),
+          _SummaryButton(article: article, dimmed: isRead),
         ],
       ),
     );
@@ -547,6 +555,103 @@ class _ThumbnailWidget extends StatelessWidget {
             fontSize: 26,
             fontWeight: FontWeight.w700,
             color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The one-tap AI summary button, at the card's right edge.
+///
+/// Summary used to be a button in the long-press radial menu, which meant
+/// every summary cost a long-press, a wait for the menu to spread, and a
+/// second tap. It is the one action on a card people take repeatedly, so it
+/// gets a target of its own; the radial menu keeps the ones you reach for
+/// occasionally.
+///
+/// **Geometry.** 28dp of visible button, 72dp tall to match the thumbnail
+/// exactly, with the thumbnail's own 8dp corner radius. The touch box around
+/// it is 40dp wide: 6dp of invisible padding on each side, which is where the
+/// card's right margin comes from — the card itself now has a right inset of
+/// zero. The left 6dp sits in the card's own margin rather than over the
+/// thumbnail, deliberately: the whole card is one InkWell, so a hit box that
+/// reached back over the image would eat "open the article" taps in a strip
+/// the user cannot see.
+///
+/// That makes it 40x72 rather than the 48x48 this app holds itself to
+/// elsewhere. 48 is not reachable on this axis without taking 8dp off the
+/// card's own tap target, and the trade is a bad one: at 40x72 the button is
+/// 2880dp² against a 48dp square's 2304dp², so it is a *larger* thing to hit,
+/// just a differently shaped one.
+///
+/// The splash stays on the painted 28dp rather than filling the touch box:
+/// an ink ripple spreading into empty card margin reads as a misdrawn button.
+///
+/// **Colour.** `primaryContainer` under `onPrimaryContainer`, straight from
+/// the active [ColorScheme]. Every palette in `kPaletteSeeds` generates that
+/// pair through `ColorScheme.fromSeed`, which guarantees the contrast, and
+/// Newspaper mode resolves through the same scheme — so there is no
+/// palette-specific branching here and there should not be.
+class _SummaryButton extends StatelessWidget {
+  final Article article;
+  final bool dimmed;
+
+  const _SummaryButton({required this.article, required this.dimmed});
+
+  /// Visible width. The touch box is [_touchWidth].
+  static const double _visibleWidth = 28;
+  static const double _touchWidth = 40;
+  static const double _height = 72;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    void open() => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          builder: (_) => ArticleSummarySheet(article: article),
+        );
+
+    return _DimTransition(
+      dimmed: dimmed,
+      child: Tooltip(
+        message: l10n.summary,
+        // The outer box is the target; the InkWell inside only covers the
+        // painted 28dp. Opaque so the 6dp margins belong to this button and
+        // not to the card's own InkWell underneath — without it those strips
+        // would open the article, which is the one thing a user aiming here
+        // is not asking for. A tap on the visible part is claimed by the
+        // child, so the two never both fire.
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: open,
+          child: SizedBox(
+            width: _touchWidth,
+            height: _height,
+            child: Center(
+              child: Material(
+                color: theme.colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: open,
+                  child: SizedBox(
+                    width: _visibleWidth,
+                    height: _height,
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 18,
+                      color: theme.colorScheme.onPrimaryContainer,
+                      semanticLabel: l10n.summary,
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
