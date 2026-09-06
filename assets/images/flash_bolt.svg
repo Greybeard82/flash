@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- The Flash mark, bare: the same bolt path the launcher icon's foreground
+       layer draws, with the teal disc removed. Copied verbatim from
+       icon/Modern RSS reader app design/flash-icon/README.md so the in-app
+       bolt and the app icon are one shape rather than two that resemble each
+       other. Filled white and recoloured at paint time by FlashBolt, which is
+       why the fill here is arbitrary.
+
+       Kept in the same 512 square the icon uses, rather than cropped to the
+       bolt, so the mark sits in an icon slot with the proportions it has on
+       the launcher — and so the square's centre, which is what
+       RotationTransition spins the fetching indicator about, stays within
+       4/512 of the bolt's own bounding-box centre. -->
+  <path d="M317 44 L144 286 L231 292 L198 468 L376 202 L287 198 Z" fill="#FFFFFF"/>
+</svg>

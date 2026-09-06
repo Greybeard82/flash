@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/flash_bolt.dart';
 import '../repositories/settings_repository.dart';
 
 class OnboardingScreen extends StatelessWidget {
@@ -38,8 +39,7 @@ class OnboardingScreen extends StatelessWidget {
                     color: colorScheme.primaryContainer,
                     borderRadius: BorderRadius.circular(24),
                   ),
-                  child: Icon(
-                    Icons.bolt_rounded,
+                  child: FlashBolt(
                     size: 52,
                     color: colorScheme.onPrimaryContainer,
                   ),

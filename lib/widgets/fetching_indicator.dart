@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'flash_bolt.dart';
 
 /// Small app-bar indicator shown while feeds are fetching in the background.
 ///
@@ -64,16 +65,22 @@ class _FetchingIndicatorState extends State<FetchingIndicator>
 
   @override
   Widget build(BuildContext context) {
-    // The same glyph as the bottom nav's "Flash" tab, so the spinner and the
-    // static icon are literally one shape. A real bolt is asymmetric and will
-    // orbit slightly under continuous rotation rather than spin dead-centre —
-    // the hand-drawn symmetric shape this replaced existed to avoid exactly
-    // that. Shipped as asked; if the wobble reads as cheap on device, that is
-    // the trade-off to revisit.
+    // The same mark as the app icon and the nav tab, so the spinner and the
+    // static bolt are literally one shape.
+    //
+    // A real bolt is asymmetric and orbits rather than spinning dead-centre if
+    // its mass sits off the rotation axis — the hand-drawn symmetric shape
+    // that once lived here existed to avoid exactly that, and the Material
+    // glyph that replaced it accepted the trade. This asset is safe on that
+    // count by construction rather than by luck. Its path is framed in the
+    // icon's own 512 square, and the area centroid of that polygon is
+    // (259.5, 251.1) against a rotation axis at (256, 256): 6.0 units of
+    // offset, 1.17% of the glyph box, which is 0.24dp of orbit at the 20dp
+    // this renders at. Measured, not assumed — if the mark is ever redrawn,
+    // re-measure before trusting this comment.
     return RotationTransition(
       turns: _turns,
-      child: Icon(
-        Icons.bolt_outlined,
+      child: FlashBolt(
         size: widget.size,
         color: Theme.of(context).colorScheme.primary,
       ),

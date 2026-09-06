@@ -16,6 +16,7 @@ import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/form_factor.dart';
 import 'widgets/global_loading_indicator.dart';
+import 'widgets/flash_bolt.dart';
 
 /// Maps the persisted mode selector to Flutter's [ThemeMode]. Kept as a
 /// free function (rather than inline) so both the real DB-backed load path
@@ -389,8 +390,11 @@ class _AppShellState extends State<_AppShell> {
 
     final railDestinations = [
       NavigationRailDestination(
-        icon: const Icon(Icons.bolt_outlined),
-        selectedIcon: const Icon(Icons.bolt_rounded),
+        // One mark, not an outline/filled pair: NavigationRail already
+        // supplies the selected and unselected colours through IconTheme, and
+        // FlashBolt reads them.
+        icon: const FlashBolt(),
+        selectedIcon: const FlashBolt(),
         label: Text(l10n.appTitle),
       ),
       NavigationRailDestination(
@@ -463,8 +467,8 @@ class _AppShellState extends State<_AppShell> {
           onTap: _navigateTo,
           items: [
             BottomNavigationBarItem(
-              icon: const Icon(Icons.bolt_outlined),
-              activeIcon: const Icon(Icons.bolt_rounded),
+              icon: const FlashBolt(),
+              activeIcon: const FlashBolt(),
               label: l10n.appTitle,
             ),
             BottomNavigationBarItem(

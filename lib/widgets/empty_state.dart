@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
+import 'flash_bolt.dart';
 
 class EmptyState extends StatelessWidget {
   final VoidCallback onAddFeed;
@@ -16,8 +17,7 @@ class EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.bolt_rounded,
+            FlashBolt(
               size: 80,
               color: theme.colorScheme.primary,
             ),
