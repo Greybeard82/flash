@@ -171,6 +171,15 @@
   "oldestFirst": "Älteste"
 ,
   "apply": "Übernehmen",
+  "notifications": "Benachrichtigungen",
+  "unreadCountNotification": "{count, plural, one{1 ungelesener Artikel} other{{count} ungelesene Artikel}}",
+  "@unreadCountNotification": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unreadCountBadge": "Zähler für Ungelesene",
+  "unreadCountBadgeSubtitle": "Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Manche Launcher, auch der Pixel Launcher, können selbst keine Zahl anzeigen — dort sendet Flash eine stumme Benachrichtigung, damit das Symbol einen Zähler erhält.",
   "showRead": "Gelesene anzeigen",
   "showReadSubtitle": "Gelesene Artikel bis zur nächsten Aktualisierung behalten",
   "dayToday": "Heute",

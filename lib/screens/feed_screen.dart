@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
-import 'package:app_badge_plus/app_badge_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/alert_entry.dart';
@@ -24,6 +23,7 @@ import '../services/refresh_service.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
+import '../services/unread_badge_service.dart';
 import '../utils/day_grouping.dart';
 import '../utils/mark_read_gate.dart';
 import '../utils/constants.dart';
@@ -739,7 +739,7 @@ class _FeedScreenState extends State<FeedScreen>
       _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
     });
-    AppBadgePlus.updateBadge(allCount);
+    UnreadBadgeService.instance.update(allCount);
     unawaited(_warmTabCache(folders));
   }
 
@@ -791,7 +791,7 @@ class _FeedScreenState extends State<FeedScreen>
         UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts)
             .withZeroedScopes(_zeroedScopes);
     setState(() => _counts = suppressed);
-    AppBadgePlus.updateBadge(suppressed.all);
+    UnreadBadgeService.instance.update(suppressed.all);
   }
 
   Future<void> _reloadArticles({bool ownLaunchReturn = false}) async {
@@ -1274,7 +1274,7 @@ class _FeedScreenState extends State<FeedScreen>
       // difference between seen and unseen is the whole point.
       _alertMatchRepo.setReadForArticleIds(toWrite, isRead: true);
       _counts = _counts.applyManyRead(readFolderIds);
-      AppBadgePlus.updateBadge(_counts.all);
+      UnreadBadgeService.instance.update(_counts.all);
     }
 
     // UI dim update is debounced.
@@ -1322,7 +1322,7 @@ class _FeedScreenState extends State<FeedScreen>
           ]);
           _counts = _counts.applyRead(_folderOf(article));
         });
-        AppBadgePlus.updateBadge(_counts.all);
+        UnreadBadgeService.instance.update(_counts.all);
       }
     }
 
@@ -1369,7 +1369,7 @@ class _FeedScreenState extends State<FeedScreen>
       ]);
       _counts = _counts.applyRead(_folderOf(article));
     });
-    AppBadgePlus.updateBadge(_counts.all);
+    UnreadBadgeService.instance.update(_counts.all);
   }
 
   Future<void> _markUnread(Article article) async {
@@ -1387,7 +1387,7 @@ class _FeedScreenState extends State<FeedScreen>
       ]);
       _counts = _counts.applyUnread(_folderOf(article));
     });
-    AppBadgePlus.updateBadge(_counts.all);
+    UnreadBadgeService.instance.update(_counts.all);
   }
 
   Future<void> _toggleSaved(Article article) async {
@@ -1527,7 +1527,7 @@ class _FeedScreenState extends State<FeedScreen>
         _booting = true;
         _counts = _counts.clearedAll();
       });
-      AppBadgePlus.updateBadge(0);
+      UnreadBadgeService.instance.update(0);
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
         _lastFetchAt = DateTime.now();
@@ -1574,7 +1574,7 @@ class _FeedScreenState extends State<FeedScreen>
         _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       });
       _resetScrollToTop();
-      AppBadgePlus.updateBadge(allCount);
+      UnreadBadgeService.instance.update(allCount);
       await _refreshAlertsState();
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;

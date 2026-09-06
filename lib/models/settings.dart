@@ -60,6 +60,16 @@ class AppSettings {
   /// disabled is a trap.
   final bool markAllReadConfirm;
 
+  /// Whether the unread count may be carried to the launcher icon by a silent
+  /// notification, on launchers that cannot draw a badge themselves.
+  ///
+  /// Only consulted where the native badge is unavailable — the Pixel
+  /// Launcher, and stock Android generally. On a Samsung the count is drawn
+  /// directly on the icon and nothing is posted, so this setting has no effect
+  /// there. Defaults on: the badge is the point of the feature, and the
+  /// notification is silent and dismissible.
+  final bool unreadBadgeNotification;
+
   const AppSettings({
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
@@ -74,6 +84,7 @@ class AppSettings {
     this.newspaperMode = false,
     this.showRead = true,
     this.markAllReadConfirm = true,
+    this.unreadBadgeNotification = true,
     this.colorPalette = 'orange',
   });
 
@@ -99,6 +110,8 @@ class AppSettings {
       showRead: (map['show_read'] ?? 'true') == 'true',
       markAllReadConfirm:
           (map['mark_all_read_confirm'] ?? 'true') == 'true',
+      unreadBadgeNotification:
+          (map['unread_badge_notification'] ?? 'true') == 'true',
       colorPalette: map['color_palette'] ?? 'orange',
     );
   }
@@ -117,6 +130,7 @@ class AppSettings {
     bool? newspaperMode,
     bool? showRead,
     bool? markAllReadConfirm,
+    bool? unreadBadgeNotification,
     String? colorPalette,
   }) {
     return AppSettings(
@@ -133,6 +147,8 @@ class AppSettings {
       newspaperMode: newspaperMode ?? this.newspaperMode,
       showRead: showRead ?? this.showRead,
       markAllReadConfirm: markAllReadConfirm ?? this.markAllReadConfirm,
+      unreadBadgeNotification:
+          unreadBadgeNotification ?? this.unreadBadgeNotification,
       colorPalette: colorPalette ?? this.colorPalette,
     );
   }

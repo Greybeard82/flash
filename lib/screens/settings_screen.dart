@@ -13,6 +13,7 @@ import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
 import '../services/refresh_service.dart';
+import '../services/unread_badge_service.dart';
 import '../services/settings_notifier.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -263,6 +264,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final refreshSvc = RefreshService(_settingsRepo);
               await refreshSvc.schedulePeriodicRefresh(forceReschedule: true);
             },
+          ),
+
+          // ── Notifications ──
+          _sectionHeader(l10n.notifications),
+          SwitchListTile(
+            title: Text(l10n.unreadCountBadge),
+            subtitle: Text(l10n.unreadCountBadgeSubtitle),
+            value: s.unreadBadgeNotification,
+            onChanged: (v) async {
+              await _save(kUnreadBadgeSettingKey, v.toString());
+              // Turning it off should take the notification down now, not at
+              // whatever point the unread count next happens to change.
+              await UnreadBadgeService.instance.onSettingChanged(enabled: v);
+            },
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           ),
 
           // ── Local backup file ──

@@ -171,6 +171,15 @@
   "oldestFirst": "Antiguos"
 ,
   "apply": "Aplicar",
+  "notifications": "Notificaciones",
+  "unreadCountNotification": "{count, plural, one{1 artículo sin leer} other{{count} artículos sin leer}}",
+  "@unreadCountNotification": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unreadCountBadge": "Contador de no leídos",
+  "unreadCountBadgeSubtitle": "Muestra el número de artículos sin leer en el icono de la app. Algunos lanzadores, como el de Pixel, no pueden dibujar un número por sí mismos: allí Flash envía una notificación silenciosa para que el icono muestre el aviso.",
   "showRead": "Mostrar leídos",
   "showReadSubtitle": "Mantener los artículos leídos hasta la próxima actualización",
   "dayToday": "Hoy",

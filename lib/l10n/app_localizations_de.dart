@@ -544,6 +544,27 @@ class AppLocalizationsDe extends AppLocalizations {
   String get apply => 'Übernehmen';
 
   @override
+  String get notifications => 'Benachrichtigungen';
+
+  @override
+  String unreadCountNotification(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ungelesene Artikel',
+      one: '1 ungelesener Artikel',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get unreadCountBadge => 'Zähler für Ungelesene';
+
+  @override
+  String get unreadCountBadgeSubtitle =>
+      'Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Manche Launcher, auch der Pixel Launcher, können selbst keine Zahl anzeigen — dort sendet Flash eine stumme Benachrichtigung, damit das Symbol einen Zähler erhält.';
+
+  @override
   String get showRead => 'Gelesene anzeigen';
 
   @override

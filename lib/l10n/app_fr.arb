@@ -171,6 +171,15 @@
   "oldestFirst": "Anciens"
 ,
   "apply": "Appliquer",
+  "notifications": "Notifications",
+  "unreadCountNotification": "{count, plural, one{1 article non lu} other{{count} articles non lus}}",
+  "@unreadCountNotification": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unreadCountBadge": "Pastille de non-lus",
+  "unreadCountBadgeSubtitle": "Affiche le nombre d'articles non lus sur l'icône de l'app. Certains lanceurs, dont celui du Pixel, ne savent pas afficher un nombre eux-mêmes : Flash y envoie alors une notification silencieuse pour que l'icône porte une pastille.",
   "showRead": "Afficher les lus",
   "showReadSubtitle": "Garder les articles lus jusqu'à la prochaine actualisation",
   "dayToday": "Aujourd'hui",

@@ -539,6 +539,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get apply => 'Apply';
 
   @override
+  String get notifications => 'Notifications';
+
+  @override
+  String unreadCountNotification(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count unread articles',
+      one: '1 unread article',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get unreadCountBadge => 'Unread count badge';
+
+  @override
+  String get unreadCountBadgeSubtitle =>
+      'Show the unread count on the app icon. Some launchers, including the Pixel Launcher, can\'t draw a number themselves — there Flash posts a silent notification so the icon gets a badge.';
+
+  @override
   String get showRead => 'Show read';
 
   @override

@@ -214,6 +214,15 @@
   "oldestFirst": "Oldest"
 ,
   "apply": "Apply",
+  "notifications": "Notifications",
+  "unreadCountNotification": "{count, plural, one{1 unread article} other{{count} unread articles}}",
+  "@unreadCountNotification": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unreadCountBadge": "Unread count badge",
+  "unreadCountBadgeSubtitle": "Show the unread count on the app icon. Some launchers, including the Pixel Launcher, can't draw a number themselves — there Flash posts a silent notification so the icon gets a badge.",
   "showRead": "Show read",
   "@showRead": {
     "description": "Label for the switch that keeps read articles in the list."

@@ -545,6 +545,27 @@ class AppLocalizationsFr extends AppLocalizations {
   String get apply => 'Appliquer';
 
   @override
+  String get notifications => 'Notifications';
+
+  @override
+  String unreadCountNotification(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count articles non lus',
+      one: '1 article non lu',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get unreadCountBadge => 'Pastille de non-lus';
+
+  @override
+  String get unreadCountBadgeSubtitle =>
+      'Affiche le nombre d\'articles non lus sur l\'icône de l\'app. Certains lanceurs, dont celui du Pixel, ne savent pas afficher un nombre eux-mêmes : Flash y envoie alors une notification silencieuse pour que l\'icône porte une pastille.';
+
+  @override
   String get showRead => 'Afficher les lus';
 
   @override

@@ -1,8 +1,7 @@
-import 'dart:ui';
-
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'alert_navigation_intent.dart';
 import '../utils/diag_log.dart';
+import '../utils/device_localizations.dart';
 import 'package:workmanager/workmanager.dart';
 import '../l10n/app_localizations.dart';
 import '../models/alert_match.dart';
@@ -231,38 +230,11 @@ List<List<String>> _distinctKeywordSets(List<AlertMatch> matches) {
   return sets.values.toList();
 }
 
-/// The localisations the notification bodies are written in, or null when they
-/// could not be resolved.
+/// The localisations the notification bodies are written in.
 ///
-/// `lookupAppLocalizations` is a plain constructor call over generated
-/// constants -- no assets, no bundle, no binding -- so it is safe on the
-/// background WorkManager isolate, where `main()` never ran and
-/// `AppLocalizations.of(context)` has no context to read. The device locale
-/// comes from [PlatformDispatcher] for the same reason.
-///
-/// Wrapped because an unsupported or malformed locale throws, and a refresh
-/// that fetched every feed successfully must not be lost to a missing
-/// translation: the callers fall back to English rather than to nothing.
-AppLocalizations? _alertLocalizations() {
-  try {
-    const supported = ['en', 'de', 'es', 'fr', 'it'];
-    // The whole preferred list, not just `locale` (which is `locales.first`).
-    // MaterialApp resolves with basicLocaleListResolution, which walks the
-    // list — so a device set to [pt-BR, es-ES] renders the entire app in
-    // Spanish while `locale` still says pt. Reading only the first would put
-    // an English notification on top of a Spanish app.
-    var code = 'en';
-    for (final locale in PlatformDispatcher.instance.locales) {
-      if (supported.contains(locale.languageCode)) {
-        code = locale.languageCode;
-        break;
-      }
-    }
-    return lookupAppLocalizations(Locale(code));
-  } catch (_) {
-    return null;
-  }
-}
+/// Shared with the unread-count badge — see [deviceLocalizations] for why this
+/// cannot go through a BuildContext.
+AppLocalizations? _alertLocalizations() => deviceLocalizations();
 
 String _alertTitle(AppLocalizations? l10n) =>
     l10n?.alertNotificationTitle ?? 'Flash — keyword alert';

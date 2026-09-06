@@ -171,6 +171,15 @@
   "oldestFirst": "Meno recenti"
 ,
   "apply": "Applica",
+  "notifications": "Notifiche",
+  "unreadCountNotification": "{count, plural, one{1 articolo non letto} other{{count} articoli non letti}}",
+  "@unreadCountNotification": {
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "unreadCountBadge": "Contatore non letti",
+  "unreadCountBadgeSubtitle": "Mostra il numero di articoli non letti sull'icona dell'app. Alcuni launcher, compreso quello dei Pixel, non sanno disegnare un numero da soli: lì Flash invia una notifica silenziosa perché l'icona riceva un indicatore.",
   "showRead": "Mostra letti",
   "showReadSubtitle": "Mantieni gli articoli letti fino al prossimo aggiornamento",
   "dayToday": "Oggi",
