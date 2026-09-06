@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../repositories/settings_repository.dart';
 import '../utils/device_localizations.dart';
+import 'unread_widget_service.dart';
 import 'alert_navigation_intent.dart';
 
 const String kUnreadBadgeChannelId = 'flash_unread_count';
@@ -125,6 +126,14 @@ class UnreadBadgeService {
   Future<void> update(int count) async {
     final safe = count < 0 ? 0 : count;
     final badge = safe > kMaxBadgeCount ? kMaxBadgeCount : safe;
+
+    // The home screen widget rides along here rather than at this service's
+    // callers. Everything that changes the unread total already calls this,
+    // so hooking in at the one place means the widget cannot be updated in
+    // eight spots and forgotten in a ninth — and it shows the same number the
+    // badge does, written in the same breath. Uncapped: the widget is a
+    // TextView with room to render "99+" itself.
+    await UnreadWidgetService.instance.update(safe);
 
     // Sent everywhere and trusted nowhere — see the class comment. One call,
     // no notification needed, and it is the whole feature on the launchers

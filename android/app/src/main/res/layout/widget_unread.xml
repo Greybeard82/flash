@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The whole widget: a rounded card with the unread count in it.
+     The root carries the id because the click target is the entire cell — at
+     1x1 there is no room for the tap to be anything smaller. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_unread_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_unread_background"
+    android:padding="4dp">
+
+    <!-- android:text is the value the OS shows before the first onUpdate and
+         in the widget picker's preview, so it is a real default rather than
+         placeholder text. -->
+    <TextView
+        android:id="@+id/widget_unread_count"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:text="0"
+        android:textColor="@color/widget_unread_text"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:includeFontPadding="false"
+        tools:ignore="HardcodedText" />
+</FrameLayout>

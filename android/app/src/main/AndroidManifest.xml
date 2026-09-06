@@ -51,6 +51,24 @@
             android:exported="false"
             tools:ignore="Instantiatable"/>
 
+        <!-- 1x1 unread-count widget. Not exported: the only thing that sends
+             it an update is HomeWidget.updateWidget from our own process, plus
+             the OS's own APPWIDGET_UPDATE. updatePeriodMillis is 0 in
+             widget_unread_info.xml on purpose — every refresh is pushed on a
+             real change, so a periodic wake would only re-render a number that
+             had not moved. -->
+        <receiver
+            android:name=".UnreadWidgetProvider"
+            android:exported="false"
+            android:label="@string/widget_unread_description">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_unread_info" />
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />

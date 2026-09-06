@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget's card. Colour comes from @color/widget_unread_bg, which has a
+     night variant, so this one file covers both themes. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/widget_unread_bg" />
+    <corners android:radius="16dp" />
+</shape>

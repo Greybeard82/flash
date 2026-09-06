@@ -57,6 +57,7 @@ dependencies:
   intl: any
   uuid: ^4.4.0
   collection: ^1.18.0
+  home_widget: ^0.9.4
 
 dependency_overrides:
   intl: ^0.20.0

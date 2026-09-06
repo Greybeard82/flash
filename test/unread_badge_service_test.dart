@@ -14,6 +14,8 @@
 // worked, which on a real Galaxy M51 meant no badge at all. See
 // UnreadBadgeService's class comment.
 
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -21,11 +23,25 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:flash/db/database.dart';
 import 'package:flash/repositories/settings_repository.dart';
 import 'package:flash/services/unread_badge_service.dart';
+import 'package:flash/services/unread_widget_service.dart';
 
 const _badgeChannel = MethodChannel('app_badge_plus');
+const _widgetChannel = MethodChannel('home_widget');
 
 /// Every call the service made to the native-badge plugin, in order.
 late List<MethodCall> _badgeCalls;
+
+/// Every call that reached the home-screen widget plugin, in order.
+///
+/// Mocked rather than left to throw: the widget push sits at the top of
+/// UnreadBadgeService.update and is wrapped in a catch, so without a mock
+/// these tests would pass while the hook silently did nothing — the exact
+/// shape of a test that cannot fail.
+late List<MethodCall> _widgetCalls;
+
+/// Set to make the widget plugin throw, standing in for a missing plugin or a
+/// launcher that rejects the broadcast.
+late bool _widgetThrows;
 
 /// Records what the service asked of the notification, in place of the real
 /// plugin — which cannot run here at all, see [UnreadBadgeSink].
@@ -54,13 +70,36 @@ late bool _nativeSupported;
 
 void _installMocks() {
   _badgeCalls = [];
+  _widgetCalls = [];
+  _widgetThrows = false;
   _sink = _FakeSink();
+  UnreadWidgetService.instance.debugReset();
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(_widgetChannel, (call) async {
+    _widgetCalls.add(call);
+    if (_widgetThrows) throw PlatformException(code: 'boom');
+    return true;
+  });
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(_badgeChannel, (call) async {
     _badgeCalls.add(call);
     if (call.method == 'isSupported') return _nativeSupported;
     return null;
   });
+}
+
+/// The count the widget was told to show, under the key the provider reads.
+///
+/// The id is matched, not just the value: a save under any other key would
+/// leave the widget reading an absent preference and showing 0 forever.
+int? _widgetCount() {
+  for (final call in _widgetCalls) {
+    final args = call.arguments as Map;
+    if (call.method == 'saveWidgetData' && args['id'] == 'unread_count') {
+      return args['data'] as int?;
+    }
+  }
+  return null;
 }
 
 /// The count handed to the native badge plugin.
@@ -241,6 +280,93 @@ void main() {
       await service.update(50);
 
       expect(_sink.posted, [kMaxBadgeCount, 50]);
+    });
+  });
+
+  group('the home screen widget', () {
+    test('is pushed the same total the badge was computed from', () async {
+      await _service().update(7);
+
+      expect(_widgetCount(), 7);
+      expect([for (final c in _widgetCalls) c.method],
+          containsAllInOrder(['saveWidgetData', 'updateWidget']),
+          reason: 'saving without broadcasting leaves the widget showing the '
+              'old number until something else happens to refresh it');
+    });
+
+    test('gets the uncapped total, unlike the badge', () async {
+      await _service().update(238);
+
+      expect(_widgetCount(), 238,
+          reason: 'the widget is a TextView with room to render "99+" itself; '
+              'capping here would throw away the number it needs to decide');
+      expect(_badgeOf(_badgeCalls), kMaxBadgeCount);
+    });
+
+    test('is not re-pushed for an unchanged count', () async {
+      final service = _service();
+      await service.update(5);
+      final first = _widgetCalls.length;
+      await service.update(5);
+
+      expect(_widgetCalls, hasLength(first),
+          reason: 'every push is a channel round trip plus a broadcast the '
+              'launcher wakes to re-render — pointless for a number that has '
+              'not moved');
+    });
+
+    test('is targeted at the provider by name', () async {
+      await _service().update(1);
+
+      final update =
+          _widgetCalls.firstWhere((c) => c.method == 'updateWidget');
+      expect((update.arguments as Map)['android'], 'UnreadWidgetProvider',
+          reason: 'home_widget resolves this against the application id, so '
+              'it must match the Kotlin class name exactly');
+    });
+
+    test('a widget failure does not take the launcher badge down with it',
+        () async {
+      // The push runs first, so an exception escaping it would cost the badge
+      // and the notification too — the widget is the least important of the
+      // three.
+      _widgetThrows = true;
+
+      await _service().update(9);
+
+      expect(_badgeOf(_badgeCalls), 9);
+      expect(_sink.posted, [9]);
+    });
+
+    test('the Dart and Kotlin sides agree on the key and the class name', () {
+      // Nothing at runtime checks these against each other, and a mismatch
+      // fails silently: the provider reads an absent preference, defaults to
+      // 0, and the widget sits at zero forever while everything else is
+      // correct. Cheap to pin from here, so it is pinned from here.
+      final kotlin = File(
+        'android/app/src/main/kotlin/io/getflash/app/UnreadWidgetProvider.kt',
+      ).readAsStringSync();
+
+      expect(kotlin, contains('const val KEY_COUNT = "unread_count"'));
+      expect(kotlin, contains('class UnreadWidgetProvider'));
+
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      expect(manifest, contains('android:name=".UnreadWidgetProvider"'),
+          reason: 'an unregistered provider is a broadcast into nothing');
+    });
+
+    test('a failed push is retried rather than assumed delivered', () async {
+      final service = _service();
+      _widgetThrows = true;
+      await service.update(5);
+      _widgetThrows = false;
+      _widgetCalls.clear();
+      await service.update(5);
+
+      expect(_widgetCount(), 5,
+          reason: 'the count never reached the widget the first time, so the '
+              'dedupe must not treat it as already shown');
     });
   });
 
