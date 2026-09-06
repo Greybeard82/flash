@@ -236,16 +236,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get colorPalette => 'Paleta de colores';
 
   @override
-  String get paletteGreen => 'Verde';
+  String get paletteGreen => 'Verde y oro';
 
   @override
-  String get paletteBlue => 'Azul';
+  String get paletteBlue => 'Azul y terracota';
 
   @override
-  String get paletteOrange => 'Naranja';
+  String get paletteOrange => 'Naranja y bosque';
 
   @override
-  String get paletteRed => 'Rojo';
+  String get paletteRed => 'Rojo e índigo';
 
   @override
   String get paletteTealOrange => 'Verde azulado y naranja';

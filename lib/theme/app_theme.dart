@@ -56,10 +56,23 @@ const String kDefaultPalette = 'orange';
 /// amount than the rest.
 const DynamicSchemeVariant kPaletteSchemeVariant = DynamicSchemeVariant.vibrant;
 
-/// Applies a two-hue override: `secondary` and `onSecondary` come from a
-/// full scheme generated off [accentSeed], at the same brightness, rather
-/// than a hand-picked pair — so the override gets the same guaranteed
-/// on-color contrast [ColorScheme.fromSeed] already gives the primary hue.
+/// Applies a two-hue override: every `secondary*` role comes from a full
+/// scheme generated off [accentSeed], at the same brightness, rather than a
+/// hand-picked pair — so the override gets the same guaranteed on-color
+/// contrast [ColorScheme.fromSeed] already gives the primary hue.
+///
+/// All four roles, not just `secondary`/`onSecondary`. `ColorScheme.fromSeed`
+/// derives its own `secondaryContainer`/`onSecondaryContainer` from the
+/// *primary* seed — a second tonal palette it generates algorithmically
+/// alongside the first, not from anything this override supplies — so
+/// leaving those two alone would mean a chip painted with
+/// `secondaryContainer` came out tinted like the primary hue's own shade
+/// while a button painted with bare `secondary` came out in the accent hue,
+/// on the same screen. [accent] is itself a full scheme built from
+/// [accentSeed], so its own `primaryContainer`/`onPrimaryContainer` are
+/// already the correctly-toned container pair for that hue — reused here
+/// rather than re-deriving container tones by hand.
+///
 /// Was `_applyTealOrangeAccent`, hardcoded to the one palette that had an
 /// accent at all; every palette does now, so this takes the seed as a
 /// parameter instead of reaching into [kPaletteSeeds] itself.
@@ -76,6 +89,8 @@ ColorScheme _applyAccentOverride(
   return scheme.copyWith(
     secondary: accent.primary,
     onSecondary: accent.onPrimary,
+    secondaryContainer: accent.primaryContainer,
+    onSecondaryContainer: accent.onPrimaryContainer,
   );
 }
 
@@ -183,10 +198,29 @@ ThemeData flashPaletteTheme({
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: scheme.surface,
-      selectedItemColor: scheme.primary,
+      // The accent, not the primary hue: this is the single most-touched
+      // surface in the app — every tab switch — and the most natural place
+      // for the palette's second colour to actually show up in daily use,
+      // rather than being confined to a settings swatch and a swipe gesture
+      // nobody lingers on.
+      selectedItemColor: scheme.secondary,
       unselectedItemColor: scheme.onSurface.withValues(alpha: 0.6),
       type: BottomNavigationBarType.fixed,
       elevation: 0,
+    ),
+    // Phones get BottomNavigationBarTheme above; the rail is what tablets
+    // and TV use instead (see form_factor.dart), and Flutter's own default
+    // rail styling leans on `primary` the same way the bottom nav's old
+    // default did — mirrored here so the two nav surfaces this app actually
+    // ships agree on the accent rather than only one of them getting fixed.
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: scheme.surface,
+      selectedIconTheme: IconThemeData(color: scheme.secondary),
+      selectedLabelTextStyle: TextStyle(color: scheme.secondary),
+      unselectedIconTheme:
+          IconThemeData(color: scheme.onSurface.withValues(alpha: 0.6)),
+      unselectedLabelTextStyle:
+          TextStyle(color: scheme.onSurface.withValues(alpha: 0.6)),
     ),
     cardTheme: CardThemeData(
       color: scheme.surfaceContainerHighest,

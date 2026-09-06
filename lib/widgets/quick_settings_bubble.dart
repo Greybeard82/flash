@@ -427,7 +427,14 @@ class _PaletteRow extends StatelessWidget {
             children: [
               _PaletteSwatchStrip(scheme: scheme),
               const SizedBox(width: 12),
-              Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ),
               if (selected)
                 Icon(Icons.check_circle_rounded,
                     color: theme.colorScheme.primary, size: 20)

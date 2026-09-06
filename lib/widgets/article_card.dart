@@ -408,7 +408,12 @@ class _AlertKeywordBadges extends StatelessWidget {
       height: _chipHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
+        // secondaryContainer, not primary: these badges appear on every
+        // alert-matched card across Flash, Bookmarks and Alerts, and the
+        // accent hue is the right role for a chip specifically — the same
+        // way this app already reaches for a container role rather than a
+        // bare colour for badge-shaped things.
+        color: theme.colorScheme.secondaryContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       // Center with widthFactor 1.0, not `alignment:` on the Container. A
@@ -427,7 +432,7 @@ class _AlertKeywordBadges extends StatelessWidget {
           // label; at natural width the chip already hugs the text.
           textAlign: TextAlign.center,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onPrimaryContainer,
+            color: theme.colorScheme.onSecondaryContainer,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -588,9 +593,11 @@ class _ThumbnailWidget extends StatelessWidget {
 /// The splash stays on the painted 28dp rather than filling the touch box:
 /// an ink ripple spreading into empty card margin reads as a misdrawn button.
 ///
-/// **Colour.** `primaryContainer` under `onPrimaryContainer`, straight from
-/// the active [ColorScheme]. Every palette in `kPaletteSeeds` generates that
-/// pair through `ColorScheme.fromSeed`, which guarantees the contrast, and
+/// **Colour.** `secondary` under `onSecondary`, straight from the active
+/// [ColorScheme] — the accent hue, not the primary branding every other
+/// button uses, so this reads as its own thing. Every palette generates
+/// that pair through `ColorScheme.fromSeed` (by way of the two-hue accent
+/// override in `app_theme.dart`), which guarantees the contrast, and
 /// Newspaper mode resolves through the same scheme — so there is no
 /// palette-specific branching here and there should not be.
 class _SummaryButton extends StatelessWidget {
@@ -636,7 +643,11 @@ class _SummaryButton extends StatelessWidget {
           height: _height,
           child: Center(
             child: Material(
-              color: theme.colorScheme.primaryContainer,
+              // secondary, not primaryContainer: this is the newest, most
+              // distinct per-article action, appearing on every card — the
+              // accent colour rather than the same primary branding as
+              // everything else is what makes it read as its own thing.
+              color: theme.colorScheme.secondary,
               borderRadius: BorderRadius.circular(8),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -647,7 +658,7 @@ class _SummaryButton extends StatelessWidget {
                   child: Icon(
                     Icons.auto_awesome_rounded,
                     size: 18,
-                    color: theme.colorScheme.onPrimaryContainer,
+                    color: theme.colorScheme.onSecondary,
                     semanticLabel: l10n.summary,
                   ),
                 ),

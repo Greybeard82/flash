@@ -521,25 +521,25 @@ abstract class AppLocalizations {
   /// No description provided for @paletteGreen.
   ///
   /// In en, this message translates to:
-  /// **'Green'**
+  /// **'Green & Gold'**
   String get paletteGreen;
 
   /// No description provided for @paletteBlue.
   ///
   /// In en, this message translates to:
-  /// **'Blue'**
+  /// **'Blue & Terracotta'**
   String get paletteBlue;
 
   /// No description provided for @paletteOrange.
   ///
   /// In en, this message translates to:
-  /// **'Orange'**
+  /// **'Orange & Forest'**
   String get paletteOrange;
 
   /// No description provided for @paletteRed.
   ///
   /// In en, this message translates to:
-  /// **'Red'**
+  /// **'Red & Indigo'**
   String get paletteRed;
 
   /// No description provided for @paletteTealOrange.
