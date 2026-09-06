@@ -45,6 +45,7 @@ import '../widgets/fetching_indicator.dart';
 import '../widgets/folder_tab_bar.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
+import '../widgets/spinning_refresh_icon.dart';
 import 'search_screen.dart';
 
 class FeedScreen extends StatefulWidget {
@@ -1965,8 +1966,12 @@ class _FeedScreenState extends State<FeedScreen>
                           : () => _refreshCurrentTab(),
                       tooltip: l10n.refresh,
                       mini: true,
+                      // The same circular arrow either way — it just turns
+                      // while the refresh is in flight. Swapping in the bolt
+                      // replaced the control under the user's finger with a
+                      // different glyph.
                       child: _refreshing
-                          ? const FetchingIndicator(size: 20)
+                          ? const SpinningRefreshIcon()
                           : const Icon(Icons.refresh_rounded),
                     ),
                   ),

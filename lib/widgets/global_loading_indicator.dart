@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import '../services/loading_controller.dart';
 import 'fetching_indicator.dart';
 
-/// Small spinning bolt pinned to the top of the content area, shown whenever
-/// [LoadingController] is busy. The same glyph as every other loading state
-/// in the app — one indicator, not a linear bar here and a circle there. Fades in after a short delay so instant
-/// operations don't flash, and fades out smoothly when done.
+/// Small spinning bolt shown in the app-bar row whenever [LoadingController]
+/// is busy. The same glyph as every other loading state in the app — one
+/// indicator, not a linear bar here and a circle there. Fades in after a short
+/// delay so instant operations don't flash, and fades out smoothly when done.
+///
+/// It sits at the top **right**, not centred. This is an overlay on the whole
+/// screen stack, so a centred one landed at the very top middle of the display
+/// — directly under the camera cut-out, where it was half-hidden by the punch
+/// hole. The right-hand end of the app bar is the only place in the app that
+/// already means "status of what is happening", and it is where the
+/// background-fetch indicator lives too.
 class GlobalLoadingIndicator extends StatefulWidget {
   const GlobalLoadingIndicator({super.key});
 
@@ -44,15 +51,34 @@ class _GlobalLoadingIndicatorState extends State<GlobalLoadingIndicator> {
     }
   }
 
+  /// Clears the feed screen's two app-bar actions (quick settings, filter),
+  /// which are the only actions any screen puts here.
+  static const double _rightInset = 112;
+  static const double _size = 24;
+
   @override
   Widget build(BuildContext context) {
+    // viewPadding, not padding: Scaffold consumes `padding` for its body, so
+    // by the time this overlay is built `padding.top` can already be zero and
+    // the bolt would ride up into the status bar again. viewPadding always
+    // reports the real cut-out inset.
+    final topInset = MediaQuery.of(context).viewPadding.top;
+
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: _visible ? 1.0 : 0.0,
         duration: const Duration(milliseconds: 200),
-        child: const Padding(
-          padding: EdgeInsets.only(top: 8),
-          child: Center(child: FetchingIndicator(size: 24)),
+        child: Align(
+          alignment: Alignment.topRight,
+          child: Padding(
+            padding: EdgeInsets.only(
+              // Centred in the toolbar row, so it lines up with the action
+              // icons rather than floating above or below them.
+              top: topInset + (kToolbarHeight - _size) / 2,
+              right: _rightInset,
+            ),
+            child: const FetchingIndicator(size: _size),
+          ),
         ),
       ),
     );
