@@ -17,8 +17,12 @@ import '../utils/day_grouping.dart';
 import '../widgets/article_card.dart';
 import '../widgets/day_header.dart';
 import '../widgets/fetching_indicator.dart';
+import '../widgets/keyword_alerts_panel.dart';
+import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/quick_settings_action.dart';
+import '../widgets/scroll_fade.dart';
+import '../widgets/bubble_panel.dart';
 
 /// The Alerts tab: every article any alert keyword has ever caught.
 ///
@@ -105,12 +109,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
   final _bannerKey = GlobalKey<NotificationBannerState>();
   final _scrollController = ScrollController();
 
+  /// One controller for the cluster, matching Flash: the buttons fade out
+  /// together while the list is moving and settle back when it stops.
+  final _fabFade = ScrollFadeController();
+
+  /// The "+" button doubles as the bubble's anchor, so the keyword panel grows
+  /// out of the control that opened it — the same relationship the Filter
+  /// button has with it on Flash.
+  final _addKeywordKey = GlobalKey();
+  OverlayEntry? _openPanel;
+
   List<AlertEntry> _entries = const [];
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_fabFade.onScroll);
     AlertsChangedNotifier.instance.addListener(_onAlertsChanged);
     AlertNavigationIntent.instance.addListener(_onAlertNavigationRequested);
     _load().then((_) => _consumeAlertNavigation());
@@ -120,6 +135,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
   void dispose() {
     AlertsChangedNotifier.instance.removeListener(_onAlertsChanged);
     AlertNavigationIntent.instance.removeListener(_onAlertNavigationRequested);
+    if (_openPanel?.mounted ?? false) _openPanel!.remove();
+    _fabFade.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -141,6 +158,20 @@ class _AlertsScreenState extends State<AlertsScreen> {
     await _load();
     if (!mounted || !_scrollController.hasClients) return;
     _scrollController.jumpTo(0);
+  }
+
+  void _openKeywordPanel() {
+    if (_openPanel?.mounted ?? false) return;
+    _fabFade.settleNow();
+    _openPanel = showBubblePanel(
+      context: context,
+      anchorKey: _addKeywordKey,
+      // The same host FeedScreen's filter route uses, so adding a keyword here
+      // backfills and refreshes exactly as it does there.
+      child: AlertPanelHost(
+        onClosed: () => AlertsChangedNotifier.instance.alertsChanged(),
+      ),
+    );
   }
 
   Future<void> _load() async {
@@ -216,7 +247,13 @@ class _AlertsScreenState extends State<AlertsScreen> {
   /// the one list in the app that no deletion path is allowed to touch —
   /// running them here would put back, through a toolbar button, exactly the
   /// loss `alert_matches` exists to prevent.
+  /// Gated by the same question Flash and Bookmarks ask, from the same
+  /// implementation — the "don't show again" flag is one setting, so it has to
+  /// be honoured wherever the button appears. This screen ran without any gate
+  /// at all until the extraction.
   Future<void> _markAllRead() async {
+    if (!await confirmMarkAllRead(context)) return;
+    if (!mounted) return;
     HapticFeedback.mediumImpact();
     await LoadingController.instance.run(() async {
       await _alertMatchRepo.setAllRead();
@@ -286,14 +323,39 @@ class _AlertsScreenState extends State<AlertsScreen> {
       appBar: AppBar(
         title: Text(l10n.alertsTab),
         centerTitle: false,
-        actions: [
-          if (_entries.isNotEmpty)
-            IconButton(
+        actions: const [QuickSettingsAction()],
+      ),
+      // Bottom-right, mini, ScrollFade-wrapped, 8dp apart: the same cluster
+      // Flash puts in the same corner, so the two screens do not disagree
+      // about where a floating action lives. Shown unconditionally — unlike
+      // Flash there is no "has feeds yet" precondition, and "+" is exactly
+      // what an empty Alerts list needs offering.
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScrollFade(
+            controller: _fabFade,
+            child: FloatingActionButton(
+              key: _addKeywordKey,
+              heroTag: 'alerts_add_keyword',
+              onPressed: _openKeywordPanel,
+              tooltip: l10n.keywordAlerts,
+              mini: true,
+              child: const Icon(Icons.add),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ScrollFade(
+            controller: _fabFade,
+            child: FloatingActionButton(
+              heroTag: 'alerts_mark_all_read',
               onPressed: _markAllRead,
               tooltip: l10n.markAllRead,
-              icon: const Icon(Icons.done_all_rounded),
+              mini: true,
+              child: const Icon(Icons.done_all_rounded),
             ),
-          const QuickSettingsAction(),
+          ),
         ],
       ),
       body: Column(

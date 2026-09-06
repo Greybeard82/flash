@@ -619,3 +619,37 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     );
   }
 }
+
+/// Hosts [KeywordAlertsPanel] so whoever opened it can find out what the user
+/// did in it.
+///
+/// The panel adds, edits and deletes keywords, and each of those adds or
+/// removes matches — but the panel is a const widget with nothing to report
+/// through, and it is shown in an overlay rather than pushed as a route, so
+/// there is no pop result to await either. Something whose disposal is
+/// observable is the smallest honest signal available: whatever is listening
+/// sits behind the bubble while the panel is open, so recomputing when it
+/// closes is soon enough for anything the user can actually see.
+///
+/// Public and living here rather than privately inside one screen, because
+/// two screens now open this panel — the Flash filter bubble and the Alerts
+/// "+" button — and a second copy is a second thing to keep in step.
+class AlertPanelHost extends StatefulWidget {
+  final VoidCallback onClosed;
+
+  const AlertPanelHost({super.key, required this.onClosed});
+
+  @override
+  State<AlertPanelHost> createState() => _AlertPanelHostState();
+}
+
+class _AlertPanelHostState extends State<AlertPanelHost> {
+  @override
+  void dispose() {
+    widget.onClosed();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => const KeywordAlertsPanel();
+}

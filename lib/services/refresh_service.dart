@@ -44,7 +44,7 @@ void callbackDispatcher() {
 
 Future<FlutterLocalNotificationsPlugin> _initPlugin() async {
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = AndroidInitializationSettings('ic_launcher_monochrome');
   // The handler must be passed here too. initialize() overwrites the stored
   // response callback every time, and this runs on the UI isolate as well as
   // the background one -- so omitting it de-registered main()'s handler the

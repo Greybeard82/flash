@@ -15,6 +15,23 @@ import 'package:flutter/material.dart';
 ///
 /// Returns the [OverlayEntry] so a caller can force-remove it; normal dismissal
 /// is handled internally.
+/// The panels currently on screen, oldest first.
+///
+/// A bubble is an [OverlayEntry], not a route, so a `PopScope` inside it has
+/// no [ModalRoute] to register with and never fires — the back press walks
+/// straight past it to whatever is underneath, which on a top-level screen
+/// means changing tabs with the panel still open on top. The app shell's own
+/// back handler asks this first instead.
+final List<VoidCallback> _openBubblePanels = [];
+
+/// Closes the topmost open bubble panel. Returns whether there was one to
+/// close, which is how the caller knows whether to swallow the back press.
+bool dismissTopBubblePanel() {
+  if (_openBubblePanels.isEmpty) return false;
+  _openBubblePanels.last();
+  return true;
+}
+
 OverlayEntry showBubblePanel({
   required BuildContext context,
   required GlobalKey anchorKey,
@@ -71,9 +88,14 @@ class _BubblePanelState extends State<_BubblePanel>
   /// close affordance — both landing while the reverse is already running.
   bool _dismissing = false;
 
+  /// Registered while this panel is on screen, so system back can reach it.
+  late final VoidCallback _backHandler;
+
   @override
   void initState() {
     super.initState();
+    _backHandler = () => _dismiss();
+    _openBubblePanels.add(_backHandler);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -92,6 +114,7 @@ class _BubblePanelState extends State<_BubblePanel>
 
   @override
   void dispose() {
+    _openBubblePanels.remove(_backHandler);
     _controller.dispose();
     super.dispose();
   }
@@ -157,51 +180,52 @@ class _BubblePanelState extends State<_BubblePanel>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final t = _backdrop.value;
-        return Stack(
-          children: [
-            // Blurred, lightly dimmed backdrop. The radial menu dims only;
-            // this defocuses as well, so the panel reads as the foreground.
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _dismiss,
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 6 * t, sigmaY: 6 * t),
-                  child: ColoredBox(
-                    color: Colors.black.withValues(alpha: 0.28 * t),
+          final t = _backdrop.value;
+          return Stack(
+            children: [
+              // Blurred, lightly dimmed backdrop. The radial menu dims only;
+              // this defocuses as well, so the panel reads as the foreground.
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _dismiss,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 6 * t, sigmaY: 6 * t),
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.28 * t),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: box.left,
-              top: box.top,
-              width: box.width,
-              child: FadeTransition(
-                opacity: _opacity,
-                child: ScaleTransition(
-                  scale: _scale,
-                  alignment: _originWithin(box.left, box.width),
-                  // Taps inside must not fall through to the scrim.
-                  child: GestureDetector(
-                    onTap: () {},
-                    child: ConstrainedBox(
-                      constraints:
-                          BoxConstraints(maxHeight: _maxHeight(context)),
-                      child: Material(
-                        color: theme.colorScheme.surface,
-                        elevation: 6,
-                        borderRadius: BorderRadius.circular(20),
-                        clipBehavior: Clip.antiAlias,
-                        // SingleChildScrollView sizes to its child when the
-                        // incoming constraint is loose, so the sheet is exactly
-                        // as tall as its controls and only scrolls past the cap.
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                          child: BubblePanelScope(
-                            dismiss: _dismiss,
-                            child: widget.child,
+              Positioned(
+                left: box.left,
+                top: box.top,
+                width: box.width,
+                child: FadeTransition(
+                  opacity: _opacity,
+                  child: ScaleTransition(
+                    scale: _scale,
+                    alignment: _originWithin(box.left, box.width),
+                    // Taps inside must not fall through to the scrim.
+                    child: GestureDetector(
+                      onTap: () {},
+                      child: ConstrainedBox(
+                        constraints:
+                            BoxConstraints(maxHeight: _maxHeight(context)),
+                        child: Material(
+                          color: theme.colorScheme.surface,
+                          elevation: 6,
+                          borderRadius: BorderRadius.circular(20),
+                          clipBehavior: Clip.antiAlias,
+                          // SingleChildScrollView sizes to its child when the
+                          // incoming constraint is loose, so the sheet is exactly
+                          // as tall as its controls and only scrolls past the cap.
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                            child: BubblePanelScope(
+                              dismiss: _dismiss,
+                              child: widget.child,
+                            ),
                           ),
                         ),
                       ),
@@ -209,7 +233,6 @@ class _BubblePanelState extends State<_BubblePanel>
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

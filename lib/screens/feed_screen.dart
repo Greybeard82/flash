@@ -35,6 +35,7 @@ import '../widgets/day_header.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/filter_bubble.dart';
 import '../widgets/keyword_alerts_panel.dart';
+import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/keyword_blocklist_panel.dart';
 import '../widgets/quick_settings_bubble.dart';
 import '../widgets/scroll_fade.dart';
@@ -1277,65 +1278,11 @@ class _FeedScreenState extends State<FeedScreen>
   /// outright. Both entry points — the FAB and the folder tab bar — call
   /// this, so the guard covers both.
   Future<void> _markAllRead() async {
-    final settings = await _settingsRepo.getAll();
+    if (!await confirmMarkAllRead(context)) return;
     if (!mounted) return;
-
-    if (settings.markAllReadConfirm) {
-      final l10n = AppLocalizations.of(context)!;
-      var dontAsk = false;
-      final confirmed = await showDialog<bool>(
-        context: context,
-        // StatefulBuilder so ticking the checkbox rebuilds the dialog alone,
-        // not the feed screen behind it.
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            title: Text(l10n.markAllReadWarningTitle),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.markAllReadWarningBody),
-                const SizedBox(height: 8),
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  value: dontAsk,
-                  title: Text(l10n.dontShowAgain,
-                      style: Theme.of(ctx).textTheme.bodyMedium),
-                  onChanged: (v) => setDialogState(() => dontAsk = v ?? false),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(l10n.cancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Theme.of(ctx).colorScheme.error,
-                  foregroundColor: Theme.of(ctx).colorScheme.onError,
-                ),
-                child: Text(l10n.markAllReadConfirm),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (confirmed != true || !mounted) return;
-
-      // Only on confirm. Ticking the box and then backing out must not
-      // disable the warning.
-      if (dontAsk) {
-        await _settingsRepo.set('mark_all_read_confirm', 'false');
-        SettingsNotifier.instance.settingsChanged();
-      }
-      if (!mounted) return;
-    }
-
     HapticFeedback.mediumImpact();
-    await LoadingController.instance.run(_markAllReadBody, label: 'Marking all read');
+    await LoadingController.instance
+        .run(_markAllReadBody, label: 'Marking all read');
   }
 
   Future<void> _markAllReadBody() async {
@@ -1422,7 +1369,7 @@ class _FeedScreenState extends State<FeedScreen>
   /// The keyword panel, wrapped so AlertsScreen finds out what the user did
   /// in it — adding a keyword backfills matches, deleting one takes them away.
   /// See [_AlertPanelHost].
-  Widget _alertKeywordsPanel() => _AlertPanelHost(
+  Widget _alertKeywordsPanel() => AlertPanelHost(
       onClosed: () => AlertsChangedNotifier.instance.alertsChanged());
 
 
@@ -1817,36 +1764,6 @@ class _FeedScreenState extends State<FeedScreen>
       ),
     );
   }
-}
-
-/// Hosts [KeywordAlertsPanel] so AlertsScreen can find out what the user did
-/// in it.
-///
-/// The panel adds, edits and deletes keywords, and each of those adds or
-/// removes matches — but the panel is a const widget with
-/// nothing to report through, and it is shown in an overlay rather than pushed
-/// as a route, so there is no pop result to await either. Something whose
-/// disposal is observable is the smallest honest signal available: the pill
-/// row sits behind the bubble while the panel is open, so recomputing when it
-/// closes is soon enough for anything the user can actually see.
-class _AlertPanelHost extends StatefulWidget {
-  final VoidCallback onClosed;
-
-  const _AlertPanelHost({required this.onClosed});
-
-  @override
-  State<_AlertPanelHost> createState() => _AlertPanelHostState();
-}
-
-class _AlertPanelHostState extends State<_AlertPanelHost> {
-  @override
-  void dispose() {
-    widget.onClosed();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => const KeywordAlertsPanel();
 }
 
 class _NewspaperMasthead extends StatelessWidget {

@@ -12,6 +12,7 @@ import '../services/read_state_notifier.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/share_service.dart';
 import '../widgets/article_card.dart';
+import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/quick_settings_action.dart';
 
 class BookmarksScreen extends StatefulWidget {
@@ -125,6 +126,40 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     }
   }
 
+  /// Read state only.
+  ///
+  /// None of Flash's retirement, cleanup or refetch: a saved article is exempt
+  /// from cleanup by design, so a mark-all-read here that swept anything away
+  /// would delete the one thing the user explicitly kept.
+  Future<void> _markAllRead() async {
+    final unread = [
+      for (final a in _articles)
+        if (!a.isRead && a.id != null) a,
+    ];
+    if (unread.isEmpty) return;
+    if (!await confirmMarkAllRead(context)) return;
+    if (!mounted) return;
+    HapticFeedback.mediumImpact();
+
+    await _articleRepo.markManyRead([for (final a in unread) a.id!]);
+    // Looped, unlike the articles: alert_matches keys on (feed_id, guid), and
+    // there is no bulk-by-pair write to reach for.
+    for (final a in unread) {
+      await _alertMatchRepo.setRead(a.feedId, a.guid, isRead: true);
+    }
+    ReadStateNotifier.instance.articleReadStateChanged();
+
+    if (!mounted) return;
+    // Patched locally rather than reloaded, for the same instant-feedback
+    // reason _markRead does it that way.
+    setState(() {
+      _articles = [
+        for (final a in _articles)
+          a.isRead ? a : a.copyWith(isRead: true),
+      ];
+    });
+  }
+
   Future<void> _markUnread(Article article) async {
     if (article.id == null) return;
     await _articleRepo.markAsUnread(article.id!);
@@ -154,6 +189,16 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         centerTitle: false,
         actions: const [QuickSettingsAction()],
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: _articles.any((a) => !a.isRead)
+          ? FloatingActionButton(
+              heroTag: 'bookmarks_mark_all_read',
+              onPressed: _markAllRead,
+              tooltip: l10n.markAllRead,
+              mini: true,
+              child: const Icon(Icons.done_all_rounded),
+            )
+          : null,
       body: _loading
           ? const Center(child: FetchingIndicator(size: 40))
           : _articles.isEmpty

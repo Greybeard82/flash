@@ -465,15 +465,19 @@ class _FolderSectionState extends State<_FolderSection>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final name = widget.folder.name;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Folder header — tap to collapse, long-press for actions. Also a
-        // drop target in its own right: dropping a source directly on the
-        // header (e.g. while this category is collapsed, so no row/slot is
-        // visible) appends it to the end of this folder's list.
+        // Folder header — tap to collapse. Rename and delete are buttons in
+        // the row rather than a long-press sheet: a gesture with no affordance
+        // was the only way to reach either, so the two actions the row exists
+        // to offer were invisible. Also a drop target in its own right:
+        // dropping a source directly on the header (e.g. while this category
+        // is collapsed, so no row/slot is visible) appends it to the end of
+        // this folder's list.
         DragTarget<Feed>(
           onWillAcceptWithDetails: (_) => true,
           onAcceptWithDetails: (details) =>
@@ -482,22 +486,27 @@ class _FolderSectionState extends State<_FolderSection>
             final isHovering = candidateData.isNotEmpty;
             return InkWell(
               onTap: _toggle,
-              onLongPress: () => showModalBottomSheet(
-                context: context,
-                builder: (ctx) => _FolderActionsSheet(
-                  folder: widget.folder,
-                  onRename: widget.onRenameFolder,
-                  onDelete: widget.onDeleteFolder,
-                ),
-              ),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 150),
                 color: isHovering
                     ? theme.colorScheme.primary.withValues(alpha: 0.08)
                     : Colors.transparent,
-                padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                // Left to right: drag handle, label, name, edit, delete,
+                // chevron. The handle leads because reordering starts there
+                // and the eye should find it before the row's content; the
+                // chevron trails because expanding is what the whole row
+                // already does on tap.
                 child: Row(
                   children: [
+                    ReorderableDragStartListener(
+                      index: widget.dragIndex,
+                      child: Icon(Icons.drag_handle_rounded,
+                          size: 20,
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.35)),
+                    ),
+                    const SizedBox(width: 8),
                     Icon(Icons.label_outline_rounded,
                         size: 16, color: theme.colorScheme.primary),
                     const SizedBox(width: 6),
@@ -510,6 +519,25 @@ class _FolderSectionState extends State<_FolderSection>
                         ),
                       ),
                     ),
+                    // The same callbacks the long-press sheet's tiles called,
+                    // so whatever dialog or confirmation each already opened
+                    // still opens. IconButton claims its own taps, so neither
+                    // reaches the row's onTap and toggles the folder as a side
+                    // effect of renaming it.
+                    IconButton(
+                      onPressed: widget.onRenameFolder,
+                      tooltip: l10n.renameCategory,
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.edit_outlined,
+                          size: 18, color: theme.colorScheme.primary),
+                    ),
+                    IconButton(
+                      onPressed: widget.onDeleteFolder,
+                      tooltip: l10n.deleteCategory,
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(Icons.delete_outline,
+                          size: 18, color: theme.colorScheme.error),
+                    ),
                     RotationTransition(
                       turns: Tween(begin: -0.25, end: 0.0)
                           .animate(_chevronController),
@@ -517,14 +545,6 @@ class _FolderSectionState extends State<_FolderSection>
                           size: 18,
                           color: theme.colorScheme.primary
                               .withValues(alpha: 0.7)),
-                    ),
-                    const SizedBox(width: 4),
-                    ReorderableDragStartListener(
-                      index: widget.dragIndex,
-                      child: Icon(Icons.drag_handle_rounded,
-                          size: 20,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.35)),
                     ),
                   ],
                 ),
@@ -1321,49 +1341,6 @@ class _ConfirmSheet extends StatelessWidget {
   }
 }
 
-class _FolderActionsSheet extends StatelessWidget {
-  final Folder folder;
-  final VoidCallback? onRename;
-  final VoidCallback? onDelete;
-
-  const _FolderActionsSheet({
-    required this.folder,
-    this.onRename,
-    this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.edit_outlined),
-            title: Text(l10n.renameFolder(folder.name)),
-            onTap: () {
-              Navigator.pop(context);
-              onRename?.call();
-            },
-          ),
-          ListTile(
-            leading: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error),
-            title: Text(
-              l10n.deleteFolder(folder.name),
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            onTap: () {
-              Navigator.pop(context);
-              onDelete?.call();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _FeedActionsSheet extends StatelessWidget {
   final Feed feed;

@@ -23,7 +23,7 @@ void main() async {
   // callback unconditionally. Every other caller therefore passes this same
   // shared handler -- see onAlertNotificationResponse.
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+  const androidInit = AndroidInitializationSettings('ic_launcher_monochrome');
   await plugin.initialize(
     const InitializationSettings(android: androidInit),
     onDidReceiveNotificationResponse: onAlertNotificationResponse,

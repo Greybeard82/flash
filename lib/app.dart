@@ -15,6 +15,7 @@ import 'screens/bookmarks_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/form_factor.dart';
+import 'widgets/bubble_panel.dart';
 import 'widgets/global_loading_indicator.dart';
 import 'widgets/flash_bolt.dart';
 
@@ -448,7 +449,12 @@ class _AppShellState extends State<_AppShell> {
       return PopScope(
         canPop: _currentIndex == 0,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) setState(() => _currentIndex = 0);
+          if (didPop) return;
+          // A bubble panel is an overlay, not a route, so it cannot answer a
+          // back press itself — without this the tab would change underneath
+          // an open panel. Asked first, and swallowed if one was closed.
+          if (dismissTopBubblePanel()) return;
+          setState(() => _currentIndex = 0);
         },
         child: shell,
       );
@@ -458,7 +464,9 @@ class _AppShellState extends State<_AppShell> {
     return PopScope(
       canPop: _currentIndex == 0,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) setState(() => _currentIndex = 0);
+        if (didPop) return;
+        if (dismissTopBubblePanel()) return;
+        setState(() => _currentIndex = 0);
       },
       child: Scaffold(
         body: _buildScreenStack(),

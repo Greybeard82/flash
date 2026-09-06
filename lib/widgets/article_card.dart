@@ -248,7 +248,7 @@ class ArticleCard extends StatelessWidget {
             dimmed: isRead,
           ),
           const SizedBox(width: 2),
-          _SummaryButton(article: article, dimmed: isRead),
+          _SummaryButton(article: article),
         ],
       ),
     );
@@ -595,9 +595,8 @@ class _ThumbnailWidget extends StatelessWidget {
 /// palette-specific branching here and there should not be.
 class _SummaryButton extends StatelessWidget {
   final Article article;
-  final bool dimmed;
 
-  const _SummaryButton({required this.article, required this.dimmed});
+  const _SummaryButton({required this.article});
 
   /// Visible width. The touch box is [_touchWidth].
   static const double _visibleWidth = 28;
@@ -616,38 +615,40 @@ class _SummaryButton extends StatelessWidget {
           builder: (_) => ArticleSummarySheet(article: article),
         );
 
-    return _DimTransition(
-      dimmed: dimmed,
-      child: Tooltip(
-        message: l10n.summary,
-        // The outer box is the target; the InkWell inside only covers the
-        // painted 28dp. Opaque so the 6dp margins belong to this button and
-        // not to the card's own InkWell underneath — without it those strips
-        // would open the article, which is the one thing a user aiming here
-        // is not asking for. A tap on the visible part is claimed by the
-        // child, so the two never both fire.
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: open,
-          child: SizedBox(
-            width: _touchWidth,
-            height: _height,
-            child: Center(
-              child: Material(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: open,
-                  child: SizedBox(
-                    width: _visibleWidth,
-                    height: _height,
-                    child: Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 18,
-                      color: theme.colorScheme.onPrimaryContainer,
-                      semanticLabel: l10n.summary,
-                    ),
+    return Tooltip(
+      message: l10n.summary,
+      // The outer box is the target; the InkWell inside only covers the
+      // painted 28dp. Opaque so the 6dp margins belong to this button and not
+      // to the card's own InkWell underneath — without it those strips would
+      // open the article, which is the one thing a user aiming here is not
+      // asking for. A tap on the visible part is claimed by the child, so the
+      // two never both fire.
+      //
+      // Deliberately not wrapped in _DimTransition, unlike the thumbnail and
+      // the favicon beside it. Reading an article does not make summarising it
+      // any less available, and a control that fades with the content it acts
+      // on reads as disabled — the one impression this button must not give.
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: open,
+        child: SizedBox(
+          width: _touchWidth,
+          height: _height,
+          child: Center(
+            child: Material(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: open,
+                child: SizedBox(
+                  width: _visibleWidth,
+                  height: _height,
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 18,
+                    color: theme.colorScheme.onPrimaryContainer,
+                    semanticLabel: l10n.summary,
                   ),
                 ),
               ),

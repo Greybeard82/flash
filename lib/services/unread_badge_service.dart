@@ -192,7 +192,7 @@ class _NotificationBadgeSink implements UnreadBadgeSink {
     final existing = _plugin;
     if (existing != null) return existing;
     final plugin = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('ic_launcher_monochrome');
     // The shared handler, like every other initialize() in the app — this call
     // overwrites whatever was registered before it.
     await plugin.initialize(
