@@ -561,7 +561,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get unreadCountBadgeSubtitle =>
-      'Muestra el número de artículos sin leer en el icono de la app. Algunos lanzadores, como el de Pixel, no pueden dibujar un número por sí mismos: allí Flash envía una notificación silenciosa para que el icono muestre el aviso.';
+      'Muestra el número de artículos sin leer en el icono de la app. Android solo marca un icono a partir de una notificación, así que Flash mantiene una silenciosa. Samsung muestra el número; un Pixel, un punto.';
 
   @override
   String get showRead => 'Mostrar leídos';

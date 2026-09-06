@@ -179,7 +179,7 @@
     }
   },
   "unreadCountBadge": "Pastille de non-lus",
-  "unreadCountBadgeSubtitle": "Affiche le nombre d'articles non lus sur l'icône de l'app. Certains lanceurs, dont celui du Pixel, ne savent pas afficher un nombre eux-mêmes : Flash y envoie alors une notification silencieuse pour que l'icône porte une pastille.",
+  "unreadCountBadgeSubtitle": "Affiche le nombre d'articles non lus sur l'icône de l'app. Android ne marque une icône qu'à partir d'une notification, Flash en garde donc une silencieuse. Samsung affiche le nombre, un Pixel une pastille.",
   "showRead": "Afficher les lus",
   "showReadSubtitle": "Garder les articles lus jusqu'à la prochaine actualisation",
   "dayToday": "Aujourd'hui",

@@ -562,7 +562,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get unreadCountBadgeSubtitle =>
-      'Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Manche Launcher, auch der Pixel Launcher, können selbst keine Zahl anzeigen — dort sendet Flash eine stumme Benachrichtigung, damit das Symbol einen Zähler erhält.';
+      'Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Android setzt einen Zähler nur über eine Benachrichtigung, daher behält Flash eine stumme in der Leiste. Samsung zeigt die Zahl, ein Pixel einen Punkt.';
 
   @override
   String get showRead => 'Gelesene anzeigen';

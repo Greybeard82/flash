@@ -179,7 +179,7 @@
     }
   },
   "unreadCountBadge": "Zähler für Ungelesene",
-  "unreadCountBadgeSubtitle": "Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Manche Launcher, auch der Pixel Launcher, können selbst keine Zahl anzeigen — dort sendet Flash eine stumme Benachrichtigung, damit das Symbol einen Zähler erhält.",
+  "unreadCountBadgeSubtitle": "Zeigt die Anzahl ungelesener Artikel auf dem App-Symbol. Android setzt einen Zähler nur über eine Benachrichtigung, daher behält Flash eine stumme in der Leiste. Samsung zeigt die Zahl, ein Pixel einen Punkt.",
   "showRead": "Gelesene anzeigen",
   "showReadSubtitle": "Gelesene Artikel bis zur nächsten Aktualisierung behalten",
   "dayToday": "Heute",

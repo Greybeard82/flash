@@ -557,7 +557,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get unreadCountBadgeSubtitle =>
-      'Show the unread count on the app icon. Some launchers, including the Pixel Launcher, can\'t draw a number themselves — there Flash posts a silent notification so the icon gets a badge.';
+      'Show the unread count on the app icon. Android only badges an icon from a notification, so Flash keeps a silent one in the shade. Samsung shows the number; a Pixel shows a dot.';
 
   @override
   String get showRead => 'Show read';
