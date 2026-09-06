@@ -13,7 +13,7 @@ List<String> _bullets(String s) => s
 void main() {
   group('backstop ceilings', () {
     test('are deliberately looser than the prompt budget', () {
-      expect(SummaryFormatter.maxWords, 180);
+      expect(SummaryFormatter.maxWords, 320);
       expect(SummaryFormatter.maxBullets, 8);
     });
   });
@@ -117,14 +117,14 @@ void main() {
   });
 
   group('word ceiling', () {
-    test('a 120-word summary is never clamped', () {
-      final input = List.generate(120, (i) => 'word$i').join(' ');
+    test('a 250-word summary is never clamped', () {
+      final input = List.generate(250, (i) => 'word$i').join(' ');
       expect(SummaryFormatter.clamp(input), input,
           reason: 'The prompt budget must sit comfortably inside the backstop.');
     });
 
     test('drops whole trailing lines until the ceiling is met', () {
-      final long = List.generate(40, (i) => 'word$i').join(' ');
+      final long = List.generate(70, (i) => 'word$i').join(' ');
       final input = [
         'The company reported record revenue across every regional market.',
         '- $long',
@@ -135,12 +135,13 @@ void main() {
       ].join('\n');
 
       final out = SummaryFormatter.clamp(input);
-      expect(_wordCount(out), lessThanOrEqualTo(180));
+      expect(_wordCount(out), lessThanOrEqualTo(320));
+      expect(out, isNot(input), reason: 'the input exceeds the ceiling, so something must be dropped');
       expect(_bullets(out), isNotEmpty);
     });
 
     test('never cuts a retained bullet mid-sentence', () {
-      final long = List.generate(40, (i) => 'word$i').join(' ');
+      final long = List.generate(70, (i) => 'word$i').join(' ');
       final input = [
         'Focal sentence here.',
         '- $long',
@@ -150,7 +151,11 @@ void main() {
         '- $long',
       ].join('\n');
 
-      for (final b in _bullets(SummaryFormatter.clamp(input))) {
+      final bullets = _bullets(SummaryFormatter.clamp(input));
+      expect(bullets.length, lessThan(5),
+          reason: 'the input exceeds the ceiling, so at least one whole '
+              'bullet must be dropped rather than truncated');
+      for (final b in bullets) {
         expect(b, '- $long',
             reason: 'Retained bullets must be whole, not truncated.');
       }
@@ -160,17 +165,17 @@ void main() {
       final runaway = List.generate(400, (i) => 'word$i').join(' ');
       final out = SummaryFormatter.clamp(runaway);
 
-      expect(_wordCount(out), lessThanOrEqualTo(180));
+      expect(_wordCount(out), lessThanOrEqualTo(320));
       expect(out, endsWith('…'));
-      expect(out, isNot(contains('word300')));
+      expect(out, isNot(contains('word320')));
       expect(out, isNot(matches(RegExp(r'word\d*[a-z]…$'))));
     });
 
     test('a summary exactly at the ceiling is left intact', () {
-      final exact = List.generate(180, (i) => 'word$i').join(' ');
+      final exact = List.generate(320, (i) => 'word$i').join(' ');
       final out = SummaryFormatter.clamp(exact);
 
-      expect(_wordCount(out), 180);
+      expect(_wordCount(out), 320);
       expect(out, isNot(endsWith('…')));
     });
   });

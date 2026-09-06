@@ -181,7 +181,7 @@ void main() {
       await tester.pump();
 
       expect(tester.takeException(), isNull);
-      expect(find.textContaining('word300'), findsNothing);
+      expect(find.textContaining('word320'), findsNothing);
     });
   });
 }

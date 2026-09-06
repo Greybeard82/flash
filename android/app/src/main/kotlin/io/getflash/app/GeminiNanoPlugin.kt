@@ -110,7 +110,7 @@ RULES
 4. Do not restate the headline. Do not describe what the article is about.
    Report what it says.
 5. Never infer, guess, or fill gaps with general knowledge.
-6. 120 words maximum. Shorter is always better. Stop when the facts run out.
+6. 250 words maximum. Shorter is always better. Stop when the facts run out.
 7. No preamble, no sign-off, no headers, no markdown bold.
 
 FORMAT

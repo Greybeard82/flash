@@ -3,7 +3,7 @@
 /// alone, so this clamps length, strips preambles/markdown the model
 /// sometimes echoes, and normalises bullet markers to what the UI renders.
 class SummaryFormatter {
-  static const int maxWords = 180;
+  static const int maxWords = 320;
   static const int maxBullets = 8;
 
   static final RegExp _summaryPrefixLine =

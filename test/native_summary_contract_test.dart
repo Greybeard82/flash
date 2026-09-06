@@ -94,8 +94,8 @@ void main() {
           anyOf(contains('never infer'), contains('do not infer')));
     });
 
-    test('states the 120-word budget', () {
-      expect(_source, contains('120'));
+    test('states the 250-word budget', () {
+      expect(_source, contains('250'));
     });
 
     test('uses the "- " bullet marker the Dart widget renders', () {

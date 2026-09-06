@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as html_parser;
 import 'package:html/dom.dart';
 import '../models/content_block.dart';
+import 'summary_source.dart';
 
 export '../models/content_block.dart';
 
@@ -25,9 +26,16 @@ class ArticleExtractor {
     'aside', 'form', 'iframe', 'template',
   };
 
+  // "widget" is deliberately absent: Future plc's CMS (PC Gamer, TechRadar,
+  // GamesRadar) names every content section a "widget" — including the
+  // actual article body — so this term alone was deleting whole articles
+  // before content-scoring ever ran. A genuine ad/promo widget is almost
+  // always also caught by the more specific terms already here (ad, promo,
+  // sidebar, banner). Don't narrow it instead (e.g. "ad-widget") — that
+  // just chases one CMS's naming scheme at a time.
   static final _junkClassIdPattern = RegExp(
     r'ad|advertisement|banner|sidebar|related|share|social|comment|reply|'
-    r'newsletter|subscribe|cookie|popup|modal|overlay|promo|widget|menu|breadcrumb',
+    r'newsletter|subscribe|cookie|popup|modal|overlay|promo|menu|breadcrumb',
     caseSensitive: false,
   );
 
@@ -49,15 +57,57 @@ class ArticleExtractor {
       headers: {'User-Agent': _userAgent},
     ).timeout(networkTimeout);
     final body = utf8.decode(response.bodyBytes, allowMalformed: true);
-    final doc = html_parser.parse(body);
-    final baseUrl = url;
+    return extractFromHtml(body, url);
+  }
+
+  /// The HTML-parsing half of [extract], split out so it can be tested
+  /// against constructed markup without a real network fetch.
+  List<ContentBlock>? extractFromHtml(String html, String baseUrl) {
+    final doc = html_parser.parse(html);
 
     _removeJunk(doc);
 
     final contentEl = _findMainContent(doc);
     if (contentEl == null) return null;
 
-    final blocks = _walkElement(contentEl, baseUrl);
+    var blocks = _walkElement(contentEl, baseUrl);
+
+    // The tag-whitelist walk above only reads text out of p/h1-4/blockquote/
+    // ul/ol — it recurses into div/section/article/main purely to find more
+    // of those tags nested inside. Some sites' real prose isn't wrapped in
+    // any of those tags at all, so the walk can come back thin even when the
+    // already-correctly-identified content element's raw text holds much
+    // more. When that gap is large, fall back to the element's raw text.
+    //
+    // That raw text is NOT automatically trustworthy, though: on a live
+    // Kotaku article the "article" element's raw text was 100% byline,
+    // comment count, a newsletter CTA and a "You May Also Like" related-link
+    // list — zero real body prose, because Kotaku's actual paragraph content
+    // isn't present in the server-rendered HTML at all for that page. Naively
+    // falling back there would hand Nano a wall of unrelated headlines
+    // dressed up as "the article." The one signal that reliably tells real
+    // prose apart from a related-links block is link density — a related-
+    // link list is almost entirely anchor text, while an article body has
+    // only occasional inline links — so this reuses the same linkRatio
+    // concept _findMainContent already scores candidates on, as a hard
+    // reject here rather than a soft penalty.
+    final rawText = contentEl.text.trim();
+    final rawLinkText =
+        contentEl.querySelectorAll('a').map((a) => a.text).join();
+    final rawLinkRatio =
+        rawText.isNotEmpty ? rawLinkText.length / rawText.length : 0.0;
+    if (_blocksTextLength(blocks) < rawText.length / 2 &&
+        SummarySource.isSubstantial(rawText) &&
+        rawLinkRatio < 0.3) {
+      final paragraphs = rawText
+          .split(RegExp(r'\n\s*\n'))
+          .map((p) => p.trim())
+          .where((p) => p.isNotEmpty)
+          .toList();
+      blocks = paragraphs.length > 1
+          ? paragraphs.map((p) => ParagraphBlock(p)).toList()
+          : [ParagraphBlock(rawText)];
+    }
 
     // Filter tracker images
     final filtered = blocks.where((b) {
@@ -69,6 +119,25 @@ class ArticleExtractor {
 
     if (filtered.isEmpty) return null;
     return filtered;
+  }
+
+  int _blocksTextLength(List<ContentBlock> blocks) {
+    var total = 0;
+    for (final block in blocks) {
+      switch (block) {
+        case HeadingBlock():
+          total += block.text.length;
+        case ParagraphBlock():
+          total += block.text.length;
+        case QuoteBlock():
+          total += block.text.length;
+        case ListBlock():
+          total += block.items.join().length;
+        case ImageBlock():
+          break;
+      }
+    }
+    return total;
   }
 
   void _removeJunk(Document doc) {
