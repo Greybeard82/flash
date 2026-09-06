@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/screens/article_summary_sheet.dart';
+import 'package:flash/services/article_extractor.dart';
 import 'package:flash/services/gemini_nano_service.dart';
 import 'package:flash/services/summary_cache.dart';
 
@@ -75,11 +76,14 @@ void main() {
     SummaryCache.instance.clear();
   });
 
-  group('extraction budget', () {
-    test('is a hard 2 seconds', () {
-      expect(ArticleSummarySheet.extractionBudget, const Duration(seconds: 2),
-          reason: 'Extraction races the teaser fallback; it must not dominate '
-              'time-to-first-content.');
+  group('extraction timeout', () {
+    test('extraction has exactly one ceiling: the extractor\'s own', () {
+      expect(ArticleExtractor.networkTimeout, const Duration(seconds: 8),
+          reason: 'This used to race a second, tighter timeout in '
+              'ArticleSummarySheet, which fired first almost every time and '
+              'silently discarded every real fetch in favour of the RSS '
+              'teaser. There must be exactly one clock on this operation '
+              'now, owned by the extractor.');
     });
   });
 

@@ -9,6 +9,17 @@ export '../models/content_block.dart';
 class ArticleExtractor {
   static const _userAgent = 'Mozilla/5.0 (compatible; FlashReader/1.0)';
 
+  /// The single ceiling on extraction: long enough for the large majority of
+  /// real article pages (ads, tracking scripts, redirects and all) to
+  /// resolve, short enough that a caller's "Reading article…" state doesn't
+  /// feel broken while it waits. This used to race a second, tighter timeout
+  /// in `ArticleSummarySheet` — that outer timeout fired first almost every
+  /// time, extraction was abandoned before a real fetch could ever complete,
+  /// and every summary silently fell back to the RSS teaser. Don't add
+  /// another timeout around a call to [extract] elsewhere; this is the only
+  /// one that should exist for this operation.
+  static const Duration networkTimeout = Duration(seconds: 8);
+
   static final _junkTags = {
     'script', 'style', 'noscript', 'nav', 'footer', 'header',
     'aside', 'form', 'iframe', 'template',
@@ -36,7 +47,7 @@ class ArticleExtractor {
     final response = await http.get(
       Uri.parse(url),
       headers: {'User-Agent': _userAgent},
-    ).timeout(const Duration(seconds: 12));
+    ).timeout(networkTimeout);
     final body = utf8.decode(response.bodyBytes, allowMalformed: true);
     final doc = html_parser.parse(body);
     final baseUrl = url;

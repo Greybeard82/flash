@@ -16,9 +16,6 @@ class ArticleSummarySheet extends StatefulWidget {
   final Article article;
   const ArticleSummarySheet({super.key, required this.article});
 
-  /// Hard ceiling on article extraction before falling back to the RSS teaser.
-  static const Duration extractionBudget = Duration(seconds: 2);
-
   @override
   State<ArticleSummarySheet> createState() => _ArticleSummarySheetState();
 }
@@ -77,9 +74,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     String content;
     var teaserOnly = false;
     try {
-      final blocks = await ArticleExtractor()
-          .extract(widget.article.url)
-          .timeout(ArticleSummarySheet.extractionBudget);
+      final blocks = await ArticleExtractor().extract(widget.article.url);
       final extracted = SummarySource.fromBlocks(blocks, fallback: description);
       if (SummarySource.isSubstantial(extracted)) {
         content = extracted;
