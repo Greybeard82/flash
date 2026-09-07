@@ -668,7 +668,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get builtInViewer => 'Open articles in the built-in viewer';
 
   @override
-  String get summaryLength => 'Summary length';
+  String get summaryLength => 'AI Summary length';
 
   @override
   String get summaryShort => 'Short';

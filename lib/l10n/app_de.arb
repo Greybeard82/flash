@@ -213,7 +213,7 @@
   "selectAnArticle": "Wähle einen Artikel, um ihn hier zu lesen",
   "builtInViewer": "Artikel im integrierten Viewer öffnen",
   "reading": "Lesen",
-  "summaryLength": "Zusammenfassungslänge",
+  "summaryLength": "Länge der KI-Zusammenfassung",
   "summaryShort": "Kurz",
   "summaryStandard": "Standard",
   "summaryDetailed": "Ausführlich"

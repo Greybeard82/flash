@@ -677,7 +677,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ouvrir les articles dans la visionneuse intégrée';
 
   @override
-  String get summaryLength => 'Longueur du résumé';
+  String get summaryLength => 'Longueur du résumé IA';
 
   @override
   String get summaryShort => 'Court';

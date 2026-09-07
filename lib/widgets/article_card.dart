@@ -35,6 +35,16 @@ const List<double> _kIdentityMatrix = <double>[
   0, 0, 0, 1, 0,
 ];
 
+/// The AI-summary button's two colours, fixed rather than theme-derived.
+///
+/// Top-level so `summary_button_contrast_test.dart` asserts on the same two
+/// values the button actually paints, instead of a copy that could drift.
+/// See the note on colour in [_SummaryButton] for why both are fixed: a
+/// fixed light fill cannot be paired with a theme role that resolves light
+/// in dark mode.
+const Color kSummaryButtonFill = Color(0xFFB0EBFF);
+const Color kSummaryButtonIcon = Color(0xFF0A2540);
+
 /// How long a card takes to grey out once it's marked read.
 const Duration kReadDimDuration = Duration(milliseconds: 180);
 
@@ -149,11 +159,11 @@ class ArticleCard extends StatelessWidget {
     final isTV = FormFactor.isTV;
 
     final content = Padding(
-      // Asymmetric on purpose. The summary button supplies its own 6dp of
-      // right margin from inside its touch box (see [_SummaryButton]), so the
-      // card's own right inset is zero — the alternative was padding on top of
-      // padding and a button floating well short of the edge.
-      padding: const EdgeInsets.only(left: 16, right: 0, top: 10, bottom: 10),
+      // Symmetric again. The right inset was zero while the summary button
+      // sat at the card's edge and supplied its own margin from inside its
+      // touch box; the thumbnail is the rightmost element once more, so the
+      // normal 16dp screen inset applies on both sides.
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -242,13 +252,13 @@ class ArticleCard extends StatelessWidget {
           // 6, down from 12: the summary button needs the room and the
           // tightening is wanted rather than tolerated.
           const SizedBox(width: 6),
+          _SummaryButton(article: article),
+          const SizedBox(width: 2),
           _ThumbnailWidget(
             article: article,
             feedTitle: article.feedTitle ?? '',
             dimmed: isRead,
           ),
-          const SizedBox(width: 2),
-          _SummaryButton(article: article),
         ],
       ),
     );
@@ -593,13 +603,18 @@ class _ThumbnailWidget extends StatelessWidget {
 /// The splash stays on the painted 28dp rather than filling the touch box:
 /// an ink ripple spreading into empty card margin reads as a misdrawn button.
 ///
-/// **Colour.** `secondary` under `onSecondary`, straight from the active
-/// [ColorScheme] — the accent hue, not the primary branding every other
-/// button uses, so this reads as its own thing. Every palette generates
-/// that pair through `ColorScheme.fromSeed` (by way of the two-hue accent
-/// override in `app_theme.dart`), which guarantees the contrast, and
-/// Newspaper mode resolves through the same scheme — so there is no
-/// palette-specific branching here and there should not be.
+/// **Colour.** Two fixed hex values, deliberately outside the theme. This
+/// used to be `secondary` under `onSecondary`, which meant the button pulled
+/// whichever accent the active palette generated — and in this position, on
+/// every card, that read as garish rather than as an accent.
+///
+/// Because [_fill] is a fixed *light* colour, the icon has to be fixed too.
+/// A theme role like `onSecondary` or `onSurface` resolves toward light in
+/// dark mode — correct against a dark surface, and light-on-light here. So
+/// the pair is set together and checked together: #0A2540 on #B0EBFF is
+/// 11.97:1, well past the 4.5:1 this app holds text-like content to, and
+/// pinned in `summary_button_contrast_test.dart` so a later edit to either
+/// value cannot quietly break the other.
 class _SummaryButton extends StatelessWidget {
   final Article article;
 
@@ -612,7 +627,7 @@ class _SummaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    // No Theme.of here any more: both colours are fixed, which is the point.
     final l10n = AppLocalizations.of(context)!;
 
     void open() => showModalBottomSheet<void>(
@@ -643,11 +658,7 @@ class _SummaryButton extends StatelessWidget {
           height: _height,
           child: Center(
             child: Material(
-              // secondary, not primaryContainer: this is the newest, most
-              // distinct per-article action, appearing on every card — the
-              // accent colour rather than the same primary branding as
-              // everything else is what makes it read as its own thing.
-              color: theme.colorScheme.secondary,
+              color: kSummaryButtonFill,
               borderRadius: BorderRadius.circular(8),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -658,7 +669,7 @@ class _SummaryButton extends StatelessWidget {
                   child: Icon(
                     Icons.auto_awesome_rounded,
                     size: 18,
-                    color: theme.colorScheme.onSecondary,
+                    color: kSummaryButtonIcon,
                     semanticLabel: l10n.summary,
                   ),
                 ),

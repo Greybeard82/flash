@@ -674,7 +674,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get builtInViewer => 'Apri gli articoli nel visualizzatore integrato';
 
   @override
-  String get summaryLength => 'Lunghezza del riassunto';
+  String get summaryLength => 'Lunghezza del riepilogo IA';
 
   @override
   String get summaryShort => 'Breve';

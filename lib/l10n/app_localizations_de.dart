@@ -676,7 +676,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get builtInViewer => 'Artikel im integrierten Viewer öffnen';
 
   @override
-  String get summaryLength => 'Zusammenfassungslänge';
+  String get summaryLength => 'Länge der KI-Zusammenfassung';
 
   @override
   String get summaryShort => 'Kurz';

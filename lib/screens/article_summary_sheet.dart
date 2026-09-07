@@ -59,7 +59,20 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
 
   Future<void> _generate() async {
     final url = widget.article.url;
-    final cached = SummaryCache.instance.get(url);
+
+    // Read before the cache is consulted, not after: the tier is half the
+    // cache key, so without it here a summary generated at one length would
+    // be served back after the reader picked another.
+    //
+    // Fresh each time rather than from a snapshot — this setting lives in
+    // Quick Settings and can change between one summary and the next — and
+    // the same value goes on to the prompt and the formatter's backstop, so
+    // all three agree on which tier this is.
+    final tier = widget.summaryLengthForTesting ??
+        (await SettingsRepository().getAll()).summaryLength;
+    if (!mounted) return;
+
+    final cached = SummaryCache.instance.get(url, tier);
     if (cached != null) {
       if (mounted) {
         setState(() {
@@ -84,12 +97,6 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     }
 
     final locale = Platform.localeName.split('_').first;
-    // Read fresh, not from a cached snapshot: this setting lives in Quick
-    // Settings, so it can change between one summary and the next, and the
-    // same value has to reach both the prompt and the formatter's backstop
-    // or the two would be clamping to different tiers.
-    final tier = widget.summaryLengthForTesting ??
-        (await SettingsRepository().getAll()).summaryLength;
     final description = widget.article.description;
 
     String content;
@@ -138,7 +145,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
               _errorMessage = 'Empty summary returned';
             } else {
               _summary = result;
-              SummaryCache.instance.put(url, result);
+              SummaryCache.instance.put(url, tier, result);
             }
             _done = true;
           });

@@ -1,27 +1,30 @@
 // Contrast checks for `_applyAccentOverride`'s two colour pairs, across
 // every palette and both brightnesses.
 //
-// The summary button paints `onSecondary` on `secondary`; the alert-keyword
-// badges paint `onSecondaryContainer` on `secondaryContainer`. Both pairs
-// come straight from the active ColorScheme, on the argument that
-// `ColorScheme.fromSeed` already guarantees each pair contrasts. That is the
-// right argument, and this checks it rather than trusting it — every palette
-// carries a hand-adjusted two-hue accent override (`_applyAccentOverride` in
-// app_theme.dart), and an override is exactly the kind of thing that can
-// quietly break a generated guarantee. It already did once, here: the
-// override used to touch only `secondary`/`onSecondary`, leaving
-// `secondaryContainer`/`onSecondaryContainer` derived from the *primary*
-// seed's own algorithmic secondary palette — invisible while nothing painted
-// with it, and wrong the moment the alert badges started using it. Both
-// pairs are covered now so a future field this override forgets fails a
-// test rather than a screenshot.
+// The alert-keyword badges paint `onSecondaryContainer` on
+// `secondaryContainer`, straight from the active ColorScheme, on the
+// argument that `ColorScheme.fromSeed` already guarantees each pair
+// contrasts. That is the right argument, and this checks it rather than
+// trusting it — every palette carries a hand-adjusted two-hue accent
+// override (`_applyAccentOverride` in app_theme.dart), and an override is
+// exactly the kind of thing that can quietly break a generated guarantee.
+// It already did once, here: the override used to touch only
+// `secondary`/`onSecondary`, leaving `secondaryContainer`/
+// `onSecondaryContainer` derived from the *primary* seed's own algorithmic
+// secondary palette — invisible while nothing painted with it, and wrong the
+// moment the alert badges started using it.
 //
-// The bar is 3:1, WCAG AA for non-text content: the summary button's content
-// is an 18dp icon, the badges' a wordmark cut down to labelSmall — treated as
-// non-text here too since a low-vision reader working from context has the
-// keyword text itself, not the container tint, doing the identifying work.
-// Real values are far above the bar; the point of the test is to catch a
-// future palette or override that is not.
+// The summary button used to be checked the same way, off the same accent
+// pair. It no longer is: it paints two fixed hex values now, so it has no
+// ColorScheme guarantee behind it at all and is checked separately, below,
+// against a higher bar.
+//
+// The bar for the generated pairs is 3:1, WCAG AA for non-text content: a
+// badge's content is a wordmark cut down to labelSmall, treated as non-text
+// here since a low-vision reader working from context has the keyword text
+// itself, not the container tint, doing the identifying work. Real values
+// are far above the bar; the point is to catch a future palette or override
+// that is not.
 
 import 'dart:math' as math;
 
@@ -29,6 +32,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:flash/theme/app_theme.dart';
+import 'package:flash/widgets/article_card.dart'
+    show kSummaryButtonFill, kSummaryButtonIcon;
 import 'package:flash/widgets/quick_settings_bubble.dart' show kPaletteKeys;
 
 /// WCAG relative luminance.
@@ -65,15 +70,6 @@ void main() {
     for (final brightness in Brightness.values) {
       final scheme = paletteColorScheme(palette: palette, brightness: brightness);
 
-      test('$palette/${brightness.name}: the summary icon contrasts with its '
-          'button', () {
-        final ratio = _contrast(scheme.onSecondary, scheme.secondary);
-        expect(ratio, greaterThanOrEqualTo(minimum),
-            reason: '$palette/${brightness.name} draws the summary icon at '
-                '${ratio.toStringAsFixed(2)}:1, below the 3:1 this app holds '
-                'non-text content to');
-      });
-
       test('$palette/${brightness.name}: an alert-keyword badge contrasts '
           'with its chip', () {
         final ratio =
@@ -103,16 +99,40 @@ void main() {
     }
   }
 
+  // The summary button left the ColorScheme behind: it paints two fixed hex
+  // values now, because pulling the active palette's accent in that position
+  // read as garish. That trades one risk for another — a fixed *light* fill
+  // paired with a theme role would be light-on-light in dark mode — so the
+  // pair is pinned here, against the same constants the button paints.
+  group('the summary button is a fixed pair, checked as one', () {
+    test('the icon contrasts with the fill', () {
+      final ratio = _contrast(kSummaryButtonIcon, kSummaryButtonFill);
+      expect(ratio, greaterThanOrEqualTo(4.5),
+          reason: 'held to 4.5:1, not the 3:1 used for the generated pairs '
+              'above: these two are chosen by hand, so there is no '
+              'ColorScheme guarantee underneath them — it is ${ratio.toStringAsFixed(2)}:1');
+    });
+
+    test('neither colour varies with palette or brightness', () {
+      // The point of fixing them. If either ever became theme-derived again,
+      // it would have to stop being a const to do it.
+      expect(kSummaryButtonFill, const Color(0xFFB0EBFF));
+      expect(kSummaryButtonIcon, const Color(0xFF0A2540));
+    });
+
+    test('the icon is the darker of the two', () {
+      // Guards the specific dark-mode failure: a light icon on this light
+      // fill still passes a naive ratio check only if the fill is dark, so
+      // asserting which one is darker pins the intended direction.
+      expect(_luminance(kSummaryButtonIcon),
+          lessThan(_luminance(kSummaryButtonFill)));
+    });
+  });
+
   group('Newspaper mode contrasts too', () {
     // Hand-written constants, not generated from a seed, so the guarantee the
     // others lean on does not apply here at all.
     final scheme = flashNewspaperTheme().colorScheme;
-
-    test('summary button', () {
-      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
-      expect(ratio, greaterThanOrEqualTo(minimum),
-          reason: 'newspaper is ${ratio.toStringAsFixed(2)}:1');
-    });
 
     test('alert-keyword badge', () {
       final ratio =

@@ -1229,7 +1229,7 @@ abstract class AppLocalizations {
   /// Quick Settings row label for the AI summary length selector.
   ///
   /// In en, this message translates to:
-  /// **'Summary length'**
+  /// **'AI Summary length'**
   String get summaryLength;
 
   /// Shortest AI summary tier, roughly 40-50 words.

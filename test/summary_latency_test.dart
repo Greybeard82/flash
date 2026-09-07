@@ -96,7 +96,8 @@ void main() {
   group('cache short-circuit', () {
     testWidgets('a cached summary renders without any inference call',
         (tester) async {
-      SummaryCache.instance.put(_url, 'Four games are free.\n- Sifu');
+      SummaryCache.instance
+          .put(_url, kSummaryLengthStandard, 'Four games are free.\n- Sifu');
 
       final methods = <String>[];
       _mockNative(tester, methods: methods);
@@ -126,7 +127,7 @@ void main() {
       await _fromNative(tester, 'summaryDone', null);
       await tester.pump();
 
-      expect(SummaryCache.instance.get(_url), 'Four games are free.');
+      expect(SummaryCache.instance.get(_url, kSummaryLengthStandard), 'Four games are free.');
     });
 
     testWidgets('the cached value is the clamped text, not the raw stream',
@@ -139,7 +140,7 @@ void main() {
       await _fromNative(tester, 'summaryDone', null);
       await tester.pump();
 
-      expect(SummaryCache.instance.get(_url), 'Four games are free.',
+      expect(SummaryCache.instance.get(_url, kSummaryLengthStandard), 'Four games are free.',
           reason: 'Clamp runs before caching, so preamble and markdown are '
               'stripped once rather than on every read.');
     });
@@ -152,7 +153,7 @@ void main() {
       await tester.pump();
 
       expect(find.byKey(_unavailable), findsOneWidget);
-      expect(SummaryCache.instance.contains(_url), isFalse,
+      expect(SummaryCache.instance.contains(_url, kSummaryLengthStandard), isFalse,
           reason: 'A failure must not poison the cache for the session.');
     });
 
@@ -163,7 +164,7 @@ void main() {
       await _fromNative(tester, 'summaryDone', null);
       await tester.pump();
 
-      expect(SummaryCache.instance.contains(_url), isFalse);
+      expect(SummaryCache.instance.contains(_url, kSummaryLengthStandard), isFalse);
     });
 
     testWidgets('an unavailable model does not cache anything', (tester) async {
@@ -171,7 +172,7 @@ void main() {
       await _pumpSheet(tester);
 
       expect(find.byKey(_unavailable), findsOneWidget);
-      expect(SummaryCache.instance.contains(_url), isFalse);
+      expect(SummaryCache.instance.contains(_url, kSummaryLengthStandard), isFalse);
     });
   });
 

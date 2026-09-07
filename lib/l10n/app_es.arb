@@ -213,7 +213,7 @@
   "selectAnArticle": "Selecciona un artículo para leerlo aquí",
   "builtInViewer": "Abrir artículos en el visor integrado",
   "reading": "Lectura",
-  "summaryLength": "Longitud del resumen",
+  "summaryLength": "Longitud del resumen IA",
   "summaryShort": "Corto",
   "summaryStandard": "Estándar",
   "summaryDetailed": "Detallado"

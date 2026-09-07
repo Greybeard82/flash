@@ -336,7 +336,7 @@
   "@reading": {
     "description": "Settings section header for article-reading preferences."
   },
-  "summaryLength": "Summary length",
+  "summaryLength": "AI Summary length",
   "@summaryLength": {
     "description": "Quick Settings row label for the AI summary length selector."
   },

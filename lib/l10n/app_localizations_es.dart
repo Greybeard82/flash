@@ -674,7 +674,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get builtInViewer => 'Abrir artículos en el visor integrado';
 
   @override
-  String get summaryLength => 'Longitud del resumen';
+  String get summaryLength => 'Longitud del resumen IA';
 
   @override
   String get summaryShort => 'Corto';
