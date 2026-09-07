@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'summary_formatter.dart' show kSummaryLengthStandard;
+import 'summary_prompt_builder.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -107,13 +108,21 @@ class GeminiNanoService {
     final controller = StreamController<String>();
     _summaryController = controller;
 
+    // The prompt is assembled here, not on the other side of the channel.
+    // The cloud fallback is pure Dart and shares this builder, so a prompt
+    // built in Kotlin would have been a second copy of the same rules with
+    // nothing keeping the two honest.
+    final prompt = buildSummaryPrompt(
+      title: title,
+      content: content,
+      langInstruction: summaryLangInstructionFor(locale),
+      lengthTier: lengthTier,
+    );
+
     // Fire-and-forget — result is null (acknowledged immediately by native)
     unawaited(_channel.invokeMethod<void>('summarize', {
       'requestId': id,
-      'title': title,
-      'content': content,
-      'locale': locale,
-      'lengthTier': lengthTier,
+      'prompt': prompt,
     }).catchError((_) {
       if (id != _requestId) return;
       controller.addError('Failed to start summarization');

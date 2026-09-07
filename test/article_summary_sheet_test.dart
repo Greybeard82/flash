@@ -232,15 +232,20 @@ void main() {
         reason: 'after scrolling to the end, the last control is on-screen');
   });
 
-  testWidgets('passes title and content to the native summarize call',
+  testWidgets('the article reaches the native call inside the prompt',
       (tester) async {
+    // The sheet used to hand the native side a title and a body to build a
+    // prompt from. It now hands over a finished prompt, because the cloud
+    // fallback shares the same builder and a second copy of those rules on
+    // the Kotlin side is how the two would drift apart.
     final calls = <Map<Object?, Object?>>[];
     _mockNative(tester, summarizeCalls: calls);
     await _pumpSheet(tester);
 
     expect(calls, hasLength(1));
-    expect(calls.single['title'], "You Won't Believe What This Startup Did");
-    expect(calls.single['content'], 'Some article body text.');
+    final prompt = calls.single['prompt'] as String;
+    expect(prompt, contains("Title: You Won't Believe What This Startup Did"));
+    expect(prompt, contains('Content: Some article body text.'));
   });
 
   testWidgets('shows unavailable message on native summaryError',
@@ -275,5 +280,29 @@ void main() {
 
     expect(find.byKey(_unavailable), findsOneWidget);
     expect(find.byKey(_loading), findsNothing);
+  });
+
+  testWidgets('a real error survives the stream closing after it',
+      (tester) async {
+    // A stream that errors also closes, so onError and onDone both run. The
+    // generic "empty" message used to overwrite the real reason a moment
+    // after it arrived -- which is how a 404 naming the exact problem
+    // ("this model is no longer available to new users") reached the sheet
+    // as "Empty summary returned", with the useful half thrown away.
+    _mockNative(tester);
+    await _pumpSheet(tester);
+
+    await _fromNative(tester, 'summaryError', 'HTTP 404: model retired');
+    await tester.pump();
+
+    expect(find.byKey(_unavailable), findsOneWidget);
+    expect(find.text('Show details'), findsOneWidget);
+    await tester.tap(find.text('Show details'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('HTTP 404: model retired'), findsOneWidget,
+        reason: 'the detail behind "Show details" has to be the reason it '
+            'actually failed, not a generic stand-in');
+    expect(find.text('Empty summary returned'), findsNothing);
   });
 }

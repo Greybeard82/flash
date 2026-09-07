@@ -42,12 +42,17 @@ void main() {
   setUp(GeminiNanoService.resetForTesting);
 
   group('the chosen tier reaches the native side', () {
-    for (final tier in [
-      kSummaryLengthShort,
-      kSummaryLengthStandard,
-      kSummaryLengthDetailed,
+    // The tier used to cross the channel as its own argument and be turned
+    // into a prompt on the Kotlin side. It now crosses already baked into
+    // the prompt, which is a stronger thing to assert: this checks the
+    // number the model is actually told, not that a string was forwarded.
+    for (final (tier, target) in const [
+      (kSummaryLengthShort, '40-50 words'),
+      (kSummaryLengthStandard, '75-100 words'),
+      (kSummaryLengthDetailed, '150-200 words'),
     ]) {
-      testWidgets('$tier is sent as lengthTier', (tester) async {
+      testWidgets('$tier reaches the model as its own word target',
+          (tester) async {
         final calls = _captureSummarizeCalls(tester);
 
         await GeminiNanoService.instance
@@ -55,7 +60,7 @@ void main() {
         await tester.pump();
 
         expect(calls, hasLength(1));
-        expect(calls.single['lengthTier'], tier,
+        expect(calls.single['prompt'], contains(target),
             reason: 'the tier the reader picked has to be what the prompt '
                 'is built from');
       });
@@ -68,11 +73,10 @@ void main() {
       await GeminiNanoService.instance.summarizeStream('Title', 'Body text');
       await tester.pump();
 
-      expect(calls.single['lengthTier'], kSummaryLengthStandard);
+      expect(calls.single['prompt'], contains('75-100 words'));
     });
 
-    testWidgets('the other arguments are still sent alongside it',
-        (tester) async {
+    testWidgets('the article and its locale travel with it', (tester) async {
       // Guards against the tier being threaded in by replacing something
       // rather than adding to it.
       final calls = _captureSummarizeCalls(tester);
@@ -82,11 +86,26 @@ void main() {
       await tester.pump();
 
       final args = calls.single;
-      expect(args['title'], 'The Title');
-      expect(args['content'], 'The body');
-      expect(args['locale'], 'fr');
-      expect(args['lengthTier'], kSummaryLengthDetailed);
+      final prompt = args['prompt'] as String;
+      expect(prompt, contains('Title: The Title'));
+      expect(prompt, contains('Content: The body'));
+      expect(prompt, contains('Write the summary in French.'));
+      expect(prompt, contains('150-200 words'));
       expect(args['requestId'], isA<int>());
+    });
+
+    testWidgets('nothing but the prompt and the request id crosses',
+        (tester) async {
+      // If a caller starts sending raw pieces again, the native side has the
+      // material to build a second prompt from — which is what this whole
+      // move was to prevent.
+      final calls = _captureSummarizeCalls(tester);
+
+      await GeminiNanoService.instance.summarizeStream('T', 'B');
+      await tester.pump();
+
+      expect(calls.single.keys.map((k) => k as String).toSet(),
+          {'prompt', 'requestId'});
     });
   });
 

@@ -369,10 +369,18 @@ class AppLocalizationsDe extends AppLocalizations {
       'Die KI auf dem Gerät ist nicht verfügbar. Gemini Nano erfordert ein Pixel 8 oder neuer mit Android 14+.';
 
   @override
+  String get aiSummaryFailed =>
+      'Zusammenfassung konnte gerade nicht erstellt werden.';
+
+  @override
   String get aiSummaryShowDetails => 'Details anzeigen';
 
   @override
   String get aiSummaryHideDetails => 'Details ausblenden';
+
+  @override
+  String get aiSummaryDisclaimerCloud =>
+      'In der Cloud von Gemini erstellt. Kann Fehler enthalten.';
 
   @override
   String get aiSummaryDisclaimer =>
