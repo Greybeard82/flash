@@ -377,10 +377,63 @@ const double kSectionsColumnWidth = 96;
 /// reuse work instead of needing four bespoke narrow layouts.
 const double kSectionColumnMaxWidth = 420;
 
+/// Floor for the middle column. Below this the phone-oriented screens it
+/// hosts start fighting their own chrome — the app bar's actions and the FAB
+/// cluster were laid out for something near phone width.
+const double kSectionColumnMinWidth = 340;
+
 /// Cap on the reading pane. A web page stretched across the full width of a
 /// 1700dp tablet is unreadable, so past this the whole composition centres
 /// and leaves margins instead.
-const double kDetailPaneMaxWidth = 760;
+const double kDetailPaneMaxWidth = 880;
+
+/// Floor for the reading pane, roughly a phone's own portrait width — the
+/// baseline responsive web design already targets, so a site rendered this
+/// narrow is a layout every site is built to handle.
+const double kDetailPaneMinWidth = 420;
+
+/// How the two content columns divide [available] — the width left after the
+/// sections rail and the dividers.
+///
+/// The middle column used to be a fixed [SizedBox] and the reading pane a
+/// plain [Expanded], which meant the middle never gave up a pixel and the
+/// pane absorbed the entire shortfall. That was invisible on a large tablet
+/// and cramped the pane badly at real phone-landscape widths (~923dp on the
+/// Pixel, ~977dp on the Samsung), which is the whole reason this exists.
+///
+/// Both columns shrink together now, each giving up a share of the shortfall
+/// proportional to how much it *can* give before hitting its own floor — so
+/// the pane, which has far more slack between 880 and 420, yields more than
+/// the middle column does, without the middle column staying rigid.
+({double middle, double detail}) threeColumnWidths(double available) {
+  const preferred = kSectionColumnMaxWidth + kDetailPaneMaxWidth;
+  if (available >= preferred) {
+    return (middle: kSectionColumnMaxWidth, detail: kDetailPaneMaxWidth);
+  }
+
+  const minimums = kSectionColumnMinWidth + kDetailPaneMinWidth;
+  if (available <= minimums) {
+    // Narrower than both floors combined — which the breakpoint alone does
+    // not rule out, since 840dp leaves less than 760dp for the two of them.
+    // Nothing is left to negotiate, so each column takes the same share of
+    // what there is that its floor represents. Cramped, but it fits, which
+    // an overflowing Row would not.
+    final scale = available / minimums;
+    return (
+      middle: kSectionColumnMinWidth * scale,
+      detail: kDetailPaneMinWidth * scale,
+    );
+  }
+
+  final deficit = preferred - available;
+  const middleRange = kSectionColumnMaxWidth - kSectionColumnMinWidth;
+  const detailRange = kDetailPaneMaxWidth - kDetailPaneMinWidth;
+  const totalRange = middleRange + detailRange;
+  return (
+    middle: kSectionColumnMaxWidth - deficit * (middleRange / totalRange),
+    detail: kDetailPaneMaxWidth - deficit * (detailRange / totalRange),
+  );
+}
 
 class _AppShellState extends State<_AppShell> {
   int _currentIndex = 0;
@@ -544,10 +597,13 @@ class _AppShellState extends State<_AppShell> {
     if (useThreeColumn) {
       // Total the three columns and their dividers want. Past this the Row is
       // centred rather than stretched — see kDetailPaneMaxWidth.
-      const composed = kSectionsColumnWidth +
-          kSectionColumnMaxWidth +
-          kDetailPaneMaxWidth +
-          2; // the two dividers
+      // The two columns divide whatever is left once the rail and the two
+      // dividers have taken theirs. Past their combined preferred width the
+      // sum stops growing, and Center turns the remainder into equal margins
+      // rather than stretching a web page across the whole of a large
+      // tablet.
+      const chrome = kSectionsColumnWidth + 2; // the two dividers
+      final columns = threeColumnWidths(width - chrome);
 
       return PopScope(
         // Same reasoning as the two branches below: canPop stays false so
@@ -571,8 +627,8 @@ class _AppShellState extends State<_AppShell> {
           controller: _detailController,
           child: Scaffold(
             body: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: composed),
+              child: SizedBox(
+                width: chrome + columns.middle + columns.detail,
                 child: Row(
                   // Stretch, not the default centre: without it each column
                   // shrink-wraps to its own content height and the sections
@@ -590,11 +646,12 @@ class _AppShellState extends State<_AppShell> {
                     ),
                     const VerticalDivider(thickness: 1, width: 1),
                     SizedBox(
-                      width: kSectionColumnMaxWidth,
+                      width: columns.middle,
                       child: _buildScreenStack(),
                     ),
                     const VerticalDivider(thickness: 1, width: 1),
-                    Expanded(
+                    SizedBox(
+                      width: columns.detail,
                       child: AnimatedBuilder(
                         animation: _detailController,
                         builder: (context, _) {
