@@ -26,16 +26,28 @@ class ArticleExtractor {
     'aside', 'form', 'iframe', 'template',
   };
 
-  // "widget" is deliberately absent: Future plc's CMS (PC Gamer, TechRadar,
-  // GamesRadar) names every content section a "widget" — including the
-  // actual article body — so this term alone was deleting whole articles
-  // before content-scoring ever ran. A genuine ad/promo widget is almost
-  // always also caught by the more specific terms already here (ad, promo,
-  // sidebar, banner). Don't narrow it instead (e.g. "ad-widget") — that
-  // just chases one CMS's naming scheme at a time.
+  // Every term is anchored with \b, and that is load-bearing. Unanchored,
+  // these are substring matches that fire anywhere inside a longer word:
+  // bare "ad" matched <html class="techradar"> and deleted entire pages,
+  // and "sidebar" matched BBC's ContainerWithSidebarWrapper — a container
+  // that *has* a sidebar, not one that is one. It also hit shadow, header,
+  // download, thread, loaded and readability, so the damage was much wider
+  // than the two sites that happened to expose it.
+  //
+  // \b sits at a word/non-word transition, so "techradar" — one unbroken
+  // run of letters — no longer matches, while ad-container, google-ad and
+  // "content ad-slot" still do, because hyphens and spaces are real
+  // boundaries. Keep the anchors on anything added here.
+  //
+  // "widget" is deliberately absent, and anchoring would not have saved it:
+  // Future plc's CMS names real content sections "widget" as a standalone
+  // word, so that one is a genuine semantic collision rather than a
+  // boundary problem, and removal was the right call for it.
   static final _junkClassIdPattern = RegExp(
-    r'ad|advertisement|banner|sidebar|related|share|social|comment|reply|'
-    r'newsletter|subscribe|cookie|popup|modal|overlay|promo|menu|breadcrumb',
+    r'\bad\b|\badvertisement\b|\bbanner\b|\bsidebar\b|\brelated\b|\bshare\b|'
+    r'\bsocial\b|\bcomment\b|\breply\b|\bnewsletter\b|\bsubscribe\b|'
+    r'\bcookie\b|\bpopup\b|\bmodal\b|\boverlay\b|\bpromo\b|\bmenu\b|'
+    r'\bbreadcrumb\b',
     caseSensitive: false,
   );
 

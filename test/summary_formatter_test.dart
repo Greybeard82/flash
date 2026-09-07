@@ -14,7 +14,7 @@ void main() {
   group('backstop ceilings', () {
     test('are deliberately looser than the prompt budget', () {
       expect(SummaryFormatter.maxWords, 320);
-      expect(SummaryFormatter.maxBullets, 8);
+      expect(SummaryFormatter.maxBullets, 6);
     });
   });
 
@@ -86,14 +86,22 @@ void main() {
   });
 
   group('bullet ceiling', () {
-    test('keeps the first eight bullets in order and drops the rest', () {
+    test('keeps the first six bullets in order and drops the rest', () {
       final input = [
         'Twelve items were announced.',
         for (var i = 1; i <= 12; i++) '- Item $i',
       ].join('\n');
 
       expect(_bullets(SummaryFormatter.clamp(input)),
-          [for (var i = 1; i <= 8; i++) '- Item $i']);
+          [for (var i = 1; i <= 6; i++) '- Item $i']);
+    });
+
+    test('the cap sits just above the prompt\'s own five-bullet limit', () {
+      // A backstop equal to the instruction would turn every one-bullet
+      // overshoot into a visible truncation; the old 8 was loose enough to
+      // catch nothing, and let a real 8-bullet response through untouched.
+      expect(SummaryFormatter.maxBullets, greaterThan(5));
+      expect(SummaryFormatter.maxBullets, lessThan(8));
     });
 
     test('the focal line survives bullet truncation', () {

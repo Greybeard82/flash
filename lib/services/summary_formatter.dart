@@ -4,7 +4,11 @@
 /// sometimes echoes, and normalises bullet markers to what the UI renders.
 class SummaryFormatter {
   static const int maxWords = 320;
-  static const int maxBullets = 8;
+  /// Backstop for the prompt's "up to 5 bullets", set one above it rather
+  /// than at it: a backstop that equals the instruction turns every small
+  /// overshoot into a visible truncation, and 8 was so loose it caught
+  /// nothing — an 8-bullet response passed through untouched.
+  static const int maxBullets = 6;
 
   static final RegExp _summaryPrefixLine =
       RegExp(r'^summary:?\s*$', caseSensitive: false);
