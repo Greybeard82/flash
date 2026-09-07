@@ -1,69 +1,58 @@
 # Flash — working rules
 
-## Never change device state without asking first
+## NEVER change anything on a connected device. Ever.
 
-This covers **every** device — phones, tablets, anything of David's — and
-**every** kind of state, not just the display:
+No resolution. No DPI or display scaling. No rotation or orientation. No
+Wi-Fi, mobile data, airplane mode, DNS or proxy. No system settings, no
+permissions, no accounts. No reboots, no resets, no clearing app data.
 
-- Network: Wi-Fi, mobile data, airplane mode, DNS, proxy
-- Display: resolution, DPI, scaling, orientation
-- System settings of any kind, app permissions, accounts
-- Rebooting, clearing app data, uninstalling
+**Not for testing. Not "just to check". Not "I will put it back
+afterwards".** That last one is not a mitigation and never was — it is the
+sentence that made every one of these changes feel free. They were not free.
 
-Ask before doing any of it, every time. "I will put it back afterwards" is
-not a reason to skip asking, and it is not a mitigation: an action can leave
-consequences that restoring the setting does not undo.
+This is not "ask first". It is **never**. If a task appears to require it,
+the task is wrong: say so, and say what you would need David to do himself.
+He may choose to change something on his own device. You may not.
 
-**This rule was written because of real damage.** Disabling Wi-Fi on the
-Lenovo to test an offline code path left the tablet unable to resolve DNS
-when it reassociated; Android then flagged the network
-`NETWORK_SELECTION_DISABLED_NO_INTERNET_PERMANENT` and stopped joining it at
-all. Clearing that needs the user to reconnect by hand with the passphrase.
-The check that was run afterwards ("Wi-Fi is enabled") proved the radio was
-on and nothing else, and the breakage went unnoticed for hours.
+### What is allowed on a connected device
 
-If a test needs a device in a state it is not in — offline, rotated,
-rescaled — ask, or find a way to test it that does not touch the device: an
-emulator, an injected fake, a unit test.
+Installing and launching the app, driving the app's own UI, reading state
+(`dumpsys`, `logcat`, `screencap`, `am get-config`). That is the whole list.
+Everything is read-only or inside Flash itself.
 
+### Test the state, do not create it
 
-## Never reconfigure the phones
+Offline behaviour, a rotated screen, a different width — build these where
+they cost nothing: an emulator, an injected fake client, a widget test, a
+unit test. A real device is for confirming the app works on real hardware,
+in the state the owner keeps it in.
 
-**Never run any of the following against the Samsung Galaxy M51
-(`RF8N82VYG2D`) or the Pixel 11 Pro, for any reason, under any
-circumstance:**
+### Why this is written this way
 
-- `adb shell wm size` (setting *or* resetting)
-- `adb shell wm density` (setting *or* resetting)
-- `adb shell settings put system user_rotation` /
-  `accelerometer_rotation`, or any other forced-rotation command
-- Any other command that changes resolution, DPI, display scaling, or
-  orientation on either of these two specific devices
+Every clause above exists because it was actually done. Density and rotation
+overrides on the Pixel and the Samsung scrambled home screen layouts David
+had to rebuild by hand. Disabling Wi-Fi on the Lenovo to exercise an offline
+code path cost him an entire evening and ended in a factory reset. Each time,
+the check afterwards was shallow enough to report success — "Wi-Fi is
+enabled" proved the radio had power and nothing else — so the damage was
+found by him, not by me.
 
-**Landscape testing and landscape implementation work are completely
-off-limits on both phones, full stop.** Not temporarily, not "just to check
-something quickly", not "reset afterward" — off-limits, permanently.
+## Commands that are never to be run against any device
 
-**Why.** Overriding density, resolution or rotation on a real phone does not
-just change what Flash sees — it disrupts David's actual home screen. Icon
-positions and widget layouts get scrambled and there is no automatic undo.
-He has had to rebuild his home screen by hand after this happened, more than
-once. Restoring the *setting* afterwards does not restore the layout, so
-"I reset it after" is not a mitigation. Treat this with the same seriousness
-as any other "don't touch David's real device state" boundary.
+Named because each one has already caused damage. The list is illustrative,
+not exhaustive — the rule above is the rule, and it covers anything not
+listed here.
 
-**If a task appears to need a phone in landscape, that is a sign to use a
-different device — not a sign to make an exception.**
+- `adb shell wm size` / `wm density` — setting **or** resetting. A reset does
+  not restore the home screen the override scrambled.
+- `adb shell settings put system user_rotation` / `accelerometer_rotation`,
+  or any other forced rotation.
+- `adb shell svc wifi disable` / `svc data disable`, or anything else that
+  takes a device off the network.
+- `adb shell settings put ...` of any kind, `adb shell reboot`, `pm clear`.
 
-### What to do instead
-
-- Expanded tier, Medium tier, landscape, or anything tablet-shaped → the
-  **Lenovo Tab M11**. Real hardware, reaches both tablet tiers natively just
-  by rotating it, no override needed.
-- A width the Lenovo and the two AVDs do not cover → create or adjust an
-  **AVD**. Never a real phone.
-- The Samsung and the Pixel are for **portrait-only, phone-tier testing**
-  from now on — nothing else.
+This applies to the Samsung Galaxy M51, the Pixel 11 Pro, the Lenovo Tab M11,
+and any device connected in future. Emulators are the place for all of it.
 
 ## Phones do not have a landscape mode
 
