@@ -406,11 +406,18 @@ class SectionActionsList extends StatelessWidget {
                           const SizedBox(height: 4),
                           Text(
                             action.label,
-                            maxLines: 1,
+                            // Two lines, where the section entries above get
+                            // one. Those are single words that fit a 72dp
+                            // rail; these are phrases that do not, and on a
+                            // real tablet they came out as "Mark all a…" and
+                            // "Keyword a…". Wrapping is the cheap half of
+                            // that trade — the rail was deliberately slimmed,
+                            // and there is nothing but empty column below.
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             textAlign: TextAlign.center,
                             style: theme.textTheme.labelSmall
-                                ?.copyWith(color: colour),
+                                ?.copyWith(color: colour, height: 1.15),
                           ),
                         ],
                       ),
