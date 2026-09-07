@@ -758,6 +758,18 @@ abstract class AppLocalizations {
   /// **'On-device AI is not available on this device. Gemini Nano requires a Pixel 8 or newer running Android 14+.'**
   String get aiSummaryUnavailable;
 
+  /// No description provided for @aiSummaryShowDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Show details'**
+  String get aiSummaryShowDetails;
+
+  /// No description provided for @aiSummaryHideDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide details'**
+  String get aiSummaryHideDetails;
+
   /// No description provided for @aiSummaryDisclaimer.
   ///
   /// In en, this message translates to:

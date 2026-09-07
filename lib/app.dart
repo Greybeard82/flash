@@ -688,7 +688,7 @@ class _AppShellState extends State<_AppShell> {
   /// it, with nothing to say why the app opened.
   void _onAlertsRequested() {
     if (!mounted || _currentIndex == kAlertsNavIndex) return;
-    setState(() => _currentIndex = kAlertsNavIndex);
+    _setCurrentIndex(kAlertsNavIndex);
   }
 
   /// The number on the Alerts destination.
@@ -710,22 +710,35 @@ class _AppShellState extends State<_AppShell> {
   }
 
   void _finishOnboarding() {
-    setState(() {
-      _onboardingComplete = true;
-      _currentIndex = 1; // go straight to Feeds tab to add first feed
-    });
+    setState(() => _onboardingComplete = true);
+    _setCurrentIndex(1); // straight to Feeds, to add the first feed
+  }
+
+  /// The one way to change which section is showing.
+  ///
+  /// The sidebar's contextual actions are keyed by section, so the controller
+  /// has to be told every time the section changes. It used to be told from
+  /// `_navigateTo` alone, which left four other ways of moving between
+  /// sections — both back presses, an alert notification, the end of
+  /// onboarding — changing the screen without changing the actions beside it.
+  /// Routing every mutation through here is what stops a sixth caller
+  /// reintroducing that: there is no longer a version of this that only does
+  /// half the job.
+  void _setCurrentIndex(int index) {
+    if (!mounted) return;
+    setState(() => _currentIndex = index);
+    SectionActionsController.instance.selectSection(index);
   }
 
   void _navigateTo(int index) {
-    SectionActionsController.instance.selectSection(index);
     if (index == 0 && _currentIndex == 0) {
       // Already on Feed tab — trigger reload without remounting
       setState(() => _feedRefreshTrigger++);
-    } else {
-      setState(() => _currentIndex = index);
-      // Cheap, and it is the moment the number is about to be looked at.
-      unawaited(_refreshAlertsCount());
+      return;
     }
+    _setCurrentIndex(index);
+    // Cheap, and it is the moment the number is about to be looked at.
+    unawaited(_refreshAlertsCount());
   }
 
   // All screens are kept alive in the IndexedStack so state (scroll position,
@@ -843,7 +856,7 @@ class _AppShellState extends State<_AppShell> {
             return;
           }
           if (_currentIndex != 0) {
-            setState(() => _currentIndex = 0);
+            _setCurrentIndex(0);
             return;
           }
           SystemNavigator.pop();
@@ -983,7 +996,7 @@ class _AppShellState extends State<_AppShell> {
           // an open panel. Asked first, and swallowed if one was closed.
           if (dismissTopBubblePanel()) return;
           if (_currentIndex != 0) {
-            setState(() => _currentIndex = 0);
+            _setCurrentIndex(0);
             return;
           }
           // On Flash with nothing open, back means leave. Explicit because
@@ -1003,7 +1016,7 @@ class _AppShellState extends State<_AppShell> {
         if (didPop) return;
         if (dismissTopBubblePanel()) return;
         if (_currentIndex != 0) {
-          setState(() => _currentIndex = 0);
+          _setCurrentIndex(0);
           return;
         }
         SystemNavigator.pop();

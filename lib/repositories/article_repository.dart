@@ -2,6 +2,8 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/article.dart';
+import '../services/alerts_changed_notifier.dart';
+import '../services/blocked_state_notifier.dart';
 import '../utils/keyword_matcher.dart';
 import '../utils/constants.dart';
 
@@ -504,6 +506,7 @@ class ArticleRepository {
       }
     }
     await batch.commit(noResult: true);
+    _blockedRowsChanged();
   }
 
   Future<void> unblockByKeyword(String keyword) async {
@@ -514,5 +517,20 @@ class ArticleRepository {
       where: 'blocked_keyword = ?',
       whereArgs: [keyword],
     );
+    _blockedRowsChanged();
+  }
+
+  /// Pinged from inside the writes rather than from the panels that trigger
+  /// them, which is the same choke-point rule `FeedsChangedNotifier` follows:
+  /// add, edit and delete of a blocklist keyword all land here, so none of
+  /// them is a separate call site to remember.
+  ///
+  /// Alerts are pinged too, and not as a courtesy: every alerts query carries
+  /// a `NOT EXISTS ... is_blocked = 1` clause, so flipping this column changes
+  /// which alert rows exist as surely as it changes the feed. The blocklist
+  /// winning over alerts is the settled rule -- see `buildAlertCandidates`.
+  void _blockedRowsChanged() {
+    BlockedStateNotifier.instance.blockedArticlesChanged();
+    AlertsChangedNotifier.instance.alertsChanged();
   }
 }

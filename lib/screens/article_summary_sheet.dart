@@ -322,7 +322,15 @@ class _LoadingDotsState extends State<_LoadingDots>
   }
 }
 
-class _UnavailableMessage extends StatelessWidget {
+/// Why no summary appeared, in the user's terms.
+///
+/// The plain-language sentence is the whole message for almost everyone. The
+/// raw platform reason underneath it -- `NANO_UNAVAILABLE: Feature status: 0`
+/// and friends -- is what makes a bug report actionable, so it is kept, but it
+/// is not something to hand an ordinary reader unprompted: it was rendering in
+/// error red directly beneath the explanation, which read as a second, worse
+/// problem rather than a detail.
+class _UnavailableMessage extends StatefulWidget {
   final AppLocalizations l10n;
   final ThemeData theme;
   final String? debugReason;
@@ -331,7 +339,18 @@ class _UnavailableMessage extends StatelessWidget {
       {super.key, required this.l10n, required this.theme, this.debugReason});
 
   @override
+  State<_UnavailableMessage> createState() => _UnavailableMessageState();
+}
+
+class _UnavailableMessageState extends State<_UnavailableMessage> {
+  bool _showDetails = false;
+
+  @override
   Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final l10n = widget.l10n;
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Column(
@@ -345,17 +364,59 @@ class _UnavailableMessage extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(l10n.aiSummaryUnavailable,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: 0.5))),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
               ),
             ],
           ),
-          if (debugReason != null) ...[
-            const SizedBox(height: 8),
-            Text(debugReason!,
-                style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.error.withValues(alpha: 0.7))),
+          if (widget.debugReason != null) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: () => setState(() => _showDetails = !_showDetails),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  // Indented to the width of the icon and its gap, so the
+                  // control lines up under the sentence it belongs to.
+                  padding: const EdgeInsets.fromLTRB(28, 6, 8, 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _showDetails
+                            ? l10n.aiSummaryHideDetails
+                            : l10n.aiSummaryShowDetails,
+                        style: theme.textTheme.labelMedium?.copyWith(
+                            color: muted, fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(width: 2),
+                      AnimatedRotation(
+                        turns: _showDetails ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Icon(Icons.expand_more_rounded,
+                            size: 18, color: muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox(width: double.infinity, height: 0),
+              secondChild: Padding(
+                padding: const EdgeInsets.only(left: 28, top: 2),
+                child: SelectableText(
+                  widget.debugReason!,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      fontFamily: 'monospace'),
+                ),
+              ),
+              crossFadeState: _showDetails
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 150),
+            ),
           ],
         ],
       ),

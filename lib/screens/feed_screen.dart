@@ -12,6 +12,7 @@ import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/blocked_state_notifier.dart';
 import '../services/section_actions_controller.dart';
 import '../services/article_opener.dart';
 import '../services/feeds_changed_notifier.dart';
@@ -381,6 +382,10 @@ class _FeedScreenState extends State<FeedScreen>
     // otherwise never reach here. (Feed/folder structure changes use
     // FeedsChangedNotifier instead — see _consumeFeedsChange.)
     SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
+    // A new blocklist keyword hides rows this list is already holding, and
+    // the panel that adds one is opened from this very screen, so nothing
+    // else would ever tell it to re-query.
+    BlockedStateNotifier.instance.addListener(_onBlockedStateChanged);
     _boot();
   }
 
@@ -429,6 +434,7 @@ class _FeedScreenState extends State<FeedScreen>
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
+    BlockedStateNotifier.instance.removeListener(_onBlockedStateChanged);
     _scrollDebounce?.cancel();
     _pageController.dispose();
     _fabFade.dispose();
@@ -651,6 +657,14 @@ class _FeedScreenState extends State<FeedScreen>
   void _onExternalReadStateChanged() {
     if (!mounted || _booting) return;
     unawaited(_refreshCountsFromDb());
+  }
+
+  /// A full re-query, where [_onExternalReadStateChanged] only refreshes the
+  /// counts: blocking decides which rows come back at all, so the list this
+  /// screen is holding is wrong, not just its badges.
+  void _onBlockedStateChanged() {
+    if (!mounted || _booting) return;
+    unawaited(_loadArticles());
   }
 
   /// Patches the one article in place rather than re-querying — the saved

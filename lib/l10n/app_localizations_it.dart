@@ -368,6 +368,12 @@ class AppLocalizationsIt extends AppLocalizations {
       'L\'IA sul dispositivo non è disponibile. Gemini Nano richiede un Pixel 8 o superiore con Android 14+.';
 
   @override
+  String get aiSummaryShowDetails => 'Mostra dettagli';
+
+  @override
+  String get aiSummaryHideDetails => 'Nascondi dettagli';
+
+  @override
   String get aiSummaryDisclaimer =>
       'Generato sul dispositivo da Gemini Nano. Potrebbe non essere completamente accurato.';
 

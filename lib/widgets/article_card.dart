@@ -657,20 +657,29 @@ class _SummaryButton extends StatelessWidget {
           width: _touchWidth,
           height: _height,
           child: Center(
-            child: Material(
-              color: kSummaryButtonFill,
-              borderRadius: BorderRadius.circular(8),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: open,
-                child: SizedBox(
-                  width: _visibleWidth,
-                  height: _height,
-                  child: Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 18,
-                    color: kSummaryButtonIcon,
-                    semanticLabel: l10n.summary,
+            // The Tooltip above already labels this button, and the InkWell
+            // and Icon below were each contributing a second "Summary" of
+            // their own -- an accessibility dump showed two identically
+            // labelled, separately focusable nodes per card, one 40dp wide
+            // and one 28dp. The InkWell stays for its ripple and the Icon for
+            // the glyph; neither needs to be reachable in its own right, so
+            // the whole painted layer is excluded and the outer 40dp target
+            // is the single node that remains.
+            child: ExcludeSemantics(
+              child: Material(
+                color: kSummaryButtonFill,
+                borderRadius: BorderRadius.circular(8),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: open,
+                  child: const SizedBox(
+                    width: _visibleWidth,
+                    height: _height,
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 18,
+                      color: kSummaryButtonIcon,
+                    ),
                   ),
                 ),
               ),

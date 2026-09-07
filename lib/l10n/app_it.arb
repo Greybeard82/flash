@@ -115,6 +115,8 @@
   "markAllReadConfirm": "Segna tutto come letto",
   "aiSummary": "Riepilogo IA",
   "aiSummaryUnavailable": "L'IA sul dispositivo non è disponibile. Gemini Nano richiede un Pixel 8 o superiore con Android 14+.",
+  "aiSummaryShowDetails": "Mostra dettagli",
+  "aiSummaryHideDetails": "Nascondi dettagli",
   "aiSummaryDisclaimer": "Generato sul dispositivo da Gemini Nano. Potrebbe non essere completamente accurato.",
   "aiSummaryReading": "Lettura dell'articolo…",
   "aiSummaryWriting": "Scrittura del riepilogo…",

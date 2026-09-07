@@ -156,6 +156,8 @@
   "markAllReadConfirm": "Mark all read",
   "aiSummary": "AI Summary",
   "aiSummaryUnavailable": "On-device AI is not available on this device. Gemini Nano requires a Pixel 8 or newer running Android 14+.",
+  "aiSummaryShowDetails": "Show details",
+  "aiSummaryHideDetails": "Hide details",
   "aiSummaryDisclaimer": "Generated on-device by Gemini Nano. May not be fully accurate.",
   "aiSummaryReading": "Reading the article…",
   "aiSummaryWriting": "Writing the summary…",
