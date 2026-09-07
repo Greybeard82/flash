@@ -54,13 +54,11 @@ OverlayEntry showBubblePanel({
   required Widget child,
 }) {
   final anchorRect = _globalRectOf(anchorKey);
-  // Measured here, from the calling screen, rather than inside the panel.
-  // The panel lives in the Overlay, whose context is the whole display -- ask
-  // it how wide things are and the answer is always the display, which is how
-  // a panel opened from the article column ended up spanning the reading pane
-  // too. `context` here belongs to the screen that opened it, which on a
-  // tablet is one column of two or three.
-  final hostRect = _globalRectOfContext(context);
+  // Measured here, not inside the panel: the panel lives in the Overlay,
+  // whose context is the whole display, so asking it how wide things are
+  // always answers "the display" -- which is how a panel opened from the
+  // article column ended up spanning the reading pane too.
+  final hostRect = _hostRectOf(anchorKey, context);
 
   late OverlayEntry entry;
   entry = OverlayEntry(
@@ -80,10 +78,39 @@ OverlayEntry showBubblePanel({
 /// The button's rect in global coordinates, used as the origin the panel grows
 /// out of. Falls back to the top-right corner if the button has somehow gone
 /// away between tap and insert.
-/// The same, for the screen that opened the panel. Null when it cannot be
-/// measured, which leaves the panel to fall back to the display.
-Rect? _globalRectOfContext(BuildContext context) {
-  final box = context.findRenderObject() as RenderBox?;
+/// The bounds of the screen hosting the panel, which is what its width should
+/// come from. Null when they cannot be worked out, leaving the panel to fall
+/// back to the display.
+///
+/// Two ways to reach the same box, because neither works on its own.
+///
+/// **From the anchor**, walking up to its [Scaffold]. Every screen keeps its
+/// own Scaffold and the three-column layout constrains each to one column, so
+/// this is right whenever the anchor is on screen. It has to be the anchor
+/// rather than the caller's `context`: `QuickSettingsAction` passes its own
+/// State's context — an app-bar IconButton — and measuring that gave a 48dp
+/// host, which is why three of the four screens drew an empty sliver behind a
+/// full-screen scrim.
+///
+/// **From the caller's own render box**, when the anchor is not mounted. On a
+/// tablet the Alerts screen's "+" moves into the shared sidebar, so the FAB
+/// its anchor key is attached to is never built and the key resolves to
+/// nothing. Screens pass their own State's context, whose render object *is*
+/// the Scaffold subtree, so measuring it directly lands on the same column.
+/// Walking up from there would not: a screen's Scaffold is below its State,
+/// not above it, so the search would sail past it to the shell's full-width
+/// one.
+Rect? _hostRectOf(GlobalKey anchorKey, BuildContext caller) {
+  // findAncestorStateOfType rather than Scaffold.maybeOf: this runs from a
+  // button callback, not a build, and maybeOf would register an inherited
+  // dependency from outside the build phase.
+  final scaffold =
+      anchorKey.currentContext?.findAncestorStateOfType<ScaffoldState>();
+  return _rectOf(scaffold?.context) ?? _rectOf(caller);
+}
+
+Rect? _rectOf(BuildContext? context) {
+  final box = context?.findRenderObject() as RenderBox?;
   if (box == null || !box.hasSize || box.size.isEmpty) return null;
   return box.localToGlobal(Offset.zero) & box.size;
 }

@@ -11,6 +11,24 @@ import 'quick_settings_bubble.dart';
 /// stateful only to own its own anchor key — the bubble grows out of the
 /// button that was tapped, so each screen's copy needs a key of its own.
 ///
+/// **FeedScreen deliberately does not use this**, and that is not an
+/// oversight left over from before this widget existed. Its own
+/// `_openBubblePanel` is shared by four bubbles — quick settings, the filter,
+/// the blocklist and the alerts panel — and carries two things this widget
+/// has no business knowing about: a single guard so only one of those four is
+/// ever open at a time, and `_fabFade.settleNow()`, so the FAB cluster is not
+/// caught mid-fade behind the scrim. Moving one of those four onto this
+/// widget would fragment FeedScreen's own handling rather than consolidate
+/// anything.
+///
+/// It used to matter for a second reason: this widget passes its own State's
+/// context to [showBubblePanel], which is an app-bar IconButton, and the old
+/// host measurement believed whatever context it was handed. FeedScreen
+/// passing something screen-sized was the only thing keeping it correct.
+/// [showBubblePanel] now measures from the anchor's Scaffold instead, so both
+/// call shapes are right — the divergence is a difference in responsibility,
+/// not in reliability.
+///
 /// The settings are read fresh on every open rather than passed in. The panel
 /// edits live values, and a cached snapshot taken when the screen was built
 /// would show a stale switch position after the same setting had been changed
