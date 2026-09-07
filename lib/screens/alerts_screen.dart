@@ -7,6 +7,7 @@ import '../models/article.dart';
 import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
 import '../services/article_opener.dart';
+import '../services/section_actions_controller.dart';
 import '../services/alert_navigation_intent.dart';
 import '../services/alerts_changed_notifier.dart';
 import '../services/read_state_notifier.dart';
@@ -314,6 +315,24 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
 
+    // The same two the corner offered, on the same terms:
+    // unconditional, unlike the Flash list's.
+    final hostedInSidebar = SectionActionsHost.of(context);
+    if (hostedInSidebar) {
+      SectionActionsController.instance.setFor(kSectionAlerts, [
+        SectionAction(
+          icon: Icons.add,
+          label: l10n.keywordAlerts,
+          onPressed: _openKeywordPanel,
+        ),
+        SectionAction(
+          icon: Icons.done_all_rounded,
+          label: l10n.markAllRead,
+          onPressed: _markAllRead,
+        ),
+      ]);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.alertsTab),
@@ -339,33 +358,35 @@ class _AlertsScreenState extends State<AlertsScreen> {
       // Flash there is no "has feeds yet" precondition, and "+" is exactly
       // what an empty Alerts list needs offering.
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ScrollFade(
-            controller: _fabFade,
-            child: FloatingActionButton(
-              key: _addKeywordKey,
-              heroTag: 'alerts_add_keyword',
-              onPressed: _openKeywordPanel,
-              tooltip: l10n.keywordAlerts,
-              mini: true,
-              child: const Icon(Icons.add),
-            ),
+      floatingActionButton: hostedInSidebar
+          ? null
+          : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ScrollFade(
+                controller: _fabFade,
+                child: FloatingActionButton(
+                  key: _addKeywordKey,
+                  heroTag: 'alerts_add_keyword',
+                  onPressed: _openKeywordPanel,
+                  tooltip: l10n.keywordAlerts,
+                  mini: true,
+                  child: const Icon(Icons.add),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ScrollFade(
+                controller: _fabFade,
+                child: FloatingActionButton(
+                  heroTag: 'alerts_mark_all_read',
+                  onPressed: _markAllRead,
+                  tooltip: l10n.markAllRead,
+                  mini: true,
+                  child: const Icon(Icons.done_all_rounded),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          ScrollFade(
-            controller: _fabFade,
-            child: FloatingActionButton(
-              heroTag: 'alerts_mark_all_read',
-              onPressed: _markAllRead,
-              tooltip: l10n.markAllRead,
-              mini: true,
-              child: const Icon(Icons.done_all_rounded),
-            ),
-          ),
-        ],
-      ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),

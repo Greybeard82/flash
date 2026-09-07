@@ -12,6 +12,7 @@ import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/section_actions_controller.dart';
 import '../services/article_opener.dart';
 import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
@@ -1426,6 +1427,38 @@ class _FeedScreenState extends State<FeedScreen>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+
+    // In a rail layout these three live in the shared sidebar instead of the
+    // corner of the list, so the list is left uncluttered. Registered from
+    // build so the set tracks the same conditions the buttons did — the
+    // controller ignores repeat registrations that change nothing.
+    final hostedInSidebar = SectionActionsHost.of(context);
+    if (hostedInSidebar) {
+      SectionActionsController.instance.setFor(kSectionFlash, [
+        if (_hasFeeds && !_booting) ...[
+          SectionAction(
+            icon: Icons.refresh_rounded,
+            label: l10n.refresh,
+            busy: _refreshing,
+            onPressed: _refreshing ? null : () => _refreshCurrentTab(),
+          ),
+          SectionAction(
+            icon: Icons.search_rounded,
+            label: l10n.searchArticles,
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SearchScreen()),
+            ),
+          ),
+          SectionAction(
+            icon: Icons.done_all_rounded,
+            label: l10n.markAllRead,
+            onPressed: _markAllRead,
+          ),
+        ],
+      ]);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: _newspaperMode ? _NewspaperMasthead() : Text(l10n.appTitle),
@@ -1475,7 +1508,9 @@ class _FeedScreenState extends State<FeedScreen>
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _hasFeeds && !_booting
+      floatingActionButton: hostedInSidebar
+          ? null
+          : _hasFeeds && !_booting
           ? Padding(
               padding: EdgeInsets.zero,
               child: Column(

@@ -10,7 +10,9 @@ import 'services/alert_navigation_intent.dart';
 import 'services/alerts_changed_notifier.dart';
 import 'repositories/alert_match_repository.dart';
 import 'services/article_detail_controller.dart';
+import 'services/section_actions_controller.dart';
 import 'services/settings_notifier.dart';
+import 'widgets/spinning_refresh_icon.dart';
 import 'widgets/article_detail_pane.dart';
 import 'screens/feed_screen.dart';
 import 'screens/feeds_screen.dart';
@@ -339,9 +341,86 @@ class _SectionsColumn extends StatelessWidget {
                     : Icons.bookmark_border_rounded),
                 l10n.bookmarks),
             entry(kAlertsNavIndex, alertsIcon, l10n.alertsTab),
+            const SectionActionsList(),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The current section's actions, rendered under the section switcher.
+///
+/// Deliberately never draws a selected state: these fire and are done, and
+/// a persistent highlight would say the sidebar has two things selected at
+/// once. Everything else — icon size, label style, padding — matches the
+/// entries above so the column reads as one list.
+class SectionActionsList extends StatelessWidget {
+  /// Rail tiers get less vertical room per entry than the custom sidebar.
+  final bool compact;
+
+  const SectionActionsList({super.key, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colour = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+
+    return AnimatedBuilder(
+      animation: SectionActionsController.instance,
+      builder: (context, _) {
+        final actions = SectionActionsController.instance.actions;
+        if (actions.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Divider(
+              height: compact ? 12 : 20,
+              indent: 12,
+              endIndent: 12,
+              color: theme.dividerColor,
+            ),
+            for (final action in actions)
+              Tooltip(
+                message: action.label,
+                child: InkWell(
+                  onTap: action.onPressed,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                        vertical: compact ? 8 : 12, horizontal: 4),
+                    child: Opacity(
+                      // Disabled rather than hidden: Flash's refresh stays
+                      // put while it runs, so the column does not reshuffle
+                      // under a finger that is about to tap the next thing.
+                      opacity: action.onPressed == null ? 0.4 : 1.0,
+                      child: Column(
+                        children: [
+                          SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: action.busy
+                                ? SpinningRefreshIcon(size: 20, color: colour)
+                                : Icon(action.icon, size: 24, color: colour),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            action.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: colour),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -631,6 +710,7 @@ class _AppShellState extends State<_AppShell> {
   }
 
   void _navigateTo(int index) {
+    SectionActionsController.instance.selectSection(index);
     if (index == 0 && _currentIndex == 0) {
       // Already on Feed tab — trigger reload without remounting
       setState(() => _feedRefreshTrigger++);
@@ -761,76 +841,78 @@ class _AppShellState extends State<_AppShell> {
           }
           SystemNavigator.pop();
         },
-        child: ArticleDetailScope(
-          controller: _detailController,
-          child: Scaffold(
-            body: Row(
-              // Stretch, not the default centre: without it each column
-              // shrink-wraps to its own content height and the sections
-              // list floats in the middle of the screen instead of
-              // starting at the top.
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Pinned to the screen edge, outside the centred group.
-                //
-                // It used to sit inside it, which put the whole wide-screen
-                // margin to its left: on a 1707dp tablet the composition
-                // caps at ~1385dp and centres, so the rail began 161dp in,
-                // and since the margin is the same colour as the rail it
-                // read as one enormous gutter. Dragging the divider switched
-                // to the manual split, which fills the width, and the rail
-                // snapped flush — which is why it looked like the rail
-                // "fixed itself" on first interaction. Navigation belongs at
-                // the edge; only the content columns want centring.
-                SizedBox(
-                  width: kSectionsColumnWidth,
-                  child: _SectionsColumn(
-                    currentIndex: _currentIndex,
-                    onSelected: _navigateTo,
-                    alertsCount: _alertsCount,
+        child: SectionActionsHost(
+          child: ArticleDetailScope(
+            controller: _detailController,
+            child: Scaffold(
+              body: Row(
+                // Stretch, not the default centre: without it each column
+                // shrink-wraps to its own content height and the sections
+                // list floats in the middle of the screen instead of
+                // starting at the top.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Pinned to the screen edge, outside the centred group.
+                  //
+                  // It used to sit inside it, which put the whole wide-screen
+                  // margin to its left: on a 1707dp tablet the composition
+                  // caps at ~1385dp and centres, so the rail began 161dp in,
+                  // and since the margin is the same colour as the rail it
+                  // read as one enormous gutter. Dragging the divider switched
+                  // to the manual split, which fills the width, and the rail
+                  // snapped flush — which is why it looked like the rail
+                  // "fixed itself" on first interaction. Navigation belongs at
+                  // the edge; only the content columns want centring.
+                  SizedBox(
+                    width: kSectionsColumnWidth,
+                    child: _SectionsColumn(
+                      currentIndex: _currentIndex,
+                      onSelected: _navigateTo,
+                      alertsCount: _alertsCount,
+                    ),
                   ),
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
-                Expanded(
-                  child: Center(
-                    child: SizedBox(
-                      width: columns.middle +
-                          kResizeHandleWidth +
-                          columns.detail,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          SizedBox(
-                            width: columns.middle,
-                            child: _buildScreenStack(),
-                          ),
-                          _ResizableDivider(
-                            onDrag: dragDivider,
-                            onReset: () =>
-                                setState(() => _manualMiddleWidth = null),
-                          ),
-                          SizedBox(
-                            width: columns.detail,
-                            child: AnimatedBuilder(
-                              animation: _detailController,
-                              builder: (context, _) {
-                                final article = _detailController.article;
-                                if (article == null) {
-                                  return const ArticleDetailPlaceholder();
-                                }
-                                return ArticleDetailPane(
-                                  article: article,
-                                  onClose: _detailController.clear,
-                                );
-                              },
+                  const VerticalDivider(thickness: 1, width: 1),
+                  Expanded(
+                    child: Center(
+                      child: SizedBox(
+                        width: columns.middle +
+                            kResizeHandleWidth +
+                            columns.detail,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: columns.middle,
+                              child: _buildScreenStack(),
                             ),
-                          ),
-                        ],
+                            _ResizableDivider(
+                              onDrag: dragDivider,
+                              onReset: () =>
+                                  setState(() => _manualMiddleWidth = null),
+                            ),
+                            SizedBox(
+                              width: columns.detail,
+                              child: AnimatedBuilder(
+                                animation: _detailController,
+                                builder: (context, _) {
+                                  final article = _detailController.article;
+                                  if (article == null) {
+                                    return const ArticleDetailPlaceholder();
+                                  }
+                                  return ArticleDetailPane(
+                                    article: article,
+                                    onClose: _detailController.clear,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -838,23 +920,32 @@ class _AppShellState extends State<_AppShell> {
     }
 
     if (useRail) {
-      Widget shell = Scaffold(
-        body: Row(
-          children: [
-            if (_onboardingComplete) ...[
-              NavigationRail(
-                selectedIndex: _currentIndex,
-                onDestinationSelected: _navigateTo,
-                extended: isTV,
-                labelType: isTV
-                    ? NavigationRailLabelType.none
-                    : NavigationRailLabelType.all,
-                destinations: railDestinations,
-              ),
-              const VerticalDivider(thickness: 1, width: 1),
+      Widget shell = SectionActionsHost(
+        child: Scaffold(
+          body: Row(
+            children: [
+              if (_onboardingComplete) ...[
+                NavigationRail(
+                  selectedIndex: _currentIndex,
+                  onDestinationSelected: _navigateTo,
+                  extended: isTV,
+                  labelType: isTV
+                      ? NavigationRailLabelType.none
+                      : NavigationRailLabelType.all,
+                  destinations: railDestinations,
+                  // NavigationRail lays its children out in a Column and gives
+                  // `trailing` whatever height it asks for, so this has to be
+                  // a single self-sizing widget rather than something that
+                  // expects to fill the rail. Compact spacing because the
+                  // destinations above it are already taller here than in the
+                  // custom sidebar.
+                  trailing: const SectionActionsList(compact: true),
+                ),
+                const VerticalDivider(thickness: 1, width: 1),
+              ],
+              Expanded(child: _buildScreenStack()),
             ],
-            Expanded(child: _buildScreenStack()),
-          ],
+          ),
         ),
       );
 

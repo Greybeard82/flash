@@ -7,6 +7,7 @@ import '../models/feed.dart';
 import '../models/folder.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
+import '../services/section_actions_controller.dart';
 import '../services/favicon_service.dart';
 import '../services/feedly_service.dart';
 import '../services/loading_controller.dart';
@@ -179,6 +180,21 @@ class _FeedsScreenState extends State<FeedsScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+
+    // The extended pill becomes an ordinary icon-and-label entry in the
+    // sidebar — the wide shape belongs to a floating button, not to a
+    // column of equal-sized actions.
+    final hostedInSidebar = SectionActionsHost.of(context);
+    if (hostedInSidebar) {
+      SectionActionsController.instance.setFor(kSectionCategories, [
+        SectionAction(
+          icon: Icons.add,
+          label: l10n.addFeed,
+          onPressed: _showAddFeedSheet,
+        ),
+      ]);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.categories),
@@ -187,12 +203,14 @@ class _FeedsScreenState extends State<FeedsScreen> {
       ),
       // One entry point. Creating a category happens inside the add-feed
       // sheet, where it is needed — a feed cannot be added without one.
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: 'add_feed',
-        onPressed: _showAddFeedSheet,
-        icon: const Icon(Icons.add),
-        label: Text(l10n.addFeed),
-      ),
+      floatingActionButton: hostedInSidebar
+          ? null
+          : FloatingActionButton.extended(
+            heroTag: 'add_feed',
+            onPressed: _showAddFeedSheet,
+            icon: const Icon(Icons.add),
+            label: Text(l10n.addFeed),
+          ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),

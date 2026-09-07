@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
+import '../services/section_actions_controller.dart';
 import '../services/article_opener.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
@@ -182,6 +183,20 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
+    // Same gate the button used: offered only when there is something
+    // unread to mark.
+    final hostedInSidebar = SectionActionsHost.of(context);
+    if (hostedInSidebar) {
+      SectionActionsController.instance.setFor(kSectionBookmarks, [
+        if (_articles.any((a) => !a.isRead))
+          SectionAction(
+            icon: Icons.done_all_rounded,
+            label: l10n.markAllRead,
+            onPressed: _markAllRead,
+          ),
+      ]);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(l10n.bookmarks),
@@ -189,7 +204,9 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
         actions: const [QuickSettingsAction()],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      floatingActionButton: _articles.any((a) => !a.isRead)
+      floatingActionButton: hostedInSidebar
+          ? null
+          : _articles.any((a) => !a.isRead)
           ? FloatingActionButton(
               heroTag: 'bookmarks_mark_all_read',
               onPressed: _markAllRead,
