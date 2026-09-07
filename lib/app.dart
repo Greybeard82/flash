@@ -764,53 +764,73 @@ class _AppShellState extends State<_AppShell> {
         child: ArticleDetailScope(
           controller: _detailController,
           child: Scaffold(
-            body: Center(
-              child: SizedBox(
-                width: chrome + columns.middle + columns.detail,
-                child: Row(
-                  // Stretch, not the default centre: without it each column
-                  // shrink-wraps to its own content height and the sections
-                  // list floats in the middle of the screen instead of
-                  // starting at the top.
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    SizedBox(
-                      width: kSectionsColumnWidth,
-                      child: _SectionsColumn(
-                        currentIndex: _currentIndex,
-                        onSelected: _navigateTo,
-                        alertsCount: _alertsCount,
-                      ),
-                    ),
-                    const VerticalDivider(thickness: 1, width: 1),
-                    SizedBox(
-                      width: columns.middle,
-                      child: _buildScreenStack(),
-                    ),
-                    _ResizableDivider(
-                      onDrag: dragDivider,
-                      onReset: () =>
-                          setState(() => _manualMiddleWidth = null),
-                    ),
-                    SizedBox(
-                      width: columns.detail,
-                      child: AnimatedBuilder(
-                        animation: _detailController,
-                        builder: (context, _) {
-                          final article = _detailController.article;
-                          if (article == null) {
-                            return const ArticleDetailPlaceholder();
-                          }
-                          return ArticleDetailPane(
-                            article: article,
-                            onClose: _detailController.clear,
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+            body: Row(
+              // Stretch, not the default centre: without it each column
+              // shrink-wraps to its own content height and the sections
+              // list floats in the middle of the screen instead of
+              // starting at the top.
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Pinned to the screen edge, outside the centred group.
+                //
+                // It used to sit inside it, which put the whole wide-screen
+                // margin to its left: on a 1707dp tablet the composition
+                // caps at ~1385dp and centres, so the rail began 161dp in,
+                // and since the margin is the same colour as the rail it
+                // read as one enormous gutter. Dragging the divider switched
+                // to the manual split, which fills the width, and the rail
+                // snapped flush — which is why it looked like the rail
+                // "fixed itself" on first interaction. Navigation belongs at
+                // the edge; only the content columns want centring.
+                SizedBox(
+                  width: kSectionsColumnWidth,
+                  child: _SectionsColumn(
+                    currentIndex: _currentIndex,
+                    onSelected: _navigateTo,
+                    alertsCount: _alertsCount,
+                  ),
                 ),
-              ),
+                const VerticalDivider(thickness: 1, width: 1),
+                Expanded(
+                  child: Center(
+                    child: SizedBox(
+                      width: columns.middle +
+                          kResizeHandleWidth +
+                          columns.detail,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: columns.middle,
+                            child: _buildScreenStack(),
+                          ),
+                          _ResizableDivider(
+                            onDrag: dragDivider,
+                            onReset: () =>
+                                setState(() => _manualMiddleWidth = null),
+                          ),
+                          SizedBox(
+                            width: columns.detail,
+                            child: AnimatedBuilder(
+                              animation: _detailController,
+                              builder: (context, _) {
+                                final article = _detailController.article;
+                                if (article == null) {
+                                  return const ArticleDetailPlaceholder();
+                                }
+                                return ArticleDetailPane(
+                                  article: article,
+                                  onClose: _detailController.clear,
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
