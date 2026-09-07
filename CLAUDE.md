@@ -1,5 +1,32 @@
 # Flash — working rules
 
+## Never change device state without asking first
+
+This covers **every** device — phones, tablets, anything of David's — and
+**every** kind of state, not just the display:
+
+- Network: Wi-Fi, mobile data, airplane mode, DNS, proxy
+- Display: resolution, DPI, scaling, orientation
+- System settings of any kind, app permissions, accounts
+- Rebooting, clearing app data, uninstalling
+
+Ask before doing any of it, every time. "I will put it back afterwards" is
+not a reason to skip asking, and it is not a mitigation: an action can leave
+consequences that restoring the setting does not undo.
+
+**This rule was written because of real damage.** Disabling Wi-Fi on the
+Lenovo to test an offline code path left the tablet unable to resolve DNS
+when it reassociated; Android then flagged the network
+`NETWORK_SELECTION_DISABLED_NO_INTERNET_PERMANENT` and stopped joining it at
+all. Clearing that needs the user to reconnect by hand with the passphrase.
+The check that was run afterwards ("Wi-Fi is enabled") proved the radio was
+on and nothing else, and the breakage went unnoticed for hours.
+
+If a test needs a device in a state it is not in — offline, rotated,
+rescaled — ask, or find a way to test it that does not touch the device: an
+emulator, an injected fake, a unit test.
+
+
 ## Never reconfigure the phones
 
 **Never run any of the following against the Samsung Galaxy M51
