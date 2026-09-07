@@ -1,6 +1,8 @@
 package io.getflash.app
 
 import android.content.Context
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -45,11 +47,47 @@ class MainActivity : FlutterActivity() {
         window.setBackgroundDrawable(ColorDrawable(color))
     }
 
+    /// Phones do not have a landscape mode. Tablets do.
+    ///
+    /// Flash's responsive logic is width-based -- rail at 600dp, three
+    /// columns at 840 -- and was always correct. The problem was the width it
+    /// was handed: a Samsung M51 turned sideways reports ~977dp and a Pixel
+    /// 11 Pro ~923dp, so both crossed the tablet breakpoint honestly. The
+    /// answer is not to teach the layout about device classes; it is to stop
+    /// a phone ever producing that width.
+    ///
+    /// [Configuration.smallestScreenWidthDp] is the shorter of the two
+    /// dimensions and does not change when the device rotates, which is
+    /// exactly what makes it safe to key off -- reading the *current* width
+    /// here would reintroduce the bug being fixed. 600 is deliberately the
+    /// same number `useRail` uses on the Dart side; they are meant to stay in
+    /// step.
+    ///
+    /// Re-applied on configuration changes as well as at launch. The manifest
+    /// keeps `smallestScreenSize` in `configChanges`, so this Activity is
+    /// never recreated and `onCreate` sees only the configuration it launched
+    /// in -- which, launched into split-screen, is the window's width rather
+    /// than the device's.
+    private fun applyOrientationLock() {
+        val wanted = if (resources.configuration.smallestScreenWidthDp < 600) {
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != wanted) requestedOrientation = wanted
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        applyOrientationLock()
         // Before the first Flutter frame, so the launch cross-fade composites
         // over the right colour.
         applyStoredBackground()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyOrientationLock()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
