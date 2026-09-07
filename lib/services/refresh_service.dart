@@ -13,6 +13,7 @@ import '../repositories/keyword_alert_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import 'alert_notification_planner.dart';
+import 'notification_group.dart';
 import 'rss_service.dart';
 
 const String kRefreshTaskName = 'flash_feed_refresh';
@@ -24,7 +25,10 @@ const String _kKeywordChannelName = 'Keyword alerts';
 /// keyword set posts under its own id they no longer overwrite each other,
 /// which trades one destroyed notification for a wall of them; grouping is
 /// what keeps five alerts looking like five alerts rather than five apps.
-const String _kKeywordGroupKey = 'flash_keyword_alerts_group';
+/// Kept as a name for what this is, but it now resolves to the app-wide
+/// group so the unread count stacks alongside these rather than beside
+/// them as a second, ungroupable card.
+const String _kKeywordGroupKey = kFlashNotificationGroupKey;
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -44,7 +48,7 @@ void callbackDispatcher() {
 
 Future<FlutterLocalNotificationsPlugin> _initPlugin() async {
   final plugin = FlutterLocalNotificationsPlugin();
-  const androidInit = AndroidInitializationSettings('ic_launcher_monochrome');
+  const androidInit = AndroidInitializationSettings('ic_stat_flash');
   // The handler must be passed here too. initialize() overwrites the stored
   // response callback every time, and this runs on the UI isolate as well as
   // the background one -- so omitting it de-registered main()'s handler the

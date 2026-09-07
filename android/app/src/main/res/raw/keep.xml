@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Resources the shrinker cannot see are used.
+
+  Flutter's Gradle plugin turns on resource shrinking for release builds, so
+  there is nothing in app/build.gradle.kts to show it is happening. Both of
+  these are notification small icons, named as plain strings from Dart and
+  resolved at runtime by getIdentifier() - there is no static reference for
+  the shrinker to follow, so it reports them `reachable=false` and strips
+  them after the merge. That is why an icon could compile, appear in
+  merged_res as a .flat, and still be missing from the linked resource table.
+
+  ic_launcher_monochrome happened to survive that on its own, but only
+  because the manifest's @mipmap/ic_launcher names it as the adaptive icon's
+  monochrome layer. It is kept explicitly here too: the day that reference
+  changes, notifications would silently lose their icon, and nothing about
+  the launcher icon would look like the cause.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_flash,@drawable/ic_launcher_monochrome" />

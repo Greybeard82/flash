@@ -54,11 +54,19 @@ OverlayEntry showBubblePanel({
   required Widget child,
 }) {
   final anchorRect = _globalRectOf(anchorKey);
+  // Measured here, from the calling screen, rather than inside the panel.
+  // The panel lives in the Overlay, whose context is the whole display -- ask
+  // it how wide things are and the answer is always the display, which is how
+  // a panel opened from the article column ended up spanning the reading pane
+  // too. `context` here belongs to the screen that opened it, which on a
+  // tablet is one column of two or three.
+  final hostRect = _globalRectOfContext(context);
 
   late OverlayEntry entry;
   entry = OverlayEntry(
     builder: (_) => _BubblePanel(
       anchorRect: anchorRect,
+      hostRect: hostRect,
       onDismissed: () {
         if (entry.mounted) entry.remove();
       },
@@ -72,6 +80,14 @@ OverlayEntry showBubblePanel({
 /// The button's rect in global coordinates, used as the origin the panel grows
 /// out of. Falls back to the top-right corner if the button has somehow gone
 /// away between tap and insert.
+/// The same, for the screen that opened the panel. Null when it cannot be
+/// measured, which leaves the panel to fall back to the display.
+Rect? _globalRectOfContext(BuildContext context) {
+  final box = context.findRenderObject() as RenderBox?;
+  if (box == null || !box.hasSize || box.size.isEmpty) return null;
+  return box.localToGlobal(Offset.zero) & box.size;
+}
+
 Rect _globalRectOf(GlobalKey key) {
   final box = key.currentContext?.findRenderObject() as RenderBox?;
   if (box == null || !box.hasSize) return Rect.zero;
@@ -80,11 +96,15 @@ Rect _globalRectOf(GlobalKey key) {
 
 class _BubblePanel extends StatefulWidget {
   final Rect anchorRect;
+
+  /// The bounds of the screen that opened this, or null if unmeasurable.
+  final Rect? hostRect;
   final VoidCallback onDismissed;
   final Widget child;
 
   const _BubblePanel({
     required this.anchorRect,
+    required this.hostRect,
     required this.onDismissed,
     required this.child,
   });
@@ -149,10 +169,14 @@ class _BubblePanelState extends State<_BubblePanel>
   ({double left, double top, double width}) _panelBox(BuildContext context) {
     final media = MediaQuery.of(context);
     const horizontalInset = 16.0;
+    // Inset from the column that owns this panel, not from the display.
+    final host = widget.hostRect;
+    final left = (host?.left ?? 0) + horizontalInset;
+    final right = (host?.right ?? media.size.width) - horizontalInset;
     return (
-      left: horizontalInset,
+      left: left,
       top: media.padding.top + 12,
-      width: media.size.width - horizontalInset * 2,
+      width: right - left,
     );
   }
 

@@ -6,6 +6,7 @@ import '../repositories/settings_repository.dart';
 import '../utils/device_localizations.dart';
 import 'unread_widget_service.dart';
 import 'alert_navigation_intent.dart';
+import 'notification_group.dart';
 
 const String kUnreadBadgeChannelId = 'flash_unread_count';
 const String kUnreadBadgeChannelName = 'Unread count';
@@ -192,7 +193,7 @@ class _NotificationBadgeSink implements UnreadBadgeSink {
     final existing = _plugin;
     if (existing != null) return existing;
     final plugin = FlutterLocalNotificationsPlugin();
-    const androidInit = AndroidInitializationSettings('ic_launcher_monochrome');
+    const androidInit = AndroidInitializationSettings('ic_stat_flash');
     // The shared handler, like every other initialize() in the app — this call
     // overwrites whatever was registered before it.
     await plugin.initialize(
@@ -227,6 +228,9 @@ class _NotificationBadgeSink implements UnreadBadgeSink {
           playSound: false,
           enableVibration: false,
           showWhen: false,
+// Without this the shade had a grouped keyword alert next to an
+          // ungrouped count and could stack neither.
+          groupKey: kFlashNotificationGroupKey,
           // What the launcher actually reads.
           number: badgeNumber,
           channelShowBadge: true,

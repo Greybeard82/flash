@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The notification small icon.
+
+  Deliberately NOT ic_launcher_monochrome, which the shade used to borrow.
+  That one is the adaptive icon's monochrome layer and is drawn to the
+  launcher safe zone - the inner 72dp of a 108dp canvas - so it is correct
+  there and about two thirds the size it should be here, because a status
+  bar icon uses its whole canvas. Same bolt, retargeted: 85% of the height,
+  with the remainder as the internal padding the platform guidance asks for.
+
+  Drawn white and flat on purpose: Android masks a small icon to a single
+  colour and only the alpha survives.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:scaleX="0.0481132" android:scaleY="0.0481132" android:translateX="-0.5094" android:translateY="-0.3170">
+        <path android:pathData="M317 44 L144 286 L231 292 L198 468 L376 202 L287 198 Z" android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>

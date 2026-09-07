@@ -572,6 +572,29 @@ double maxDraggableMiddleWidth(double available) =>
   return (middle: middle, detail: available - middle);
 }
 
+/// A column rule that stops below the status bar.
+///
+/// The app draws edge-to-edge, which is the current platform guidance and
+/// stays. What that guidance also says is that going edge-to-edge must not
+/// let content collide with the system bars -- and a decorative hairline
+/// running up through the clock is exactly that collision. The background
+/// still goes to the top of the display; only the rule stops short of it.
+///
+/// Both column boundaries use this. Insetting one and not the other would
+/// just be a different inconsistency, noticed later.
+class _ColumnRule extends StatelessWidget {
+  /// The rule itself, so the draggable divider can put its own line here.
+  final Widget child;
+
+  const _ColumnRule({required this.child});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
+        child: child,
+      );
+}
+
 /// The draggable boundary between the article list and the reading pane.
 ///
 /// Renders as the same 1dp rule the static [VerticalDivider] did, sat inside
@@ -612,7 +635,7 @@ class _ResizableDivider extends StatelessWidget {
           child: Stack(
             alignment: Alignment.center,
             children: [
-              Container(width: 1, color: line),
+              _ColumnRule(child: Container(width: 1, color: line)),
               // Four dots rather than a solid bar: enough to read as a grip
               // at a glance, not enough to become furniture.
               Column(
@@ -891,7 +914,8 @@ class _AppShellState extends State<_AppShell> {
                       alertsCount: _alertsCount,
                     ),
                   ),
-                  const VerticalDivider(thickness: 1, width: 1),
+                  const _ColumnRule(
+                      child: VerticalDivider(thickness: 1, width: 1)),
                   Expanded(
                     child: Center(
                       child: SizedBox(
@@ -961,7 +985,8 @@ class _AppShellState extends State<_AppShell> {
                   // custom sidebar.
                   trailing: const SectionActionsList(compact: true),
                 ),
-                const VerticalDivider(thickness: 1, width: 1),
+                const _ColumnRule(
+                    child: VerticalDivider(thickness: 1, width: 1)),
               ],
               Expanded(child: _buildScreenStack()),
             ],
