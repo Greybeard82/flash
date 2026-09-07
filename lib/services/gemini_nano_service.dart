@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'summary_formatter.dart' show kSummaryLengthStandard;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -93,7 +94,9 @@ class GeminiNanoService {
   /// Starts streaming a summary. Returns a [Stream<String>] that emits the
   /// accumulated text so far on each new chunk, finishing when generation ends.
   /// Returns null if unavailable.
-  Future<Stream<String>?> summarizeStream(String title, String content, {String locale = 'en'}) async {
+  Future<Stream<String>?> summarizeStream(String title, String content,
+      {String locale = 'en',
+      String lengthTier = kSummaryLengthStandard}) async {
     if (!await isAvailable) return null;
 
     // Retire any in-progress summary: bumping the id makes every remaining
@@ -110,6 +113,7 @@ class GeminiNanoService {
       'title': title,
       'content': content,
       'locale': locale,
+      'lengthTier': lengthTier,
     }).catchError((_) {
       if (id != _requestId) return;
       controller.addError('Failed to start summarization');

@@ -335,5 +335,21 @@
   "reading": "Reading",
   "@reading": {
     "description": "Settings section header for article-reading preferences."
+  },
+  "summaryLength": "Summary length",
+  "@summaryLength": {
+    "description": "Quick Settings row label for the AI summary length selector."
+  },
+  "summaryShort": "Short",
+  "@summaryShort": {
+    "description": "Shortest AI summary tier, roughly 40-50 words."
+  },
+  "summaryStandard": "Standard",
+  "@summaryStandard": {
+    "description": "Default AI summary tier, roughly 75-100 words."
+  },
+  "summaryDetailed": "Detailed",
+  "@summaryDetailed": {
+    "description": "Longest AI summary tier, roughly 150-200 words."
   }
 }

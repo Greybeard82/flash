@@ -212,5 +212,9 @@
   "openInBrowser": "Im Browser öffnen",
   "selectAnArticle": "Wähle einen Artikel, um ihn hier zu lesen",
   "builtInViewer": "Artikel im integrierten Viewer öffnen",
-  "reading": "Lesen"
+  "reading": "Lesen",
+  "summaryLength": "Zusammenfassungslänge",
+  "summaryShort": "Kurz",
+  "summaryStandard": "Standard",
+  "summaryDetailed": "Ausführlich"
 }

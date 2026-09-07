@@ -1,3 +1,4 @@
+import '../services/summary_formatter.dart';
 import '../utils/constants.dart';
 
 /// Feed ordering values stored under the `article_sort_order` settings key.
@@ -78,6 +79,16 @@ class AppSettings {
   /// a full-screen route on a phone, the right-hand column on a tablet.
   final bool useEmbeddedWebView;
 
+  /// How long AI summaries should be: `'short'`, `'standard'` or
+  /// `'detailed'`.
+  ///
+  /// A string enum like [theme], not a new convention. This used to be the
+  /// model's own judgement — it was asked to work out whether an article was
+  /// a short factual item or a substantive piece and pick a length to
+  /// match — which was the least predictable part of the whole feature. The
+  /// reader knows what they want better than the model can infer it.
+  final String summaryLength;
+
   const AppSettings({
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
@@ -94,6 +105,7 @@ class AppSettings {
     this.markAllReadConfirm = true,
     this.unreadBadgeNotification = true,
     this.useEmbeddedWebView = true,
+    this.summaryLength = kSummaryLengthStandard,
     this.colorPalette = 'orange',
   });
 
@@ -123,6 +135,10 @@ class AppSettings {
           (map['unread_badge_notification'] ?? 'true') == 'true',
       useEmbeddedWebView:
           (map['use_embedded_webview'] ?? 'true') == 'true',
+      summaryLength:
+          kSummaryTierLimits.containsKey(map['summary_length'])
+              ? map['summary_length']!
+              : kSummaryLengthStandard,
       colorPalette: map['color_palette'] ?? 'orange',
     );
   }
@@ -143,6 +159,7 @@ class AppSettings {
     bool? markAllReadConfirm,
     bool? unreadBadgeNotification,
     bool? useEmbeddedWebView,
+    String? summaryLength,
     String? colorPalette,
   }) {
     return AppSettings(
@@ -162,6 +179,7 @@ class AppSettings {
       unreadBadgeNotification:
           unreadBadgeNotification ?? this.unreadBadgeNotification,
       useEmbeddedWebView: useEmbeddedWebView ?? this.useEmbeddedWebView,
+      summaryLength: summaryLength ?? this.summaryLength,
       colorPalette: colorPalette ?? this.colorPalette,
     );
   }

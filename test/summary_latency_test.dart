@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/screens/article_summary_sheet.dart';
+import 'package:flash/services/summary_formatter.dart';
 import 'package:flash/services/article_extractor.dart';
 import 'package:flash/services/gemini_nano_service.dart';
 import 'package:flash/services/summary_cache.dart';
@@ -61,7 +62,12 @@ Future<void> _pumpSheet(WidgetTester tester) async {
   await tester.pumpWidget(MaterialApp(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
-    home: Scaffold(body: ArticleSummarySheet(article: _article())),
+    home: Scaffold(
+        // Tier supplied directly: these tests have no database, and
+        // the real read would hang rather than fail under FakeAsync.
+        body: ArticleSummarySheet(
+            article: _article(),
+            summaryLengthForTesting: kSummaryLengthStandard)),
   ));
   await tester.pump();
   await tester.pump();

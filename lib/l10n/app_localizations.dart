@@ -1225,6 +1225,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open articles in the built-in viewer'**
   String get builtInViewer;
+
+  /// Quick Settings row label for the AI summary length selector.
+  ///
+  /// In en, this message translates to:
+  /// **'Summary length'**
+  String get summaryLength;
+
+  /// Shortest AI summary tier, roughly 40-50 words.
+  ///
+  /// In en, this message translates to:
+  /// **'Short'**
+  String get summaryShort;
+
+  /// Default AI summary tier, roughly 75-100 words.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get summaryStandard;
+
+  /// Longest AI summary tier, roughly 150-200 words.
+  ///
+  /// In en, this message translates to:
+  /// **'Detailed'**
+  String get summaryDetailed;
 }
 
 class _AppLocalizationsDelegate

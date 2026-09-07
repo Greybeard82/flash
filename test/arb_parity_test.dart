@@ -29,6 +29,8 @@ const Map<String, List<String>> _sameAsEnglishIsFine = {
   'paletteOrange': ['de', 'fr'],
   // A bare "+3" overflow badge is a number, not a word.
   'alertsMoreKeywords': ['de', 'es', 'fr', 'it'],
+  // "Standard" is the ordinary word in German, French and Italian too.
+  'summaryStandard': ['de', 'fr', 'it'],
 };
 
 Map<String, String> _load(String locale) {

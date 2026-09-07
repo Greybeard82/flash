@@ -5,6 +5,7 @@ import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../repositories/settings_repository.dart';
 import '../services/article_extractor.dart';
 import '../services/gemini_nano_service.dart';
 import '../services/loading_controller.dart';
@@ -14,7 +15,21 @@ import '../services/summary_source.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
-  const ArticleSummarySheet({super.key, required this.article});
+
+  /// Test-only seam: supplies the summary-length tier instead of reading it
+  /// from the database. Widget tests can't combine testWidgets() with real
+  /// sqflite I/O — the FFI Future never resolves inside flutter_test's
+  /// FakeAsync zone, so the read below would hang rather than fail, and the
+  /// summary would never start. Same reasoning, and same shape, as
+  /// `FlashApp.initialSettingsForTesting`. Unused in production.
+  @visibleForTesting
+  final String? summaryLengthForTesting;
+
+  const ArticleSummarySheet({
+    super.key,
+    required this.article,
+    this.summaryLengthForTesting,
+  });
 
   @override
   State<ArticleSummarySheet> createState() => _ArticleSummarySheetState();
@@ -69,6 +84,12 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     }
 
     final locale = Platform.localeName.split('_').first;
+    // Read fresh, not from a cached snapshot: this setting lives in Quick
+    // Settings, so it can change between one summary and the next, and the
+    // same value has to reach both the prompt and the formatter's backstop
+    // or the two would be clamping to different tiers.
+    final tier = widget.summaryLengthForTesting ??
+        (await SettingsRepository().getAll()).summaryLength;
     final description = widget.article.description;
 
     String content;
@@ -94,7 +115,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     });
 
     final stream = await nano.summarizeStream(widget.article.title, content,
-        locale: locale);
+        locale: locale, lengthTier: tier);
 
     if (stream == null) {
       if (mounted) {
@@ -112,7 +133,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
       onDone: () {
         if (mounted) {
           setState(() {
-            final result = SummaryFormatter.clamp(_pending);
+            final result = SummaryFormatter.clamp(_pending, tier: tier);
             if (result.isEmpty) {
               _errorMessage = 'Empty summary returned';
             } else {

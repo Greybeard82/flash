@@ -672,4 +672,16 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get builtInViewer => 'Apri gli articoli nel visualizzatore integrato';
+
+  @override
+  String get summaryLength => 'Lunghezza del riassunto';
+
+  @override
+  String get summaryShort => 'Breve';
+
+  @override
+  String get summaryStandard => 'Standard';
+
+  @override
+  String get summaryDetailed => 'Dettagliato';
 }

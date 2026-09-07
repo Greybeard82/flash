@@ -12,9 +12,90 @@ List<String> _bullets(String s) => s
 
 void main() {
   group('backstop ceilings', () {
-    test('are deliberately looser than the prompt budget', () {
-      expect(SummaryFormatter.maxWords, 320);
-      expect(SummaryFormatter.maxBullets, 6);
+    // The reader picks a tier, the prompt is told that tier's numbers, and
+    // this is the backstop for the same tier. The two have to agree rather
+    // than compete, so each backstop sits one step above what the prompt
+    // asked for — see the note on kSummaryTierLimits.
+    test('standard is unchanged, for anyone who never touches the setting',
+        () {
+      final s = SummaryFormatter.limitsFor(kSummaryLengthStandard);
+      expect(s.maxWords, 320);
+      expect(s.maxBullets, 6);
+    });
+
+    test('every tier backstops above the prompt ceiling it shadows', () {
+      // Prompt-side figures, from GeminiNanoPlugin's writePrompt.
+      const promptWords = {
+        kSummaryLengthShort: 100,
+        kSummaryLengthStandard: 250,
+        kSummaryLengthDetailed: 350,
+      };
+      const promptBullets = {
+        kSummaryLengthShort: 3,
+        kSummaryLengthStandard: 5,
+        kSummaryLengthDetailed: 8,
+      };
+      for (final tier in kSummaryTierLimits.keys) {
+        final l = SummaryFormatter.limitsFor(tier);
+        expect(l.maxWords, greaterThan(promptWords[tier]!),
+            reason: '$tier: a backstop at or under the prompt ceiling would '
+                'truncate output that obeyed the instruction');
+        expect(l.maxBullets, promptBullets[tier]! + 1,
+            reason: '$tier: one bullet of slack — equal punishes every small '
+                'overshoot, far looser catches nothing');
+      }
+    });
+
+    test('tiers get progressively roomier', () {
+      final short = SummaryFormatter.limitsFor(kSummaryLengthShort);
+      final standard = SummaryFormatter.limitsFor(kSummaryLengthStandard);
+      final detailed = SummaryFormatter.limitsFor(kSummaryLengthDetailed);
+      expect(short.maxWords, lessThan(standard.maxWords));
+      expect(standard.maxWords, lessThan(detailed.maxWords));
+      expect(short.maxBullets, lessThan(standard.maxBullets));
+      expect(standard.maxBullets, lessThan(detailed.maxBullets));
+    });
+
+    test('an unknown tier falls back to standard rather than throwing', () {
+      final s = SummaryFormatter.limitsFor(kSummaryLengthStandard);
+      final unknown = SummaryFormatter.limitsFor('nonsense');
+      expect(unknown.maxWords, s.maxWords);
+      expect(unknown.maxBullets, s.maxBullets);
+    });
+  });
+
+  group('the tier actually changes what clamp does', () {
+    String clampTwelveBullets(String tier) {
+      final input = [
+        'Twelve items were announced.',
+        for (var i = 1; i <= 12; i++) '- Item $i',
+      ].join('\n');
+      return SummaryFormatter.clamp(input, tier: tier);
+    }
+
+    test('each tier keeps its own number of bullets', () {
+      expect(_bullets(clampTwelveBullets(kSummaryLengthShort)), hasLength(4));
+      expect(_bullets(clampTwelveBullets(kSummaryLengthStandard)), hasLength(6));
+      expect(_bullets(clampTwelveBullets(kSummaryLengthDetailed)), hasLength(9));
+    });
+
+    test('short clamps words harder than detailed', () {
+      final long = List.generate(400, (i) => 'word$i').join(' ');
+      final short = SummaryFormatter.clamp(long, tier: kSummaryLengthShort);
+      final detailed =
+          SummaryFormatter.clamp(long, tier: kSummaryLengthDetailed);
+      expect(_wordCount(short), lessThan(_wordCount(detailed)));
+      expect(_wordCount(short), lessThanOrEqualTo(130));
+      expect(_wordCount(detailed), lessThanOrEqualTo(450));
+    });
+
+    test('omitting the tier behaves as standard', () {
+      final input = [
+        'Twelve items were announced.',
+        for (var i = 1; i <= 12; i++) '- Item $i',
+      ].join('\n');
+      expect(SummaryFormatter.clamp(input),
+          SummaryFormatter.clamp(input, tier: kSummaryLengthStandard));
     });
   });
 
@@ -94,14 +175,6 @@ void main() {
 
       expect(_bullets(SummaryFormatter.clamp(input)),
           [for (var i = 1; i <= 6; i++) '- Item $i']);
-    });
-
-    test('the cap sits just above the prompt\'s own five-bullet limit', () {
-      // A backstop equal to the instruction would turn every one-bullet
-      // overshoot into a visible truncation; the old 8 was loose enough to
-      // catch nothing, and let a real 8-bullet response through untouched.
-      expect(SummaryFormatter.maxBullets, greaterThan(5));
-      expect(SummaryFormatter.maxBullets, lessThan(8));
     });
 
     test('the focal line survives bullet truncation', () {

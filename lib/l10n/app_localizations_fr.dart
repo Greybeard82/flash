@@ -675,4 +675,16 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get builtInViewer =>
       'Ouvrir les articles dans la visionneuse intégrée';
+
+  @override
+  String get summaryLength => 'Longueur du résumé';
+
+  @override
+  String get summaryShort => 'Court';
+
+  @override
+  String get summaryStandard => 'Standard';
+
+  @override
+  String get summaryDetailed => 'Détaillé';
 }

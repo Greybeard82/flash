@@ -1,14 +1,44 @@
+/// The three summary lengths the reader can pick between, stored under
+/// `summary_length`.
+const String kSummaryLengthShort = 'short';
+const String kSummaryLengthStandard = 'standard';
+const String kSummaryLengthDetailed = 'detailed';
+
+/// What [SummaryFormatter] will let through for a given tier.
+///
+/// Each figure sits deliberately *above* what the prompt asks for at the
+/// same tier, because these two limits have to agree rather than compete.
+/// A backstop set equal to the instruction turns every one-bullet overshoot
+/// into a visible mid-summary truncation; one set far too loose catches
+/// nothing at all — the old flat 8 against an instruction of 5 let a real
+/// 8-bullet response through untouched. One tier of slack is the middle
+/// ground, applied here to all three tiers rather than to just one.
+///
+/// The prompt-side figures these shadow live in `GeminiNanoPlugin.kt`'s
+/// `writePrompt`. Change one, change the other.
+class SummaryTierLimits {
+  /// Backstop above the tier's stated word ceiling (100 / 250 / 350).
+  final int maxWords;
+
+  /// Backstop above the tier's stated bullet cap (3 / 5 / 8).
+  final int maxBullets;
+
+  const SummaryTierLimits({required this.maxWords, required this.maxBullets});
+}
+
+const Map<String, SummaryTierLimits> kSummaryTierLimits = {
+  kSummaryLengthShort: SummaryTierLimits(maxWords: 130, maxBullets: 4),
+  kSummaryLengthStandard: SummaryTierLimits(maxWords: 320, maxBullets: 6),
+  kSummaryLengthDetailed: SummaryTierLimits(maxWords: 450, maxBullets: 9),
+};
+
 /// Pure-function backstop for the AI summary text. Nano's instruction-following
 /// is not reliable enough to trust the prompt's own budget and format rules
 /// alone, so this clamps length, strips preambles/markdown the model
 /// sometimes echoes, and normalises bullet markers to what the UI renders.
 class SummaryFormatter {
-  static const int maxWords = 320;
-  /// Backstop for the prompt's "up to 5 bullets", set one above it rather
-  /// than at it: a backstop that equals the instruction turns every small
-  /// overshoot into a visible truncation, and 8 was so loose it caught
-  /// nothing — an 8-bullet response passed through untouched.
-  static const int maxBullets = 6;
+  static SummaryTierLimits limitsFor(String tier) =>
+      kSummaryTierLimits[tier] ?? kSummaryTierLimits[kSummaryLengthStandard]!;
 
   static final RegExp _summaryPrefixLine =
       RegExp(r'^summary:?\s*$', caseSensitive: false);
@@ -17,7 +47,8 @@ class SummaryFormatter {
   static final RegExp _bulletMarker = RegExp(r'^[*•–]\s+');
   static final RegExp _blankRuns = RegExp(r'\n{3,}');
 
-  static String clamp(String input) {
+  static String clamp(String input, {String tier = kSummaryLengthStandard}) {
+    final limits = limitsFor(tier);
     var text = input.trim();
     if (text.isEmpty) return '';
 
@@ -43,13 +74,13 @@ class SummaryFormatter {
     text = text.replaceAll(_blankRuns, '\n\n').trim();
     if (text.isEmpty) return '';
 
-    text = _capBullets(text);
-    text = _capWords(text);
+    text = _capBullets(text, limits.maxBullets);
+    text = _capWords(text, limits.maxWords);
     text = text.trim();
     return text;
   }
 
-  static String _capBullets(String text) {
+  static String _capBullets(String text, int maxBullets) {
     final lines = text.split('\n');
     var bulletCount = 0;
     final kept = <String>[];
@@ -64,7 +95,7 @@ class SummaryFormatter {
     return kept.join('\n');
   }
 
-  static String _capWords(String text) {
+  static String _capWords(String text, int maxWords) {
     if (_wordCount(text) <= maxWords) return text;
 
     final lines = text.split('\n');

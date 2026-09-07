@@ -75,54 +75,84 @@ void main() {
   });
 
   group('prompt content', () {
-    // This has been through two corrections. First the prompt was all
-    // brevity, which produced a restated headline and clipped fragments.
-    // Then it asked for ~100 words of prose unconditionally, which fixed
-    // that but padded short factual items — a release date does not have
-    // 100 words in it — into sounding longer than the article was.
+    // This has been through three corrections. All-brevity produced a
+    // restated headline and clipped fragments. An unconditional ~100 words
+    // fixed that but padded short factual items. Then the model was asked to
+    // judge which of two cases an article was — and that judgement was the
+    // least predictable part of the whole feature.
     //
-    // So length is now a judgement the model makes per article, between two
-    // named cases, and that branch is what needs pinning: a single stated
-    // target would collapse it straight back to one tier.
-    test('asks the model to pick a length case, not one fixed length', () {
-      final lower = _source.toLowerCase();
-      expect(lower, contains('case a'),
-          reason: 'the short-factual case has to be named to be chosen');
-      expect(lower, contains('case b'),
-          reason: 'the substantive case has to be named to be chosen');
-      expect(lower, contains('75–100 words'),
-          reason: 'only the substantive case carries a length target');
-      expect(lower, anyOf(contains('match the length'), contains('far less')),
-          reason: 'the model must be told to fit length to the article, or '
-              'it defaults to one size for everything');
+    // So the length is the reader's choice now, and the prompt is built from
+    // the tier they picked. What needs pinning is that the numbers are
+    // parameterised at all, and that no trace of the old self-judgement
+    // survives to compete with them.
+    test('is parameterised by tier rather than judging the article itself',
+        () {
+      expect(_code, contains('lengthTier'),
+          reason: 'the tier has to reach writePrompt to be used');
+      expect(_code, contains(RegExp(r'fun\s+writePrompt\([^)]*lengthTier',
+          dotAll: true)),
+          reason: 'writePrompt must take the tier, not infer a length');
     });
 
-    test('forbids padding a short article out to look substantial', () {
+    test('no trace of the old case-judgement survives', () {
       final lower = _source.toLowerCase();
-      expect(lower, contains('never pad'),
-          reason: 'padding a spec sheet into a paragraph is the regression '
-              'this case split exists to prevent');
-      expect(lower, contains("don't stretch to fill it"),
-          reason: 'the ceiling is a limit, not a target');
+      expect(lower, isNot(contains('case a')));
+      expect(lower, isNot(contains('case b')));
+      expect(lower, isNot(contains('first, judge what kind of article')),
+          reason: 'this pass replaced that judgement rather than layering '
+              'the tiers on top of it');
+    });
+
+    test('defines all three tiers, each roomier than the last', () {
+      // Targets, ceilings and bullet caps live in tierFor(). Their Dart-side
+      // backstops are asserted in summary_formatter_test.
+      for (final tier in ['short', 'detailed']) {
+        expect(_code, contains('"$tier"'),
+            reason: 'tierFor must recognise "$tier" by name');
+      }
+      for (final target in ['40-50', '75-100', '150-200']) {
+        expect(_code, contains(target),
+            reason: 'each tier needs its own word target');
+      }
+      for (final ceiling in ['100', '250', '350']) {
+        expect(_code, contains(ceiling),
+            reason: 'each tier needs its own hard ceiling');
+      }
+    });
+
+    test('an unrecognised tier falls back rather than failing', () {
+      expect(_code, contains(RegExp(r'else\s*->\s*LengthTier')),
+          reason: 'a missing or unknown tier must still produce a prompt');
+    });
+
+    test('forbids padding, whichever tier is selected', () {
+      final lower = _source.toLowerCase();
+      expect(lower, contains('never pad'));
+      expect(lower, anyOf(contains('not a floor'), contains('write less')),
+          reason: 'the target is something to come in under, not to reach');
     });
 
     // A headline that withholds something — a count, a name, an answer — is
-    // the case a summary most has to earn its place on. Gesturing at the
-    // tease without resolving it is worse than useless.
-    test('requires the headline\'s tease to be resolved explicitly', () {
+    // what a summary most has to earn its place on. Gesturing at the tease
+    // without resolving it is worse than useless, and that holds at the
+    // shortest tier too: tersely resolved is still resolved.
+    test('requires the headline\'s tease to be resolved at every tier', () {
       final lower = _source.toLowerCase();
       expect(lower, contains('resolve it explicitly'));
-      expect(lower, contains('name the actual'),
-          reason: 'the instruction has to be to name the thing, not to '
-              'mention that a thing exists');
+      expect(lower, contains('at every length'),
+          reason: 'the short tier must not be treated as an excuse to skip '
+              'the one thing the summary is for');
+      expect(lower, contains('never leave the tease unresolved'));
     });
 
-    test('makes bullets conditional rather than mandatory', () {
+    test('makes bullets conditional, and capped by the tier', () {
       final lower = _source.toLowerCase();
-      expect(lower, contains('up to 5 bullets'),
-          reason: 'bullets stay capped');
-      expect(lower, anyOf(contains("don't force one"),
-          contains('do not add bullets')),
+      expect(_code, contains(r'${tier.bulletCap}'),
+          reason: 'the bullet cap has to come from the tier, not be fixed');
+      expect(lower, contains('only if'),
+          reason: 'bullets must be earned by the article having distinct '
+              'listable points');
+      expect(lower, contains('the paragraph alone is complete'),
           reason: 'the model needs telling that no bullets is a correct '
               'outcome, not an incomplete one — otherwise it invents some');
     });

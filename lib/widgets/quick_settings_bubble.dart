@@ -6,6 +6,8 @@ import '../repositories/settings_repository.dart';
 import '../screens/settings_screen.dart';
 import '../services/refresh_service.dart';
 import '../services/settings_notifier.dart';
+import '../services/summary_formatter.dart'
+    show kSummaryLengthShort, kSummaryLengthStandard, kSummaryLengthDetailed;
 import '../services/unread_badge_service.dart';
 import '../theme/app_theme.dart';
 import 'bubble_panel.dart';
@@ -73,6 +75,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
   late bool _markReadOnScroll;
   late bool _markAllReadConfirm;
   late bool _iconBadge;
+  late String _summaryLength;
   late int _refreshIntervalMinutes;
 
   /// Collapsed by default — see the picker's own row for why.
@@ -93,6 +96,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
     _markReadOnScroll = widget.initial.markReadOnScroll;
     _markAllReadConfirm = widget.initial.markAllReadConfirm;
     _iconBadge = widget.initial.unreadBadgeNotification;
+    _summaryLength = widget.initial.summaryLength;
     _refreshIntervalMinutes = widget.initial.refreshIntervalMinutes;
     _paletteChevronController = AnimationController(
       vsync: this,
@@ -174,6 +178,16 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
 
   /// Turning it off takes the notification down now rather than at whatever
   /// point the unread count next happens to change.
+  /// How long AI summaries should be. Lives here rather than in the full
+  /// Settings screen because it is the kind of thing you change while
+  /// reading — the same category as theme and palette, not a decide-once
+  /// preference like the built-in viewer toggle.
+  Future<void> _setSummaryLength(String value) async {
+    setState(() => _summaryLength = value);
+    await _repo.set('summary_length', value);
+    SettingsNotifier.instance.settingsChanged();
+  }
+
   Future<void> _setIconBadge(bool value) async {
     setState(() => _iconBadge = value);
     await _repo.set(kUnreadBadgeSettingKey, value.toString());
@@ -233,6 +247,26 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
                   showSelectedIcon: false,
                   onSelectionChanged: (s) => _setTheme(s.first),
                 ),
+                const SizedBox(height: 16),
+                Text(l10n.summaryLength, style: theme.textTheme.bodyMedium),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: [
+                    ButtonSegment(
+                        value: kSummaryLengthShort,
+                        label: Text(l10n.summaryShort)),
+                    ButtonSegment(
+                        value: kSummaryLengthStandard,
+                        label: Text(l10n.summaryStandard)),
+                    ButtonSegment(
+                        value: kSummaryLengthDetailed,
+                        label: Text(l10n.summaryDetailed)),
+                  ],
+                  selected: {_summaryLength},
+                  showSelectedIcon: false,
+                  onSelectionChanged: (s) => _setSummaryLength(s.first),
+                ),
+
                 const SizedBox(height: 16),
                 Text(l10n.colorPalette, style: theme.textTheme.bodyMedium),
                 const SizedBox(height: 8),
