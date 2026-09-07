@@ -75,30 +75,54 @@ void main() {
   });
 
   group('prompt content', () {
-    // The prompt used to open with "deliver the headline's promise in the
-    // first line", and everything after it was terse fact-fragments. That
-    // produced summaries that restated the headline and stopped. The shape
-    // asked for now is a readable prose paragraph carrying the article's
-    // substance, with bullets as an optional extra — so what needs pinning
-    // is the paragraph instruction and the conditionality of the bullets.
-    test('asks for a prose paragraph, not a lead fact-fragment', () {
+    // This has been through two corrections. First the prompt was all
+    // brevity, which produced a restated headline and clipped fragments.
+    // Then it asked for ~100 words of prose unconditionally, which fixed
+    // that but padded short factual items — a release date does not have
+    // 100 words in it — into sounding longer than the article was.
+    //
+    // So length is now a judgement the model makes per article, between two
+    // named cases, and that branch is what needs pinning: a single stated
+    // target would collapse it straight back to one tier.
+    test('asks the model to pick a length case, not one fixed length', () {
       final lower = _source.toLowerCase();
-      expect(lower, contains('paragraph'),
-          reason: 'the primary output shape is a paragraph now');
-      expect(lower, contains('100 words'),
-          reason: 'the paragraph needs a stated target length, or the model '
-              'reverts to one terse sentence');
-      expect(lower, anyOf(contains('complete, natural sentences'),
-          contains('natural sentences')),
-          reason: 'prose, explicitly — not a list of fragments');
+      expect(lower, contains('case a'),
+          reason: 'the short-factual case has to be named to be chosen');
+      expect(lower, contains('case b'),
+          reason: 'the substantive case has to be named to be chosen');
+      expect(lower, contains('75–100 words'),
+          reason: 'only the substantive case carries a length target');
+      expect(lower, anyOf(contains('match the length'), contains('far less')),
+          reason: 'the model must be told to fit length to the article, or '
+              'it defaults to one size for everything');
+    });
+
+    test('forbids padding a short article out to look substantial', () {
+      final lower = _source.toLowerCase();
+      expect(lower, contains('never pad'),
+          reason: 'padding a spec sheet into a paragraph is the regression '
+              'this case split exists to prevent');
+      expect(lower, contains("don't stretch to fill it"),
+          reason: 'the ceiling is a limit, not a target');
+    });
+
+    // A headline that withholds something — a count, a name, an answer — is
+    // the case a summary most has to earn its place on. Gesturing at the
+    // tease without resolving it is worse than useless.
+    test('requires the headline\'s tease to be resolved explicitly', () {
+      final lower = _source.toLowerCase();
+      expect(lower, contains('resolve it explicitly'));
+      expect(lower, contains('name the actual'),
+          reason: 'the instruction has to be to name the thing, not to '
+              'mention that a thing exists');
     });
 
     test('makes bullets conditional rather than mandatory', () {
       final lower = _source.toLowerCase();
-      expect(lower, contains('only if'),
-          reason: 'bullets must be earned by the article actually having '
-              'distinct listable points');
-      expect(lower, contains('do not add bullets'),
+      expect(lower, contains('up to 5 bullets'),
+          reason: 'bullets stay capped');
+      expect(lower, anyOf(contains("don't force one"),
+          contains('do not add bullets')),
           reason: 'the model needs telling that no bullets is a correct '
               'outcome, not an incomplete one — otherwise it invents some');
     });
