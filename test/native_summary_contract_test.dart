@@ -75,10 +75,36 @@ void main() {
   });
 
   group('prompt content', () {
-    test('instructs the model to deliver the headline promise first', () {
-      expect(_source.toLowerCase(), contains('headline'),
-          reason: 'Point-first ordering replaces the deleted synthesis pass. '
-              'Without it this rewrite has no mechanism at all.');
+    // The prompt used to open with "deliver the headline's promise in the
+    // first line", and everything after it was terse fact-fragments. That
+    // produced summaries that restated the headline and stopped. The shape
+    // asked for now is a readable prose paragraph carrying the article's
+    // substance, with bullets as an optional extra — so what needs pinning
+    // is the paragraph instruction and the conditionality of the bullets.
+    test('asks for a prose paragraph, not a lead fact-fragment', () {
+      final lower = _source.toLowerCase();
+      expect(lower, contains('paragraph'),
+          reason: 'the primary output shape is a paragraph now');
+      expect(lower, contains('100 words'),
+          reason: 'the paragraph needs a stated target length, or the model '
+              'reverts to one terse sentence');
+      expect(lower, anyOf(contains('complete, natural sentences'),
+          contains('natural sentences')),
+          reason: 'prose, explicitly — not a list of fragments');
+    });
+
+    test('makes bullets conditional rather than mandatory', () {
+      final lower = _source.toLowerCase();
+      expect(lower, contains('only if'),
+          reason: 'bullets must be earned by the article actually having '
+              'distinct listable points');
+      expect(lower, contains('do not add bullets'),
+          reason: 'the model needs telling that no bullets is a correct '
+              'outcome, not an incomplete one — otherwise it invents some');
+    });
+
+    test('still forbids restating the headline', () {
+      expect(_source.toLowerCase(), contains('do not restate the headline'));
     });
 
     test('bans the filler register seen in the reported bad output', () {

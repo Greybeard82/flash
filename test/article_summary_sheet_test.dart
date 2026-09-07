@@ -67,10 +67,10 @@ Future<void> _pumpSheet(WidgetTester tester) async {
   await tester.pump();
 }
 
-/// A summary at roughly the *prompt's* budget: 1 focal sentence + 5 bullets,
-/// ~270 words total. A compliant summary should still fit on one page
-/// without scrolling — the scroll affordance added in Pass 03 is for
-/// text-scale and runaway cases.
+/// The longest realistic output shape: the ~100-word prose paragraph the
+/// prompt asks for, plus the maximum 5 bullets, ~270 words total. The
+/// paragraph is one line with no internal breaks, which is what the prompt
+/// specifies and what [SummaryFormatter] assumes when it trims.
 String _maxLengthSummary() {
   const focal =
       'The startup actually shut down after losing its largest client, '
