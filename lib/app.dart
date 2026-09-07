@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -366,10 +367,26 @@ const int kAlertsNavIndex = 3;
 /// three-column reading layout. Material's Expanded breakpoint.
 const double kThreeColumnBreakpoint = 840;
 
-/// The sections list on the left. Wide enough for an icon over a short
-/// label, no wider — its job is to get out of the way of the two columns
-/// that hold content.
-const double kSectionsColumnWidth = 96;
+/// The sections list on the left. Its job is to get out of the way of the
+/// two columns that actually hold content.
+///
+/// Measured rather than guessed, and the measurement says the labels cannot
+/// be the thing that sets this width: at `labelSmall`, English "Categories"
+/// wants 123dp of rail and German "Benachrichtigungen" wants 215dp, so two
+/// of the four English labels were already ellipsised at the old 96dp and
+/// every locale had at least one. A rail wide enough to spell them all out
+/// would be wider than the one being complained about, not narrower.
+///
+/// So this is sized for the icon, which is what actually identifies a
+/// destination here, and the label is a hint under it that may or may not
+/// fit whole. 72dp leaves the 24dp icon comfortable without the empty
+/// gutter either side that made the old width read as thick.
+const double kSectionsColumnWidth = 72;
+
+/// Width of the draggable handle between the article list and the reading
+/// pane. The line inside it stays 1dp; the rest is invisible grab area,
+/// because a 1dp touch target is not one.
+const double kResizeHandleWidth = 12;
 
 /// The middle column is held near phone width on purpose. Every screen in it
 /// is the same widget the phone build renders, app bar and FAB cluster and
@@ -435,6 +452,105 @@ const double kDetailPaneMinWidth = 420;
   );
 }
 
+/// The widest the middle column may be dragged, given [available].
+///
+/// Whatever is left once the reading pane keeps its own floor — dragging
+/// towards the list must not crush the pane any more than dragging the other
+/// way may crush the list. [math.max] guards the narrow end: at the 840dp
+/// breakpoint the two floors already want more room than there is, and a
+/// clamp whose lower bound exceeds its upper throws.
+double maxDraggableMiddleWidth(double available) =>
+    math.max(kSectionColumnMinWidth, available - kDetailPaneMinWidth);
+
+/// The widths actually used, once the reader's own preference is taken into
+/// account.
+///
+/// [manualMiddle] is null until the divider is dragged, and null means the
+/// automatic split — so the default behaviour is exactly [threeColumnWidths]
+/// and nothing changes for anyone who never touches the handle.
+///
+/// Once it is non-null the reading pane deliberately loses its
+/// [kDetailPaneMaxWidth] cap. That cap exists to stop a web page stretching
+/// unreadably wide *when nobody has said otherwise*; someone who has just
+/// dragged the divider to get more reading width has said otherwise, and
+/// re-imposing it would silently ignore the drag.
+({double middle, double detail}) resolvedColumnWidths(
+  double available,
+  double? manualMiddle,
+) {
+  if (manualMiddle == null) return threeColumnWidths(available);
+
+  final middle = manualMiddle
+      .clamp(kSectionColumnMinWidth, maxDraggableMiddleWidth(available))
+      .toDouble();
+  return (middle: middle, detail: available - middle);
+}
+
+/// The draggable boundary between the article list and the reading pane.
+///
+/// Renders as the same 1dp rule the static [VerticalDivider] did, sat inside
+/// a [kResizeHandleWidth]-wide transparent grab area — a 1dp target is not
+/// something anyone hits on a touchscreen, and widening the visible line
+/// instead would put a heavy bar between two columns that want to read as
+/// adjacent.
+///
+/// The grip dots and the resize cursor are what say "this moves" — without
+/// some cue it is indistinguishable from the static rule it replaced. Double
+/// tap returns to the automatic split, the same gesture desktop split-panes
+/// have used for this for years.
+class _ResizableDivider extends StatelessWidget {
+  /// Horizontal drag distance since the last update, positive to the right.
+  final ValueChanged<double> onDrag;
+
+  /// Double tap: back to the automatic split.
+  final VoidCallback onReset;
+
+  const _ResizableDivider({required this.onDrag, required this.onReset});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line = theme.dividerColor;
+    final grip = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.resizeLeftRight,
+      child: GestureDetector(
+        // Opaque, so the whole grab area takes the gesture rather than only
+        // the pixels the line is painted on.
+        behavior: HitTestBehavior.opaque,
+        onHorizontalDragUpdate: (d) => onDrag(d.delta.dx),
+        onDoubleTap: onReset,
+        child: SizedBox(
+          width: kResizeHandleWidth,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(width: 1, color: line),
+              // Four dots rather than a solid bar: enough to read as a grip
+              // at a glance, not enough to become furniture.
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var i = 0; i < 4; i++) ...[
+                    if (i > 0) const SizedBox(height: 3),
+                    Container(
+                      width: 3,
+                      height: 3,
+                      decoration:
+                          BoxDecoration(color: grip, shape: BoxShape.circle),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AppShellState extends State<_AppShell> {
   int _currentIndex = 0;
   bool _onboardingComplete = true; // assume complete until checked
@@ -444,6 +560,15 @@ class _AppShellState extends State<_AppShell> {
   /// IndexedStack, so it outlives section switches — picking Bookmarks with
   /// an article open leaves the article open.
   final _detailController = ArticleDetailController();
+
+  /// Where the reader has dragged the divider, or null for the automatic
+  /// split.
+  ///
+  /// Session-scoped on purpose, like Alerts' collapsed-section state: it is
+  /// a reading-position preference, not a setting, and it costs nothing to
+  /// re-drag. Persisting it would mean a Settings entry and a migration for
+  /// something worth neither yet.
+  double? _manualMiddleWidth;
 
   // Incremented each time the Feed tab is tapped while already on Feed —
   // triggers a reload via didUpdateWidget without remounting FeedScreen.
@@ -602,8 +727,21 @@ class _AppShellState extends State<_AppShell> {
       // sum stops growing, and Center turns the remainder into equal margins
       // rather than stretching a web page across the whole of a large
       // tablet.
-      const chrome = kSectionsColumnWidth + 2; // the two dividers
-      final columns = threeColumnWidths(width - chrome);
+      // The static rule beside the rail, plus the draggable handle.
+      const chrome = kSectionsColumnWidth + 1 + kResizeHandleWidth;
+      final available = width - chrome;
+      final columns = resolvedColumnWidths(available, _manualMiddleWidth);
+
+      // Clamped as it is stored, not only as it is read: without this a drag
+      // that keeps pushing past a floor banks the overshoot, and the divider
+      // then sits still for the first inch of the drag back.
+      void dragDivider(double dx) {
+        setState(() {
+          _manualMiddleWidth = ((_manualMiddleWidth ?? columns.middle) + dx)
+              .clamp(kSectionColumnMinWidth, maxDraggableMiddleWidth(available))
+              .toDouble();
+        });
+      }
 
       return PopScope(
         // Same reasoning as the two branches below: canPop stays false so
@@ -649,7 +787,11 @@ class _AppShellState extends State<_AppShell> {
                       width: columns.middle,
                       child: _buildScreenStack(),
                     ),
-                    const VerticalDivider(thickness: 1, width: 1),
+                    _ResizableDivider(
+                      onDrag: dragDivider,
+                      onReset: () =>
+                          setState(() => _manualMiddleWidth = null),
+                    ),
                     SizedBox(
                       width: columns.detail,
                       child: AnimatedBuilder(

@@ -17,9 +17,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flash/app.dart';
 
 /// Width left for the two columns on a device of [deviceWidth] dp, once the
-/// rail and the two dividers have taken theirs.
+/// rail, the rule beside it and the drag handle have taken theirs.
 double _available(double deviceWidth) =>
-    deviceWidth - kSectionsColumnWidth - 2;
+    deviceWidth - kSectionsColumnWidth - 1 - kResizeHandleWidth;
 
 void main() {
   group('at or above the preferred total', () {
@@ -51,7 +51,9 @@ void main() {
       expect(w.detail, greaterThan(kDetailPaneMinWidth));
 
       // The whole point: the pane is materially wider than the old
-      // fixed-middle arithmetic left it (923 - 96 - 2 - 420 = 405).
+      // fixed-middle arithmetic left it. 405dp, from when the rail was 96dp
+      // and the middle column a rigid 420 — a historical figure, deliberately
+      // not recomputed from today's constants.
       expect(w.detail, greaterThan(405),
           reason: 'the fix has to actually buy the reading pane width');
     });
@@ -61,7 +63,8 @@ void main() {
       expect(w.middle, lessThan(kSectionColumnMaxWidth));
       expect(w.middle, greaterThan(kSectionColumnMinWidth));
       expect(w.detail, greaterThan(kDetailPaneMinWidth));
-      expect(w.detail, greaterThan(977 - 96 - 2 - 420));
+      expect(w.detail, greaterThan(459),
+          reason: 'the same historical baseline, for the wider phone');
     });
 
     test('the wider phone gives the pane more than the narrower one', () {
@@ -118,6 +121,105 @@ void main() {
       expect(detailGiven, greaterThan(middleGiven),
           reason: 'the pane has far more slack between its cap and floor, so '
               'it should absorb proportionally more of the shortfall');
+    });
+  });
+
+  // ── The draggable divider ───────────────────────────────────────────────
+  //
+  // The handle writes a manual middle width; everything else is derived. The
+  // clamp is what stops a drag crushing either side, and it has to hold in
+  // both directions — the obvious half is "don't crush the article list",
+  // the half easy to forget is that dragging the other way crushes the
+  // reading pane instead.
+
+  group('manual resize: null means nothing changes', () {
+    test('a null manual width is exactly the automatic split', () {
+      for (final deviceWidth in <double>[840, 923, 1085, 1751]) {
+        final available = _available(deviceWidth);
+        final auto = threeColumnWidths(available);
+        final resolved = resolvedColumnWidths(available, null);
+        expect(resolved.middle, auto.middle,
+            reason: 'default behaviour must be untouched by this feature');
+        expect(resolved.detail, auto.detail);
+      }
+    });
+  });
+
+  group('manual resize: clamped at both floors', () {
+    final available = _available(1751);
+
+    test('dragging towards the pane stops at the list floor', () {
+      final w = resolvedColumnWidths(available, 10);
+      expect(w.middle, kSectionColumnMinWidth,
+          reason: 'the article list cannot be crushed below its floor');
+    });
+
+    test('dragging towards the list stops at the pane floor', () {
+      final w = resolvedColumnWidths(available, 99999);
+      expect(w.detail, greaterThanOrEqualTo(kDetailPaneMinWidth),
+          reason: 'the reading pane has a floor too — this is the half that '
+              'is easy to leave out');
+      expect(w.middle, available - kDetailPaneMinWidth);
+    });
+
+    test('a width between the floors is honoured exactly', () {
+      final w = resolvedColumnWidths(available, 600);
+      expect(w.middle, 600);
+      expect(w.detail, available - 600);
+    });
+
+    test('the two columns always fill the available width exactly', () {
+      for (final requested in <double>[10, 340, 600, 900, 99999]) {
+        final w = resolvedColumnWidths(available, requested);
+        expect(w.middle + w.detail, closeTo(available, 0.01),
+            reason: 'a manual split leaves no gap and no overflow');
+      }
+    });
+  });
+
+  group('manual resize: the pane cap does not apply', () {
+    test('past the automatic cap, the pane keeps the width it was given', () {
+      // On a wide tablet the automatic split stops the pane at
+      // kDetailPaneMaxWidth and turns the rest into margin. Someone who has
+      // dragged the divider has asked for that space, so the cap is off.
+      final available = _available(1751);
+      final auto = threeColumnWidths(available);
+      expect(auto.detail, kDetailPaneMaxWidth,
+          reason: 'this test is pointless unless the cap binds automatically');
+
+      final manual = resolvedColumnWidths(available, kSectionColumnMinWidth);
+      expect(manual.detail, greaterThan(kDetailPaneMaxWidth),
+          reason: 'the cap governs the automatic split only');
+    });
+  });
+
+  group('manual resize: the narrow end cannot invert the clamp', () {
+    test('at the breakpoint the floors overlap, and it still resolves', () {
+      // 840dp leaves less than kSectionColumnMinWidth + kDetailPaneMinWidth,
+      // so the ceiling would fall below the floor. A clamp with lower > upper
+      // throws, which would take the whole layout down.
+      final available = _available(kThreeColumnBreakpoint);
+      expect(available, lessThan(kSectionColumnMinWidth + kDetailPaneMinWidth),
+          reason: 'this test is pointless if the floors already fit here');
+
+      expect(maxDraggableMiddleWidth(available), kSectionColumnMinWidth);
+      for (final requested in <double>[10, 400, 99999]) {
+        expect(() => resolvedColumnWidths(available, requested), returnsNormally);
+        expect(resolvedColumnWidths(available, requested).middle,
+            kSectionColumnMinWidth);
+      }
+    });
+  });
+
+  group('the sections rail', () {
+    test('is narrower than it was, and still fits its icon', () {
+      // The labels cannot set this width — most of them ellipsise at any
+      // sane rail width, in every locale — so what matters is that the 24dp
+      // icon plus its 4dp side padding is comfortable, and that the rail is
+      // actually narrower than the 96dp being complained about.
+      expect(kSectionsColumnWidth, lessThan(96));
+      expect(kSectionsColumnWidth, greaterThan(24 + 8),
+          reason: 'the icon and its padding still have to fit');
     });
   });
 }
