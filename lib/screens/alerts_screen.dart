@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/alert_entry.dart';
 import '../models/article.dart';
 import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
+import '../services/article_opener.dart';
 import '../services/alert_navigation_intent.dart';
 import '../services/alerts_changed_notifier.dart';
 import '../services/read_state_notifier.dart';
@@ -224,14 +224,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
     await _load();
 
     if (!mounted) return;
-    final uri = Uri.tryParse(snapshot.url);
-    if (uri == null) return;
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      // A URL the platform refuses to open is not worth a dialog. The entry
-      // has already been marked read, which is what the tap asked for.
-    }
+    // A URL the platform refuses to open is not worth a dialog. The entry
+    // has already been marked read, which is what the tap asked for.
+    await openArticle(context, snapshot);
   }
 
   /// The `articles` row is what carries `is_saved`, so this needs it alive.

@@ -70,6 +70,14 @@ class AppSettings {
   /// notification is silent and dismissible.
   final bool unreadBadgeNotification;
 
+  /// Whether a tapped article opens in the app's own reader (ad-blocked,
+  /// pop-up-blocked) rather than being handed to the browser.
+  ///
+  /// Defaults on. Not width-gated: it governs how articles open at every
+  /// size. What changes with width is the layout the reader appears in —
+  /// a full-screen route on a phone, the right-hand column on a tablet.
+  final bool useEmbeddedWebView;
+
   const AppSettings({
     this.theme = 'system',
     this.refreshIntervalMinutes = 30,
@@ -85,6 +93,7 @@ class AppSettings {
     this.showRead = true,
     this.markAllReadConfirm = true,
     this.unreadBadgeNotification = true,
+    this.useEmbeddedWebView = true,
     this.colorPalette = 'orange',
   });
 
@@ -112,6 +121,8 @@ class AppSettings {
           (map['mark_all_read_confirm'] ?? 'true') == 'true',
       unreadBadgeNotification:
           (map['unread_badge_notification'] ?? 'true') == 'true',
+      useEmbeddedWebView:
+          (map['use_embedded_webview'] ?? 'true') == 'true',
       colorPalette: map['color_palette'] ?? 'orange',
     );
   }
@@ -131,6 +142,7 @@ class AppSettings {
     bool? showRead,
     bool? markAllReadConfirm,
     bool? unreadBadgeNotification,
+    bool? useEmbeddedWebView,
     String? colorPalette,
   }) {
     return AppSettings(
@@ -149,6 +161,7 @@ class AppSettings {
       markAllReadConfirm: markAllReadConfirm ?? this.markAllReadConfirm,
       unreadBadgeNotification:
           unreadBadgeNotification ?? this.unreadBadgeNotification,
+      useEmbeddedWebView: useEmbeddedWebView ?? this.useEmbeddedWebView,
       colorPalette: colorPalette ?? this.colorPalette,
     );
   }

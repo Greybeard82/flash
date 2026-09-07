@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app.dart';
 import 'db/database.dart';
 import 'repositories/settings_repository.dart';
+import 'services/ad_blocklist.dart';
 import 'services/alert_navigation_intent.dart';
 import 'services/refresh_service.dart';
 import 'utils/form_factor.dart';
@@ -15,6 +16,11 @@ void main() async {
 
   // Init database
   await AppDatabase.instance.database;
+
+  // Parsed once here rather than on first webview use: it is a small asset,
+  // and doing it now keeps the first article open from paying for it while
+  // the page is already loading.
+  await AdBlocklist.load();
 
   // Request notification permission (Android 13+), and register the tap
   // handler in the same call -- initialize() is the only place it can be

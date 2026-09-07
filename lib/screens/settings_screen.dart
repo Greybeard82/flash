@@ -9,9 +9,11 @@ import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/article_opener.dart' show kEmbeddedWebViewSettingKey;
 import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
+import '../services/settings_notifier.dart';
 
 /// The full settings screen.
 ///
@@ -61,6 +63,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final s = await _settingsRepo.getAll();
     if (mounted) setState(() => _settings = s);
+  }
+
+  Future<void> _setUseEmbeddedWebView(bool value) async {
+    setState(() => _settings = _settings?.copyWith(useEmbeddedWebView: value));
+    await _settingsRepo.set(kEmbeddedWebViewSettingKey, value.toString());
+    SettingsNotifier.instance.settingsChanged();
   }
 
   Future<void> _connectGoogle() async {
@@ -235,6 +243,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Expanded(
             child: ListView(
         children: [
+          // ── Reading ──
+          _sectionHeader(l10n.reading),
+          // Label-only, matching the Icon badge precedent: the off state is
+          // "opens in Chrome instead", which is what anyone flicking this
+          // already expects from a viewer toggle.
+          SwitchListTile(
+            title: Text(l10n.builtInViewer),
+            value: s.useEmbeddedWebView,
+            onChanged: _setUseEmbeddedWebView,
+          ),
+
           // ── Local backup file ──
           _sectionHeader(l10n.localBackup),
           _buildLocalBackupSection(l10n),

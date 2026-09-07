@@ -326,7 +326,7 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
-  /// No description provided for @reading.
+  /// Settings section header for article-reading preferences.
   ///
   /// In en, this message translates to:
   /// **'Reading'**
@@ -1207,6 +1207,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **' and '**
   String get keywordListAnd;
+
+  /// Tooltip on the reader's action that hands the article to Chrome instead.
+  ///
+  /// In en, this message translates to:
+  /// **'Open in browser'**
+  String get openInBrowser;
+
+  /// Empty state of the reading pane in the three-column tablet layout.
+  ///
+  /// In en, this message translates to:
+  /// **'Select an article to read it here'**
+  String get selectAnArticle;
+
+  /// Settings toggle: on opens articles in the app own reader, off opens Chrome.
+  ///
+  /// In en, this message translates to:
+  /// **'Open articles in the built-in viewer'**
+  String get builtInViewer;
 }
 
 class _AppLocalizationsDelegate

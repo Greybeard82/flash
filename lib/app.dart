@@ -8,7 +8,9 @@ import 'repositories/settings_repository.dart';
 import 'services/alert_navigation_intent.dart';
 import 'services/alerts_changed_notifier.dart';
 import 'repositories/alert_match_repository.dart';
+import 'services/article_detail_controller.dart';
 import 'services/settings_notifier.dart';
+import 'widgets/article_detail_pane.dart';
 import 'screens/feed_screen.dart';
 import 'screens/feeds_screen.dart';
 import 'screens/alerts_screen.dart';
@@ -251,6 +253,98 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
   }
 }
 
+/// The leftmost column of the three-column layout: the four app sections.
+///
+/// Deliberately not a [NavigationRail] — the rail is what this replaces at
+/// this width, and rendering both would put two navigation surfaces answering
+/// the same question side by side. Order matches the phone's bottom nav so
+/// the app does not reorder itself when it gets wider.
+class _SectionsColumn extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onSelected;
+  final int alertsCount;
+
+  const _SectionsColumn({
+    required this.currentIndex,
+    required this.onSelected,
+    required this.alertsCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    Widget entry(int index, Widget icon, String label) {
+      final selected = index == currentIndex;
+      final colour = selected
+          ? theme.colorScheme.secondary
+          : theme.colorScheme.onSurface.withValues(alpha: 0.6);
+      return InkWell(
+        onTap: () => onSelected(index),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+          child: Column(
+            children: [
+              IconTheme(
+                data: IconThemeData(color: colour, size: 24),
+                child: icon,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colour,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final alertsIcon = alertsCount > 0
+        ? Badge.count(
+            count: alertsCount,
+            child: Icon(currentIndex == kAlertsNavIndex
+                ? Icons.notifications_active_rounded
+                : Icons.notifications_none_rounded),
+          )
+        : Icon(currentIndex == kAlertsNavIndex
+            ? Icons.notifications_active_rounded
+            : Icons.notifications_none_rounded);
+
+    return SafeArea(
+      right: false,
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 8),
+            entry(0, const FlashBolt(), l10n.appTitle),
+            entry(
+                1,
+                Icon(currentIndex == 1
+                    ? Icons.rss_feed_rounded
+                    : Icons.rss_feed_outlined),
+                l10n.categories),
+            entry(
+                2,
+                Icon(currentIndex == 2
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded),
+                l10n.bookmarks),
+            entry(kAlertsNavIndex, alertsIcon, l10n.alertsTab),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AppShell extends StatefulWidget {
   final ValueNotifier<String> themeModeNotifier;
   final ValueNotifier<bool> newspaperModeNotifier;
@@ -268,10 +362,35 @@ class _AppShell extends StatefulWidget {
 /// that Settings is reached from the Quick Settings panel instead.
 const int kAlertsNavIndex = 3;
 
+/// Width at which the shell switches from "one screen at a time" to the
+/// three-column reading layout. Material's Expanded breakpoint.
+const double kThreeColumnBreakpoint = 840;
+
+/// The sections list on the left. Wide enough for an icon over a short
+/// label, no wider — its job is to get out of the way of the two columns
+/// that hold content.
+const double kSectionsColumnWidth = 96;
+
+/// The middle column is held near phone width on purpose. Every screen in it
+/// is the same widget the phone build renders, app bar and FAB cluster and
+/// all; giving it roughly the width it was designed for is what makes that
+/// reuse work instead of needing four bespoke narrow layouts.
+const double kSectionColumnMaxWidth = 420;
+
+/// Cap on the reading pane. A web page stretched across the full width of a
+/// 1700dp tablet is unreadable, so past this the whole composition centres
+/// and leaves margins instead.
+const double kDetailPaneMaxWidth = 760;
+
 class _AppShellState extends State<_AppShell> {
   int _currentIndex = 0;
   bool _onboardingComplete = true; // assume complete until checked
   int _alertsCount = 0;
+
+  /// Which article the right-hand column is showing. Lives here, above the
+  /// IndexedStack, so it outlives section switches — picking Bookmarks with
+  /// an article open leaves the article open.
+  final _detailController = ArticleDetailController();
 
   // Incremented each time the Feed tab is tapped while already on Feed —
   // triggers a reload via didUpdateWidget without remounting FeedScreen.
@@ -290,6 +409,7 @@ class _AppShellState extends State<_AppShell> {
   void dispose() {
     AlertNavigationIntent.instance.removeListener(_onAlertsRequested);
     AlertsChangedNotifier.instance.removeListener(_refreshAlertsCount);
+    _detailController.dispose();
     super.dispose();
   }
 
@@ -388,7 +508,12 @@ class _AppShellState extends State<_AppShell> {
     final l10n = AppLocalizations.of(context)!;
     final isTV = FormFactor.isTV;
     final width = MediaQuery.of(context).size.width;
-    final useRail = isTV || width >= 600;
+    // TV keeps the rail whatever its width: it is a 10-foot UI driven by a
+    // d-pad, not a tablet you reach out and touch, and a reading pane it
+    // cannot scroll comfortably is not an improvement there.
+    final useThreeColumn =
+        !isTV && _onboardingComplete && width >= kThreeColumnBreakpoint;
+    final useRail = !useThreeColumn && (isTV || width >= 600);
 
     final railDestinations = [
       NavigationRailDestination(
@@ -415,6 +540,83 @@ class _AppShellState extends State<_AppShell> {
         label: Text(l10n.alertsTab),
       ),
     ];
+
+    if (useThreeColumn) {
+      // Total the three columns and their dividers want. Past this the Row is
+      // centred rather than stretched — see kDetailPaneMaxWidth.
+      const composed = kSectionsColumnWidth +
+          kSectionColumnMaxWidth +
+          kDetailPaneMaxWidth +
+          2; // the two dividers
+
+      return PopScope(
+        // Same reasoning as the two branches below: canPop stays false so
+        // every back press arrives here and is answered in order.
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) return;
+          if (dismissTopBubblePanel()) return;
+          // The reading pane is the innermost thing open, so it closes first.
+          if (_detailController.article != null) {
+            _detailController.clear();
+            return;
+          }
+          if (_currentIndex != 0) {
+            setState(() => _currentIndex = 0);
+            return;
+          }
+          SystemNavigator.pop();
+        },
+        child: ArticleDetailScope(
+          controller: _detailController,
+          child: Scaffold(
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: composed),
+                child: Row(
+                  // Stretch, not the default centre: without it each column
+                  // shrink-wraps to its own content height and the sections
+                  // list floats in the middle of the screen instead of
+                  // starting at the top.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    SizedBox(
+                      width: kSectionsColumnWidth,
+                      child: _SectionsColumn(
+                        currentIndex: _currentIndex,
+                        onSelected: _navigateTo,
+                        alertsCount: _alertsCount,
+                      ),
+                    ),
+                    const VerticalDivider(thickness: 1, width: 1),
+                    SizedBox(
+                      width: kSectionColumnMaxWidth,
+                      child: _buildScreenStack(),
+                    ),
+                    const VerticalDivider(thickness: 1, width: 1),
+                    Expanded(
+                      child: AnimatedBuilder(
+                        animation: _detailController,
+                        builder: (context, _) {
+                          final article = _detailController.article;
+                          if (article == null) {
+                            return const ArticleDetailPlaceholder();
+                          }
+                          return ArticleDetailPane(
+                            article: article,
+                            onClose: _detailController.clear,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     if (useRail) {
       Widget shell = Scaffold(

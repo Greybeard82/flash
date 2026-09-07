@@ -2,11 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../utils/diag_log.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../repositories/alert_match_repository.dart';
 import '../repositories/article_repository.dart';
+import '../services/article_opener.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
 
@@ -76,8 +76,7 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (!mounted) return;
-    final uri = Uri.tryParse(article.url);
-    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openArticle(context, article);
   }
 
   @override

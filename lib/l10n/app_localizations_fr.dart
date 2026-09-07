@@ -665,4 +665,14 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get keywordListAnd => ' et ';
+
+  @override
+  String get openInBrowser => 'Ouvrir dans le navigateur';
+
+  @override
+  String get selectAnArticle => 'Sélectionne un article pour le lire ici';
+
+  @override
+  String get builtInViewer =>
+      'Ouvrir les articles dans la visionneuse intégrée';
 }

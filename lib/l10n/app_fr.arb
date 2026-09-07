@@ -208,5 +208,9 @@
   "alertNotificationCombined": "{count, plural, one{{count} article contient les mots {keywords}} other{{count} articles contiennent les mots {keywords}}}",
   "@alertNotificationCombined": { "placeholders": { "count": { "type": "int" }, "keywords": { "type": "String" } } },
   "keywordListSeparator": ", ",
-  "keywordListAnd": " et "
+  "keywordListAnd": " et ",
+  "openInBrowser": "Ouvrir dans le navigateur",
+  "selectAnArticle": "Sélectionne un article pour le lire ici",
+  "builtInViewer": "Ouvrir les articles dans la visionneuse intégrée",
+  "reading": "Lecture"
 }

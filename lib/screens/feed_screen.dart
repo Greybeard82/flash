@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../models/folder.dart';
@@ -13,6 +12,7 @@ import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/settings_repository.dart';
+import '../services/article_opener.dart';
 import '../services/feeds_changed_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/alerts_changed_notifier.dart';
@@ -1191,17 +1191,12 @@ class _FeedScreenState extends State<FeedScreen>
 
     _captureAnchor();
     _returningFromArticleOpen = true;
-    var launched = false;
-    try {
-      launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {
-      launched = false;
-    }
-    // A launch that did not happen will not background the app, so there is
-    // no resume coming to consume the flag. Disarm it here, and only here —
-    // a successful launch leaves it armed for the resume the browser return
-    // will cause.
-    if (!launched) _returningFromArticleOpen = false;
+    final mode = await openArticle(context, article);
+    // Only an external launch backgrounds the app, so only that leaves a
+    // resume coming to consume the flag. The built-in reader stays inside
+    // the app — and a launch that did not happen never left it — so both of
+    // those disarm here, and only here.
+    if (mode != ArticleOpenMode.external) _returningFromArticleOpen = false;
 
     // Restore by anchor. The list is *not* unchanged: with Show read off the
     // article just opened has been filtered out of it, so every row below it

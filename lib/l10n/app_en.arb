@@ -319,5 +319,21 @@
   "keywordListAnd": " and ",
   "@keywordListAnd": {
     "description": "Joins the last two keywords when a notification names several."
+  },
+  "openInBrowser": "Open in browser",
+  "@openInBrowser": {
+    "description": "Tooltip on the reader's action that hands the article to Chrome instead."
+  },
+  "selectAnArticle": "Select an article to read it here",
+  "@selectAnArticle": {
+    "description": "Empty state of the reading pane in the three-column tablet layout."
+  },
+  "builtInViewer": "Open articles in the built-in viewer",
+  "@builtInViewer": {
+    "description": "Settings toggle: on opens articles in the app own reader, off opens Chrome."
+  },
+  "reading": "Reading",
+  "@reading": {
+    "description": "Settings section header for article-reading preferences."
   }
 }

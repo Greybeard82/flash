@@ -58,6 +58,7 @@ dependencies:
   uuid: ^4.4.0
   collection: ^1.18.0
   home_widget: ^0.9.4
+  flutter_inappwebview: ^6.0.0
 
 dependency_overrides:
   intl: ^0.20.0
@@ -88,10 +89,10 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   generate: true
-
   assets:
     - assets/images/
     - assets/fonts/
+    - assets/blocklists/
 
   fonts:
     - family: PT Serif

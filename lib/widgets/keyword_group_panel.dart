@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../services/article_opener.dart';
 import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
 import 'spinning_refresh_icon.dart';
@@ -221,8 +221,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
   }
 
   Future<void> _openArticle(Article article) async {
-    final uri = Uri.tryParse(article.url);
-    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    await openArticle(context, article);
   }
 
   @override
