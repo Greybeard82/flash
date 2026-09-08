@@ -731,22 +731,32 @@ class _DraggableFeedRow extends StatelessWidget {
       onEdit: onEdit,
     );
 
-    return LongPressDraggable<Feed>(
-      data: feed,
-      onDragStarted: onDragStarted,
-      onDragUpdate: onDragUpdate,
-      onDragEnd: (_) => onDragEnd(),
-      onDraggableCanceled: (_, __) => onDragEnd(),
-      feedback: Material(
-        elevation: 6,
-        borderRadius: BorderRadius.circular(12),
-        child: SizedBox(
-          width: MediaQuery.sizeOf(context).width - 32,
+    // The feedback renders into the root Overlay, in window coordinates, so
+    // it has no idea how wide the row it came from actually is. Asking
+    // MediaQuery gave it the whole window: correct on a phone, where the list
+    // is the window, and far too wide on the tablet layout, where the list is
+    // one pane beside a detail pane. LayoutBuilder hands us this row's own
+    // incoming constraint, which is right in either layout.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return LongPressDraggable<Feed>(
+          data: feed,
+          onDragStarted: onDragStarted,
+          onDragUpdate: onDragUpdate,
+          onDragEnd: (_) => onDragEnd(),
+          onDraggableCanceled: (_, __) => onDragEnd(),
+          feedback: Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: constraints.maxWidth,
+              child: row,
+            ),
+          ),
+          childWhenDragging: Opacity(opacity: 0.3, child: row),
           child: row,
-        ),
-      ),
-      childWhenDragging: Opacity(opacity: 0.3, child: row),
-      child: row,
+        );
+      },
     );
   }
 }
@@ -785,9 +795,13 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   bool _adding = false;
   String _error = '';
 
-  /// Intentionally starts null — the user must pick a category. Enforced in
-  /// [_addByUrl], the single point both the raw-URL path and a Feedly result
-  /// pass through, not at every keystroke: searching needs no category yet.
+  /// Intentionally starts null — the user must pick a category before doing
+  /// anything else. The search field is disabled until one is chosen (see
+  /// [_canSearch]), so the category is now the sheet's first step rather than
+  /// a condition checked at the end. [_addByUrl] still enforces it too: that
+  /// is the single point both the raw-URL path and a Feedly result pass
+  /// through, and it stays as the backstop if either is reached some other
+  /// way.
   Folder? _selectedFolder;
 
   /// The sheet's own copy of the folder list. A category created inline has
@@ -799,6 +813,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   bool _creatingCategory = false;
   final _categoryController = TextEditingController();
   final _categoryFocus = FocusNode();
+
+  /// Whether the search/URL field may be used. False while no category is
+  /// selected, and false while the inline category creator is open — the user
+  /// has to finish or cancel that first, not search around it.
+  bool get _canSearch => _selectedFolder != null && !_creatingCategory;
 
   /// Shown directly under the chip row when an add is attempted with no
   /// category chosen. Cleared the moment one is picked or created.
@@ -823,8 +842,9 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       _creatingCategory = true;
       _categoryError = '';
     });
-    // The search field owns autofocus. Requesting focus after this frame is
-    // the reliable way to move the caret into the new row.
+    // The row is inserted by this same setState, so it does not exist yet.
+    // Requesting focus after the frame is the reliable way to move the caret
+    // into it.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _categoryFocus.requestFocus();
     });
@@ -1079,6 +1099,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                   child: TextField(
                     controller: _categoryController,
                     focusNode: _categoryFocus,
+                    textCapitalization: TextCapitalization.sentences,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _createCategory(),
                     decoration: InputDecoration(
@@ -1111,7 +1132,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           // Search field
           TextField(
             controller: _controller,
-            autofocus: true,
+            enabled: _canSearch,
+            // Not autofocused: the sheet always opens with no category, so
+            // this field is always disabled on the first frame and there is
+            // nothing here to focus into yet. The chips are the first step.
+            autofocus: false,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
@@ -1121,7 +1146,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               suffixIcon: IconButton(
                 icon: const Icon(Icons.search),
-                onPressed: _search,
+                onPressed: _canSearch ? _search : null,
               ),
             ),
           ),
@@ -1300,6 +1325,7 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
+            textCapitalization: TextCapitalization.sentences,
             decoration: InputDecoration(
               labelText: l10n.feedName,
               border: const OutlineInputBorder(),
