@@ -1,6 +1,0 @@
-LaunchState: COLD
-TotalTime: 2089
-LaunchState: COLD
-TotalTime: 2145
-LaunchState: COLD
-TotalTime: 2015

@@ -1,6 +1,0 @@
-LaunchState: COLD
-TotalTime: 1944
-LaunchState: COLD
-TotalTime: 1940
-LaunchState: COLD
-TotalTime: 1980
