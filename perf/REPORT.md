@@ -75,7 +75,7 @@ ever starts working, someone notices.
 
 ## Stage 2 — Performance
 
-### 2a. Impeller: measured, and NOT shipped
+### 2a. Impeller: measured, NOT shipped, and CLOSED
 
 **The approval rested on numbers that do not reproduce.** Re-measured with the
 Stage 0 methodology at four repetitions instead of the audit's single run:
@@ -100,11 +100,12 @@ That first-launch number is not only an artifact to discount. Every install and
 every update pays it, and a visibly janky first scroll after an update is
 something a user sees.
 
-The Samsung half of the approval — scroll p99 33.3 → 17.0ms — is **unverified**,
-because that device was not connected. Manifest left at `EnableImpeller=false`.
-**This needs your call with the Samsung attached**; I was not willing to ship a
-measured regression on all three tablet metrics into a release on the strength
-of one unreproduced number.
+The Samsung half of the approval — scroll p99 33.3 → 17.0ms — was never
+verified, and **will not be**. David closed this: a regression on all three
+tablet metrics settles it, the cold-pipeline-cache explanation for the audit's
+misleading 0.5% stands on its own, and the 24% first-launch jank is a real
+user-facing cost rather than a sampling artifact. Manifest stays at
+`EnableImpeller=false`. Do not re-measure this with the Samsung.
 
 ### 2b. Baseline profile: not done, and the premise needs correcting
 
@@ -127,14 +128,17 @@ Untouched. The brief's own instruction is instrument first, and I did not get to
 the instrumentation, so there is nothing to report beyond what the audit already
 said.
 
-### 2d. Per-tap DB work: done, and it does not help
+### 2d. Per-tap DB work: implemented, measured as a no-op, REVERTED
 
-Implemented exactly as the brief specified — less work, not later work,
-`retireAllRead` untouched, only how often the tab-tap path calls it.
-`ArticleRepository.hasRetirableRead` is an indexed existence probe sharing
-`retireAllRead`'s exact WHERE clause; `_flushRead` skips the transaction when it
-returns false. Skipping a delete that would match nothing is unobservable, which
-is what makes it safe.
+**Do not re-propose this.** It was built exactly as the brief specified, measured
+properly, found to buy nothing, and removed. The reasoning is kept here so the
+next person does not spend the same day on it.
+
+What was built: `ArticleRepository.hasRetirableRead`, an indexed existence probe
+sharing `retireAllRead`'s exact WHERE clause, with `_flushRead` skipping the
+transaction when it returned false. `retireAllRead` itself untouched, per the
+brief — only how often the tab-tap path called it. Observationally identical by
+construction, and covered by 12 tests.
 
 **It did not move the numbers.** Tablet, four repetitions, same build except the
 guard:
@@ -144,31 +148,32 @@ guard:
 | control, no guard | 7.4 / 7.6 / 7.9 / 7.8 | **7.7%** |
 | with guard | 8.2 / 7.6 / 7.3 / 6.9 | **7.45%** |
 
-Overlapping ranges. Reported as a no-op, not a win.
+Overlapping ranges.
 
-**Why, and what would help.** The audit's 4.55%-vs-6.25% upper bound came from
-skipping *all three* per-tap operations. This removes only the DELETE — and a
-DELETE matching no rows is already nearly free. The remaining cost is
-`_refreshCountsFromDb`'s two COUNTs and `_articlesForTab`'s SELECT, and neither
-can be skipped without changing what the screen shows. That is where any further
-work has to go.
+**Why it cannot work, which is the part worth keeping.** The audit's
+4.55%-vs-6.25% upper bound came from skipping *all three* per-tap database
+operations. The guard removed only the DELETE — and a DELETE matching no rows is
+already nearly free, because SQLite never opens a write page for it. The cost
+that remains is `_refreshCountsFromDb`'s two COUNT queries and
+`_articlesForTab`'s SELECT. Neither can be skipped without changing what the
+screen shows, so **there is no cheap win left on this path**. Any further attempt
+has to make those two reads cheaper or move what depends on them, not elide the
+delete.
 
-**Verification the brief asked for, all covered by 12 tests:** read articles
-still retire, unread articles are never deleted, bookmarked read articles
-survive, tombstones are still written, `alert_matches` survives its article being
-retired, and the probe agrees with the delete in every state including folder
-scope.
+Reverted in full: `hasRetirableRead`, its call site, and its tests are gone.
+The measurement data stays under `perf/reps/tablet_ctl_*` and
+`perf/reps/tablet_guard_*` as the evidence behind the paragraph above.
 
-Two of those corrected assumptions rather than confirming them. `alert_matches`
-has no `article_id` and no foreign key to `articles` — it keeps its own
-`feed_id`/`guid`/`title`/`url` copy, which is what lets an alert stay readable
-after the article is gone. And a bookmarked article survives retirement *in the
-table* while still being filtered out of `getAllArticles`, so that assertion had
-to move to the table; asserting through the feed list would have passed for the
-wrong reason.
+Two incidental findings from writing those tests are worth keeping even though
+the tests are gone:
 
-**Keeping it is your call.** Strictly less work per tap and fully covered, but
-not the fix for tab-switch jank.
+- `alert_matches` has no `article_id` and no foreign key to `articles`. It keeps
+  its own `feed_id`/`guid`/`title`/`url` copy, which is what lets an alert stay
+  readable after the article behind it has been retired.
+- A bookmarked read article survives retirement *in the table* but is still
+  filtered out of `getAllArticles`. Any future test asserting "bookmarks
+  survive" has to check the table; asserting through the feed list passes for
+  the wrong reason.
 
 ### Methodology note: cross-session comparisons on this tablet are unreliable
 
@@ -230,24 +235,23 @@ in case you ever want to recreate the refs.
 | `c4d5b70` | Stage 4a — duplicate ARB key |
 | `9add01e` | Stage 2a — Impeller measured and rejected, data kept, manifest unchanged |
 | `01c33c0` | Stage 5 — first version of this report |
-| `e233d1b` | Stage 2d — retire guard, 12 tests, measured as a no-op and reported as one |
+| `e233d1b` | Stage 2d — retire guard, 12 tests, measured as a no-op |
+| `c3c245b` | Stage 5 — 2d and the measurement-reliability finding folded in |
+| *(this)* | Stage 2d reverted; finding kept in this report |
 
 Earlier audit commits (`35c3cc2`, `adad003`, `9863256`, `5d0e290`) are unchanged
 beneath these.
 
-**985 tests, `flutter analyze lib test` clean.**
+**973 tests, `flutter analyze lib test` clean.**
 
 ---
 
 ## Needs your judgement
 
-1. **Impeller.** Measured worse on every tablet metric. Approved on numbers that
-   did not reproduce. Reconnect the Samsung and decide.
-2. **`\bprofile\b` and `\bmeta\b`.** Left out for lack of a page to validate
+1. **`\bprofile\b` and `\bmeta\b`.** Left out for lack of a page to validate
    them against. If you have a profile-piece article in your feeds, that is the
    test case.
-3. **Whether to keep the 2d guard at all.** It is correct and tested but buys nothing measurable. The remaining tab-switch cost is the two COUNTs and the SELECT.
-4. **Whether the fixtures belong in the repo at all.** 1.3MB gzipped, and they
+2. **Whether the fixtures belong in the repo at all.** 1.3MB gzipped, and they
    go stale as publishers re-template. The alternative is fetching them in CI,
    which trades reproducibility for freshness.
 

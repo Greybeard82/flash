@@ -269,25 +269,6 @@ class _FeedScreenState extends State<FeedScreen>
   /// Every deletion boundary goes through here so each one leaves a
   /// `[RETIRE]` line in the debug log with its trigger name.
   Future<int> _flushRead(String trigger, {int? folderId}) async {
-    // Ask before doing. Every tab tap reaches this, and a tab tap rarely
-    // follows anything being read, so most calls had nothing to retire — yet
-    // retireAllRead opens a transaction and runs an INSERT and a DELETE
-    // either way. The probe is an indexed existence check against
-    // idx_articles_is_read that stops at the first matching row.
-    //
-    // Measured on the Lenovo tablet: the per-tap database work was worth
-    // ~1.7pp of janky frames and doubled p95. Deferring it past the animation
-    // was measured too and bought nothing — the cost is that the work happens
-    // at all, not when it happens.
-    //
-    // Retirement behaviour is unchanged. Skipping a call that would have
-    // deleted zero rows is unobservable, and the probe shares
-    // retireAllRead's exact WHERE clause — including `is_saved = 0`, so a
-    // bookmarked read article is not retirable and does not keep this awake.
-    if (!await _articleRepo.hasRetirableRead(folderId: folderId)) {
-      DiagLog.retire(ids: 0, trigger: '$trigger:nothingToRetire');
-      return 0;
-    }
     final deleted = await _articleRepo.retireAllRead(folderId: folderId);
     DiagLog.retire(ids: deleted, trigger: trigger);
     // Rows left every tab, not just the visible one; keep the pages honest.

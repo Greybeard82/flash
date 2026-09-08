@@ -346,35 +346,6 @@ class ArticleRepository {
   /// retirement destroyed it and only an auto-bookmark kept it on screen;
   /// outliving retirement is the entire reason the snapshot table exists, and
   /// anything that starts deleting from it on the way past undoes the fix.
-  /// Whether [retireAllRead] would actually delete anything.
-  ///
-  /// Deliberately duplicates that method's WHERE clause rather than sharing
-  /// one: the two must agree exactly, and a test asserts they do. An existence
-  /// probe against idx_articles_is_read stops at the first matching row, where
-  /// retireAllRead opens a transaction and runs an INSERT and a DELETE
-  /// whichever way the answer comes out.
-  ///
-  /// This exists because the tab-switch path called retireAllRead on every
-  /// single tap, and most taps have nothing to retire. Measured on the Lenovo
-  /// tablet, the per-tap database work cost ~1.7pp of janky frames and doubled
-  /// p95; deferring it was measured too and did not help, because the cost is
-  /// that the work happens at all rather than when. Skipping a call that would
-  /// delete zero rows is unobservable, which is what makes this safe.
-  Future<bool> hasRetirableRead({int? folderId}) async {
-    final db = await _db;
-    final scope = folderId == null
-        ? ''
-        : 'AND feed_id IN (SELECT id FROM ${TableNames.feeds} WHERE folder_id = ?)';
-    final args = folderId == null ? <Object?>[] : <Object?>[folderId];
-
-    final rows = await db.rawQuery('''
-      SELECT 1 FROM ${TableNames.articles}
-      WHERE is_read = 1 AND is_saved = 0 $scope
-      LIMIT 1
-    ''', args);
-    return rows.isNotEmpty;
-  }
-
   Future<int> retireAllRead({int? folderId}) async {
     final db = await _db;
     final now = DateTime.now().millisecondsSinceEpoch;
