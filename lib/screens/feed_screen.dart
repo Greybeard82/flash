@@ -28,6 +28,7 @@ import '../utils/day_grouping.dart';
 import '../utils/mark_read_gate.dart';
 import '../utils/constants.dart';
 import '../utils/resume_refresh_policy.dart';
+import '../reading/new_content_check.dart';
 import '../reading/read_gate.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
@@ -586,7 +587,8 @@ class _FeedScreenState extends State<FeedScreen>
     final folders = await _folderRepo.getAll();
     if (!mounted) return;
     final probe = await _articlesForTab(_selectedTabIndex, folders);
-    final hasNew = probe.any((a) => !beforeIds.contains(a.id));
+    final hasNew =
+        NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
 
     // Two independent reasons to rebuild: something new arrived, or the
     // flush removed rows that are still on screen. Only when neither is true
@@ -727,14 +729,29 @@ class _FeedScreenState extends State<FeedScreen>
           _newspaperMode = settings.newspaperMode;
         });
       }
+      // This resume is not fetching, but that does not mean nothing arrived.
+      // The periodic WorkManager refresh inserts articles from its own
+      // isolate, and ResumeRefreshPolicy only ever sees the last *foreground*
+      // fetch — so a warm start can land on a list that grew while we were
+      // away. Snapshot what is on screen before the re-query to tell the two
+      // cases apart.
+      final beforeIds = _articles.map((a) => a.id).toSet();
       // Warm start is a lifecycle boundary: READ -> DELETED, app-wide, before
       // the list is rebuilt from the post-delete state.
       await _flushRead('resume');
       await _loadArticles();
-      // Anchor, not `offset`: _loadArticles has just re-queried, so read rows
-      // are gone and fetched rows may have been inserted above. The pixel
-      // number that was correct a moment ago now points somewhere else.
-      _restoreAnchor();
+      // Same rule as _fetchAndApply and _refreshCurrentTab: new content means
+      // the top, nothing new means back where you were reading. Anchor, not
+      // `offset`, for that second case — _loadArticles has just re-queried, so
+      // read rows are gone and the pixel number that was correct a moment ago
+      // now points somewhere else.
+      final hasNew =
+          NewContentCheck.hasNew(beforeIds, _articles.map((a) => a.id));
+      if (hasNew) {
+        _resetScrollToTop();
+      } else {
+        _restoreAnchor();
+      }
     }, label: 'Loading');
   }
 
@@ -960,7 +977,8 @@ class _FeedScreenState extends State<FeedScreen>
         // moves. The user pulled to check, not to be relocated.
         if (!mounted) return;
         final probe = await _articlesForTab(_selectedTabIndex, _folders);
-        final hasNew = probe.any((a) => !beforeIds.contains(a.id));
+        final hasNew =
+            NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
         // The user pressed refresh expecting read articles to clear. Rebuild
         // if the flush removed anything, whether or not the fetch found new
         // content — those are unrelated conditions (bug 1).
