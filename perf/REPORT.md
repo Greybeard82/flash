@@ -3,8 +3,8 @@
 Branch: **`perf/tablet-samsung-audit-2026-09-08`** (main merged in, so it carries
 today's refresh-settings and clean-mode work). Not merged to `main`.
 
-**This brief was not completed.** Stage 1 and Stage 4 are done in full, Stage 2a
-is measured and answered, and Stages 2b/2c/2d and Stage 3 are not done. What
+**This brief was not completed.** Stages 1, 2a, 2d and 4 are done, Stage 5 is
+this document, and Stages 2b, 2c and 3 are not done. What
 follows says which is which rather than blurring them. Two of the gaps are
 hard blockers, not pacing:
 
@@ -127,18 +127,58 @@ Untouched. The brief's own instruction is instrument first, and I did not get to
 the instrumentation, so there is nothing to report beyond what the audit already
 said.
 
-### 2d. Per-tap DB work: not done
+### 2d. Per-tap DB work: done, and it does not help
 
-Deliberately not attempted in what was left of the session. It changes when read
-articles are retired — a documented lifecycle rule, and the same machinery that
-destroyed read state on both devices during the audit. The brief itself calls it
-"the one with real risk" and requires tests written independently, plus explicit
-verification that unread articles are never deleted and bookmarks survive. Doing
-that carefully needs a session where it is the main event, not the last item.
+Implemented exactly as the brief specified — less work, not later work,
+`retireAllRead` untouched, only how often the tab-tap path calls it.
+`ArticleRepository.hasRetirableRead` is an indexed existence probe sharing
+`retireAllRead`'s exact WHERE clause; `_flushRead` skips the transaction when it
+returns false. Skipping a delete that would match nothing is unobservable, which
+is what makes it safe.
 
-The audit's finding still stands as the starting point: deferring the work does
-not help and regressed the Samsung; the fix has to be *less* work, not later
-work.
+**It did not move the numbers.** Tablet, four repetitions, same build except the
+guard:
+
+| | reps | median |
+|---|---|---|
+| control, no guard | 7.4 / 7.6 / 7.9 / 7.8 | **7.7%** |
+| with guard | 8.2 / 7.6 / 7.3 / 6.9 | **7.45%** |
+
+Overlapping ranges. Reported as a no-op, not a win.
+
+**Why, and what would help.** The audit's 4.55%-vs-6.25% upper bound came from
+skipping *all three* per-tap operations. This removes only the DELETE — and a
+DELETE matching no rows is already nearly free. The remaining cost is
+`_refreshCountsFromDb`'s two COUNTs and `_articlesForTab`'s SELECT, and neither
+can be skipped without changing what the screen shows. That is where any further
+work has to go.
+
+**Verification the brief asked for, all covered by 12 tests:** read articles
+still retire, unread articles are never deleted, bookmarked read articles
+survive, tombstones are still written, `alert_matches` survives its article being
+retired, and the probe agrees with the delete in every state including folder
+scope.
+
+Two of those corrected assumptions rather than confirming them. `alert_matches`
+has no `article_id` and no foreign key to `articles` — it keeps its own
+`feed_id`/`guid`/`title`/`url` copy, which is what lets an alert stay readable
+after the article is gone. And a bookmarked article survives retirement *in the
+table* while still being filtered out of `getAllArticles`, so that assertion had
+to move to the table; asserting through the feed list would have passed for the
+wrong reason.
+
+**Keeping it is your call.** Strictly less work per tap and fully covered, but
+not the fix for tab-switch jank.
+
+### Methodology note: cross-session comparisons on this tablet are unreliable
+
+The same-code control measured **7.7%** where the audit's stored baseline on the
+same device measured **6.25%**. Nothing between them touches the tab path. The
+tablet's article count swung between 81 and 6 and back across the day, and
+article volume changes query cost. Only same-session, same-build controls are
+trustworthy here — which is why 2d was re-measured against a fresh control
+rather than against the stored baseline, and why the first Impeller comparison
+in this pass had to be redone.
 
 ---
 
@@ -189,11 +229,13 @@ in case you ever want to recreate the refs.
 | `b3e8274` | Stage 1 — image dedupe, `<picture>` recursion, recirculation vocabulary, trailing trim, 10 real fixtures, 34 tests |
 | `c4d5b70` | Stage 4a — duplicate ARB key |
 | `9add01e` | Stage 2a — Impeller measured and rejected, data kept, manifest unchanged |
+| `01c33c0` | Stage 5 — first version of this report |
+| `e233d1b` | Stage 2d — retire guard, 12 tests, measured as a no-op and reported as one |
 
 Earlier audit commits (`35c3cc2`, `adad003`, `9863256`, `5d0e290`) are unchanged
 beneath these.
 
-**973 tests, `flutter analyze lib test` clean.**
+**985 tests, `flutter analyze lib test` clean.**
 
 ---
 
@@ -204,7 +246,7 @@ beneath these.
 2. **`\bprofile\b` and `\bmeta\b`.** Left out for lack of a page to validate
    them against. If you have a profile-piece article in your feeds, that is the
    test case.
-3. **Stage 2d.** The retirement-timing change. Wants its own session.
+3. **Whether to keep the 2d guard at all.** It is correct and tested but buys nothing measurable. The remaining tab-switch cost is the two COUNTs and the SELECT.
 4. **Whether the fixtures belong in the repo at all.** 1.3MB gzipped, and they
    go stale as publishers re-template. The alternative is fetching them in CI,
    which trades reproducibility for freshness.
