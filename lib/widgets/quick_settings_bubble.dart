@@ -4,7 +4,6 @@ import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../repositories/settings_repository.dart';
 import '../screens/settings_screen.dart';
-import '../services/refresh_service.dart';
 import '../services/settings_notifier.dart';
 import '../services/summary_formatter.dart'
     show kSummaryLengthShort, kSummaryLengthStandard, kSummaryLengthDetailed;
@@ -76,7 +75,6 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
   late bool _markAllReadConfirm;
   late bool _iconBadge;
   late String _summaryLength;
-  late int _refreshIntervalMinutes;
 
   /// Collapsed by default — see the picker's own row for why.
   bool _paletteExpanded = false;
@@ -97,7 +95,6 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
     _markAllReadConfirm = widget.initial.markAllReadConfirm;
     _iconBadge = widget.initial.unreadBadgeNotification;
     _summaryLength = widget.initial.summaryLength;
-    _refreshIntervalMinutes = widget.initial.refreshIntervalMinutes;
     _paletteChevronController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
@@ -162,17 +159,6 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
   Future<void> _setMarkAllReadConfirm(bool value) async {
     setState(() => _markAllReadConfirm = value);
     await _repo.set('mark_all_read_confirm', value.toString());
-    SettingsNotifier.instance.settingsChanged();
-  }
-
-  /// Rescheduling is the whole point, not a side effect: the stored value is
-  /// only ever read when the periodic task is registered, so writing it
-  /// without `forceReschedule` leaves WorkManager running on the old interval
-  /// until something else happens to re-register it.
-  Future<void> _setRefreshInterval(int value) async {
-    setState(() => _refreshIntervalMinutes = value);
-    await _repo.set('refresh_interval_minutes', value.toString());
-    await RefreshService(_repo).schedulePeriodicRefresh(forceReschedule: true);
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -342,17 +328,6 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
           ),
 
         const SizedBox(height: 12),
-        // Above the switches: how often the app fetches is the most
-        // consequential thing on this panel, and the only one here that
-        // changes what the device does while the app is closed.
-        Text(l10n.backgroundRefreshInterval, style: theme.textTheme.bodyMedium),
-        const SizedBox(height: 4),
-        _RefreshIntervalField(
-          value: _refreshIntervalMinutes,
-          onChanged: _setRefreshInterval,
-        ),
-
-        const SizedBox(height: 8),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.newspaperMode, style: theme.textTheme.bodyMedium),
@@ -513,232 +488,6 @@ class _PaletteSwatchStrip extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// (minutes, label) pairs, in the order both the field and its menu list
-/// them — identical to the original `DropdownMenuItem` list.
-List<(int, String)> _refreshIntervalOptions(AppLocalizations l10n) => [
-      (15, l10n.every15Minutes),
-      (30, l10n.every30Minutes),
-      (60, l10n.everyHour),
-      (180, l10n.every3Hours),
-      (360, l10n.every6Hours),
-      (0, l10n.manualOnly),
-    ];
-
-/// The background-refresh-interval selector.
-///
-/// Was a plain `DropdownButton<int>`, then briefly a `PopupMenuButton` with
-/// `useRootNavigator: true`. Neither worked. On-device testing (an
-/// accessibility dump taken at the same instant as a screenshot) found both
-/// popups genuinely opening — every option present and focusable, a
-/// full-screen dismiss barrier and all — while painting nothing: the popup
-/// rendered underneath this bubble's own `OverlayEntry`
-/// (`bubble_panel.dart`'s `showBubblePanel`, a manual `Overlay.insert`
-/// rather than a route). `useRootNavigator` didn't change that, because this
-/// app has exactly one `Navigator` — routing "through the root" is the same
-/// Navigator either way, and that Navigator inserts a newly pushed route's
-/// entries relative to *its own* bookkeeping, immediately above whatever it
-/// last knew was on top. It has no idea the bubble's raw entry got appended
-/// afterward by a completely different mechanism, so the new route lands
-/// below it regardless of which Navigator pushed it. And because the popup
-/// was a route while the bubble is not, dismissing the bubble did not close
-/// it either: the route stayed alive, and reappeared — now unobscured, so
-/// visible for the first time — floating over whatever screen came next,
-/// still eating the tap after that.
-///
-/// The fix is to stop using a route at all. This is its own small overlay
-/// entry, opened and positioned the same way `showBubblePanel` opens the
-/// bubble that hosts it (`Overlay.of(context).insert`, anchored to this
-/// field's own on-screen rect) — so it is guaranteed to paint above the
-/// bubble by construction: it is inserted after the bubble's entry, into
-/// the same `Overlay`, the same way the bubble itself was inserted after
-/// whatever screen was already showing. `registerBackDismiss` gives it the
-/// same back-press reach every `_BubblePanel` already has, for the same
-/// reason [dismissTopBubblePanel] exists at all.
-class _RefreshIntervalField extends StatefulWidget {
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  const _RefreshIntervalField({required this.value, required this.onChanged});
-
-  @override
-  State<_RefreshIntervalField> createState() => _RefreshIntervalFieldState();
-}
-
-class _RefreshIntervalFieldState extends State<_RefreshIntervalField> {
-  final _fieldKey = GlobalKey();
-  OverlayEntry? _menu;
-
-  @override
-  void dispose() {
-    // The overlay outlives this State otherwise — same reasoning as
-    // QuickSettingsAction's own dispose, for the same kind of leak.
-    if (_menu?.mounted ?? false) _menu!.remove();
-    super.dispose();
-  }
-
-  void _closeMenu(OverlayEntry entry) {
-    if (entry.mounted) entry.remove();
-    if (identical(_menu, entry)) _menu = null;
-  }
-
-  void _openMenu() {
-    if (_menu?.mounted ?? false) return;
-    final box = _fieldKey.currentContext?.findRenderObject() as RenderBox?;
-    if (box == null) return;
-    final anchor = box.localToGlobal(Offset.zero) & box.size;
-
-    late final OverlayEntry entry;
-    entry = OverlayEntry(
-      builder: (_) => _RefreshIntervalMenu(
-        anchor: anchor,
-        value: widget.value,
-        onSelected: (v) {
-          widget.onChanged(v);
-          _closeMenu(entry);
-        },
-        onDismiss: () => _closeMenu(entry),
-      ),
-    );
-    Overlay.of(context).insert(entry);
-    _menu = entry;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final options = _refreshIntervalOptions(l10n);
-    final currentLabel = options.firstWhere((o) => o.$1 == widget.value).$2;
-
-    // The same full-width, underline-free look `isExpanded: true` gave the
-    // DropdownButton this replaced.
-    return InkWell(
-      key: _fieldKey,
-      borderRadius: BorderRadius.circular(8),
-      onTap: _openMenu,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(currentLabel, style: theme.textTheme.titleMedium),
-            ),
-            Icon(Icons.arrow_drop_down_rounded,
-                color: theme.colorScheme.onSurfaceVariant),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The interval menu's own overlay content: a full-screen, invisible
-/// tap-to-dismiss layer behind a compact option list anchored to
-/// [anchor] — [_RefreshIntervalField]'s own on-screen rect at the moment it
-/// was tapped, the same "measure once, position from that" approach
-/// `_BubblePanel` takes with its anchor button.
-class _RefreshIntervalMenu extends StatefulWidget {
-  final Rect anchor;
-  final int value;
-  final ValueChanged<int> onSelected;
-  final VoidCallback onDismiss;
-
-  const _RefreshIntervalMenu({
-    required this.anchor,
-    required this.value,
-    required this.onSelected,
-    required this.onDismiss,
-  });
-
-  @override
-  State<_RefreshIntervalMenu> createState() => _RefreshIntervalMenuState();
-}
-
-class _RefreshIntervalMenuState extends State<_RefreshIntervalMenu> {
-  /// Registered for the lifetime of this overlay, so a system back press
-  /// closes the menu instead of walking past it — the same problem
-  /// `_BubblePanel` solves for itself, for the same reason (an
-  /// `OverlayEntry` has no `ModalRoute` of its own for `PopScope` to answer
-  /// to).
-  late final VoidCallback _backHandler;
-
-  @override
-  void initState() {
-    super.initState();
-    _backHandler = widget.onDismiss;
-    registerBackDismiss(_backHandler);
-  }
-
-  @override
-  void dispose() {
-    unregisterBackDismiss(_backHandler);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final l10n = AppLocalizations.of(context)!;
-    final options = _refreshIntervalOptions(l10n);
-
-    return Stack(
-      children: [
-        // No dimming — a dropdown, not a modal. Its only job is to catch the
-        // outside tap that closes the menu without it also reaching whatever
-        // is underneath.
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onDismiss,
-          ),
-        ),
-        Positioned(
-          left: widget.anchor.left,
-          top: widget.anchor.bottom + 4,
-          width: widget.anchor.width,
-          child: Material(
-            color: theme.colorScheme.surfaceContainerHighest,
-            elevation: 6,
-            borderRadius: BorderRadius.circular(12),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (minutes, label) in options)
-                  InkWell(
-                    onTap: () => widget.onSelected(minutes),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              label,
-                              style: minutes == widget.value
-                                  ? theme.textTheme.bodyLarge?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                      color: theme.colorScheme.primary,
-                                    )
-                                  : theme.textTheme.bodyLarge,
-                            ),
-                          ),
-                          if (minutes == widget.value)
-                            Icon(Icons.check_rounded,
-                                size: 18, color: theme.colorScheme.primary),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

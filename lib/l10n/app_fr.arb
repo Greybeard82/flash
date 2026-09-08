@@ -47,7 +47,7 @@
   "everyHour": "Toutes les heures",
   "every3Hours": "Toutes les 3 heures",
   "every6Hours": "Toutes les 6 heures",
-  "manualOnly": "Manuel uniquement",
+  "manualOnly": "Jamais",
   "maxArticlesPerFeed": "Max articles par flux",
   "filters": "Filtres",
   "keywordBlocklist": "Liste de mots bloqués",
@@ -225,5 +225,10 @@
   "cleanModeBackToWeb": "Voir la page d'origine",
   "cleanModeUnavailable": "Aucune vue épurée disponible pour cette page",
   "cleanModeSettingTitle": "Vue de lecture épurée",
-  "cleanModeSettingSubtitle": "Proposer une version sans distraction lorsque l'article s'y prête"
+  "cleanModeSettingSubtitle": "Proposer une version sans distraction lorsque l'article s'y prête",
+  "every2Hours": "Toutes les 2 heures",
+  "every4Hours": "Toutes les 4 heures",
+  "every5Hours": "Toutes les 5 heures",
+  "refreshOnWifiOnly": "Actualiser uniquement en Wi-Fi",
+  "refreshOnWifiOnlySubtitle": "L'actualisation en arrière-plan ne se fait qu'en Wi-Fi. Ouvrir l'application ou actualiser manuellement fonctionne toujours, quelle que soit la connexion."
 }

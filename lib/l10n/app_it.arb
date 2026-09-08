@@ -47,7 +47,7 @@
   "everyHour": "Ogni ora",
   "every3Hours": "Ogni 3 ore",
   "every6Hours": "Ogni 6 ore",
-  "manualOnly": "Solo manuale",
+  "manualOnly": "Mai",
   "maxArticlesPerFeed": "Max articoli per feed",
   "filters": "Filtri",
   "keywordBlocklist": "Lista parole bloccate",
@@ -225,5 +225,10 @@
   "cleanModeBackToWeb": "Vedi la pagina originale",
   "cleanModeUnavailable": "Nessuna vista pulita disponibile per questa pagina",
   "cleanModeSettingTitle": "Vista di lettura pulita",
-  "cleanModeSettingSubtitle": "Proporre una versione senza distrazioni quando è possibile estrarla"
+  "cleanModeSettingSubtitle": "Proporre una versione senza distrazioni quando è possibile estrarla",
+  "every2Hours": "Ogni 2 ore",
+  "every4Hours": "Ogni 4 ore",
+  "every5Hours": "Ogni 5 ore",
+  "refreshOnWifiOnly": "Aggiorna solo con Wi-Fi",
+  "refreshOnWifiOnlySubtitle": "L'aggiornamento in background funziona solo con Wi-Fi. Aprire l'app o aggiornare manualmente funziona sempre, con qualsiasi connessione."
 }

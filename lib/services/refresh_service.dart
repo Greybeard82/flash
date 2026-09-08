@@ -295,20 +295,29 @@ class RefreshService {
 
   Future<void> schedulePeriodicRefresh({bool forceReschedule = false}) async {
     final intervalStr =
-        await _settingsRepo.get('refresh_interval_minutes') ?? '30';
-    final intervalMinutes = int.tryParse(intervalStr) ?? 30;
+        await _settingsRepo.get('refresh_interval_minutes') ?? '180';
+    final intervalMinutes = int.tryParse(intervalStr) ?? 180;
 
     if (intervalMinutes == 0) {
       await Workmanager().cancelByUniqueName(kRefreshTaskUniqueName);
       return;
     }
 
+    // Constrains only the periodic task registered here. The cold-open fetch
+    // and pull-to-refresh call refreshAll/refreshFeeds directly and never
+    // touch WorkManager, so they keep working on any connection — which is
+    // what the setting's subtitle promises.
+    final wifiOnly =
+        (await _settingsRepo.get('refresh_wifi_only') ?? 'false') == 'true';
+
     await Workmanager().registerPeriodicTask(
       kRefreshTaskUniqueName,
       kRefreshTaskName,
       frequency: Duration(minutes: intervalMinutes),
       constraints: Constraints(
-        networkType: NetworkType.connected,
+        // unmetered is the OS-enforced "Wi-Fi or equivalent" constraint;
+        // Flash does not inspect connectivity itself.
+        networkType: wifiOnly ? NetworkType.unmetered : NetworkType.connected,
         requiresBatteryNotLow: false,
       ),
       existingWorkPolicy: forceReschedule

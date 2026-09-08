@@ -294,7 +294,11 @@ class SchemaStatements {
 // Default seeded settings
 const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'theme', 'value': 'system'},
-  {'key': 'refresh_interval_minutes', 'value': '30'},
+  // Must match AppSettings.refreshIntervalMinutes' default. This row is
+  // written on database creation, so it — not the fromMap fallback — is what
+  // a fresh install actually gets; a mismatch here silently defeats a change
+  // to the model default. Pinned by refresh_settings_test.
+  {'key': 'refresh_interval_minutes', 'value': '180'},
   {'key': 'article_limit', 'value': '100'},
   {'key': 'mark_read_on_scroll', 'value': 'true'},
   {'key': 'drive_backup_enabled', 'value': 'false'},

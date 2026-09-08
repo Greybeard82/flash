@@ -77,7 +77,7 @@
   "everyHour": "Every hour",
   "every3Hours": "Every 3 hours",
   "every6Hours": "Every 6 hours",
-  "manualOnly": "Manual only",
+  "manualOnly": "Never",
   "maxArticlesPerFeed": "Max articles per feed",
   "filters": "Filters",
   "keywordBlocklist": "Keyword Blocklist",
@@ -375,5 +375,25 @@
   "cleanModeSettingSubtitle": "Offer a distraction-free version of articles when one can be extracted",
   "@cleanModeSettingSubtitle": {
     "description": "Subtitle under cleanModeSettingTitle."
+  },
+  "every2Hours": "Every 2 hours",
+  "@every2Hours": {
+    "description": "Background refresh interval option: two hours."
+  },
+  "every4Hours": "Every 4 hours",
+  "@every4Hours": {
+    "description": "Background refresh interval option: four hours."
+  },
+  "every5Hours": "Every 5 hours",
+  "@every5Hours": {
+    "description": "Background refresh interval option: five hours."
+  },
+  "refreshOnWifiOnly": "Refresh on Wi-Fi only",
+  "@refreshOnWifiOnly": {
+    "description": "Settings switch, Refresh section: constrains the periodic background task to unmetered networks."
+  },
+  "refreshOnWifiOnlySubtitle": "Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.",
+  "@refreshOnWifiOnlySubtitle": {
+    "description": "Subtitle under refreshOnWifiOnly, stating that foreground fetches are unaffected."
   }
 }

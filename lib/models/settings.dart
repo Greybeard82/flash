@@ -21,6 +21,12 @@ class AppSettings {
   /// untouched.
   final String articleSortOrder;
 
+  /// Background refresh only runs on an unmetered network (Wi-Fi, in
+  /// practice). Only constrains the periodic WorkManager task — opening the
+  /// app and pull-to-refresh are user-initiated, direct fetches and always
+  /// run regardless of this setting, on any connection.
+  final bool refreshOnWifiOnly;
+
   final bool markReadOnScroll;
   final bool driveBackupEnabled;
   final int? driveLastBackupAt;
@@ -100,7 +106,8 @@ class AppSettings {
 
   const AppSettings({
     this.theme = 'system',
-    this.refreshIntervalMinutes = 30,
+    this.refreshIntervalMinutes = 180,
+    this.refreshOnWifiOnly = false,
     this.articleLimit = kFetchArticleLimit,
     this.articleSortOrder = kSortNewestFirst,
     this.markReadOnScroll = true,
@@ -122,7 +129,9 @@ class AppSettings {
   factory AppSettings.fromMap(Map<String, String> map) {
     return AppSettings(
       theme: map['theme'] ?? 'system',
-      refreshIntervalMinutes: int.tryParse(map['refresh_interval_minutes'] ?? '30') ?? 30,
+      refreshIntervalMinutes:
+          int.tryParse(map['refresh_interval_minutes'] ?? '180') ?? 180,
+      refreshOnWifiOnly: (map['refresh_wifi_only'] ?? 'false') == 'true',
       articleLimit:
           int.tryParse(map['article_limit'] ?? '') ?? kFetchArticleLimit,
       articleSortOrder: map['article_sort_order'] == kSortOldestFirst
@@ -157,6 +166,7 @@ class AppSettings {
   AppSettings copyWith({
     String? theme,
     int? refreshIntervalMinutes,
+    bool? refreshOnWifiOnly,
     int? articleLimit,
     String? articleSortOrder,
     bool? markReadOnScroll,
@@ -176,7 +186,9 @@ class AppSettings {
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
-      refreshIntervalMinutes: refreshIntervalMinutes ?? this.refreshIntervalMinutes,
+      refreshIntervalMinutes:
+          refreshIntervalMinutes ?? this.refreshIntervalMinutes,
+      refreshOnWifiOnly: refreshOnWifiOnly ?? this.refreshOnWifiOnly,
       articleLimit: articleLimit ?? this.articleLimit,
       articleSortOrder: articleSortOrder ?? this.articleSortOrder,
       markReadOnScroll: markReadOnScroll ?? this.markReadOnScroll,
