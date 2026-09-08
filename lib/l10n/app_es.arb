@@ -38,7 +38,6 @@
   "deleteFolderMessage": "¿Eliminar \"{name}\"? Se eliminarán todas las fuentes y artículos de esta categoría.",
   "removeFeedMessage": "¿Quitar \"{title}\"? Se eliminarán todos los artículos en caché.",
   "settings": "Ajustes",
-  "reading": "Lectura",
   "markReadOnScroll": "Marcar como leído al desplazar",
   "markReadOnScrollSubtitle": "Marca automáticamente los artículos como leídos al desplazarte",
   "backgroundRefreshInterval": "Intervalo de actualización",

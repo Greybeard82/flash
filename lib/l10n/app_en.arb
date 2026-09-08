@@ -68,7 +68,6 @@
     }
   },
   "settings": "Settings",
-  "reading": "Reading",
   "markReadOnScroll": "Mark as read on scroll",
   "markReadOnScrollSubtitle": "Automatically mark articles as read as you scroll past them",
   "backgroundRefreshInterval": "Background refresh interval",

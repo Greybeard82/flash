@@ -132,9 +132,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settings => 'Settings';
 
   @override
-  String get reading => 'Reading';
-
-  @override
   String get markReadOnScroll => 'Mark as read on scroll';
 
   @override
@@ -679,6 +676,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get builtInViewer => 'Open articles in the built-in viewer';
+
+  @override
+  String get reading => 'Reading';
 
   @override
   String get summaryLength => 'AI Summary length';

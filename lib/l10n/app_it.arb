@@ -38,7 +38,6 @@
   "deleteFolderMessage": "Eliminare \"{name}\"? Tutti i feed e gli articoli in questa categoria verranno eliminati.",
   "removeFeedMessage": "Rimuovere \"{title}\"? Tutti gli articoli in cache verranno eliminati.",
   "settings": "Impostazioni",
-  "reading": "Lettura",
   "markReadOnScroll": "Segna come letto scorrendo",
   "markReadOnScrollSubtitle": "Segna automaticamente gli articoli come letti mentre scorri",
   "backgroundRefreshInterval": "Intervallo di aggiornamento",

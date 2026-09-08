@@ -135,9 +135,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settings => 'Einstellungen';
 
   @override
-  String get reading => 'Lesen';
-
-  @override
   String get markReadOnScroll => 'Beim Scrollen als gelesen markieren';
 
   @override
@@ -688,6 +685,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get builtInViewer => 'Artikel im integrierten Viewer öffnen';
+
+  @override
+  String get reading => 'Lesen';
 
   @override
   String get summaryLength => 'Länge der KI-Zusammenfassung';

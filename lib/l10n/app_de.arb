@@ -38,7 +38,6 @@
   "deleteFolderMessage": "\"{name}\" löschen? Alle Feeds und Artikel in dieser Kategorie werden gelöscht.",
   "removeFeedMessage": "\"{title}\" entfernen? Alle zwischengespeicherten Artikel werden gelöscht.",
   "settings": "Einstellungen",
-  "reading": "Lesen",
   "markReadOnScroll": "Beim Scrollen als gelesen markieren",
   "markReadOnScrollSubtitle": "Artikel werden beim Scrollen automatisch als gelesen markiert",
   "backgroundRefreshInterval": "Aktualisierungsintervall",

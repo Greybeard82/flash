@@ -326,12 +326,6 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settings;
 
-  /// Settings section header for article-reading preferences.
-  ///
-  /// In en, this message translates to:
-  /// **'Reading'**
-  String get reading;
-
   /// No description provided for @markReadOnScroll.
   ///
   /// In en, this message translates to:
@@ -1249,6 +1243,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open articles in the built-in viewer'**
   String get builtInViewer;
+
+  /// Settings section header for article-reading preferences.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading'**
+  String get reading;
 
   /// Quick Settings row label for the AI summary length selector.
   ///

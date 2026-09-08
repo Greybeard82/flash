@@ -133,9 +133,6 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settings => 'Ajustes';
 
   @override
-  String get reading => 'Lectura';
-
-  @override
   String get markReadOnScroll => 'Marcar como leído al desplazar';
 
   @override
@@ -686,6 +683,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get builtInViewer => 'Abrir artículos en el visor integrado';
+
+  @override
+  String get reading => 'Lectura';
 
   @override
   String get summaryLength => 'Longitud del resumen IA';

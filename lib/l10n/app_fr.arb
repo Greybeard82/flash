@@ -38,7 +38,6 @@
   "deleteFolderMessage": "Supprimer \"{name}\" ? Tous les flux et articles de cette catégorie seront supprimés.",
   "removeFeedMessage": "Retirer \"{title}\" ? Tous les articles en cache seront supprimés.",
   "settings": "Paramètres",
-  "reading": "Lecture",
   "markReadOnScroll": "Marquer comme lu au défilement",
   "markReadOnScrollSubtitle": "Marque automatiquement les articles comme lus lors du défilement",
   "backgroundRefreshInterval": "Intervalle d'actualisation",
