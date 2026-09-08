@@ -1,276 +1,217 @@
-# Tablet / Samsung performance audit — 2026-09-08
+# Pre-release pass — 2026-09-08
 
-Branch: **`perf/tablet-samsung-audit-2026-09-08`**. Not merged, not pushed —
-local only, waiting on your review. `main` is untouched.
+Branch: **`perf/tablet-samsung-audit-2026-09-08`** (main merged in, so it carries
+today's refresh-settings and clean-mode work). Not merged to `main`.
 
----
+**This brief was not completed.** Stage 1 and Stage 4 are done in full, Stage 2a
+is measured and answered, and Stages 2b/2c/2d and Stage 3 are not done. What
+follows says which is which rather than blurring them. Two of the gaps are
+hard blockers, not pacing:
 
-## Read this first: I destroyed unread articles on the Samsung
-
-**The Samsung went from 73 unread to 8. The tablet went from 81 to 6.**
-
-Not a deliberate destructive test — the *scroll benchmark* did it. Flash marks
-articles read on scroll, and `_flushRead` retires read articles on every tab
-switch and resume. The scroll measurement is 12 swipes per run, and I ran it
-repeatedly on both devices. Each pass consumed a chunk of the backlog and the
-next tab switch deleted those rows.
-
-I did not foresee that, and I should have: in this app, scrolling *is* a
-destructive operation. The brief flagged Mark All Read, Restore, delete and OPML
-import as the destructive flows and had me back up before touching them. Nobody
-flagged the benchmark itself, and the backup would not have helped anyway (see
-below).
-
-**What survived:** feeds, categories, bookmarks, keyword alerts, settings — all
-intact on both devices. The Alerts badge still reads 14 on the Samsung.
-
-**What is gone:** the read/unread state of roughly 65 Samsung articles and 75
-tablet articles, and the article rows themselves. A refresh will re-fetch
-whatever is still inside each feed's current RSS window; anything that has
-rolled out of that window is gone, and the read state is not recoverable at all.
-
-**The Stage 0 backup the brief asked for was never possible.** Two independent
-reasons, both found before any destructive step:
-
-1. `LocalBackupService.exportBackup` writes a temp file and then calls
-   `Share.shareXFiles` — the Android **system share sheet**. Import uses
-   `FilePicker.platform.pickFiles`, the **system document picker**. Both are
-   outside Flash's own UI, so driving them is exactly what the device rules
-   forbid. (`lib/services/local_backup_service.dart:33,43`)
-2. Even if it had run, it would not have helped: the backup serialises
-   **folders, feeds and keywords only** — no articles, no read state
-   (`BackupSerializer.toMap`). Restoring it after a Mark All Read would not
-   un-mark anything.
-
-I did not sign in to anything, did not touch Drive, and did not run any of the
-flows the brief listed as destructive.
+- **The Samsung was not connected at any point today.** Only the tablet
+  (`HVA74XA0`) and the Pixel were. Every instruction saying "both devices"
+  could only be half-answered, and the audit's Samsung baseline has nothing to
+  compare against.
+- **Stage 3 is 516 rows × 2 devices.** That is over a thousand executions, most
+  needing visual confirmation. It is not a one-session task at any pace.
 
 ---
 
-## Devices
+## Stage 1 — Extraction quality: done
 
-| | Tablet | Samsung |
+Ten real pages from six publishers, saved as fixtures (gzipped, 1.3MB; the raw
+HTML is 6.6MB and does not belong in a repo). Every symptom was reproduced on a
+real page before being fixed, and re-measured on the same page after.
+
+### Which publisher exposed which symptom
+
+| Symptom | Exposed by | Not present on |
 |---|---|---|
-| Model | Lenovo Tab M11 (TB330FU) | Galaxy M51 (SM-M515F) |
-| Android | 15 | 12 |
-| Refresh rate | **90 Hz** (11.1ms budget) | 60 Hz (16.6ms budget) |
-| `/data` used | 8% (99 GB free) | 23% (89 GB free) |
-| Build at start | release, installed 13:33 today | release, installed 2026-09-07 |
-| Build now | release (restored) | release (restored) |
+| Duplicate image | **The Verge** (both fixtures, one dupe src each) | TechRadar, BBC, IGN, Eurogamer, RPS |
+| Author photo + bio | **TechRadar** (`author author__default-layout`, `slice-author-bio`) | — |
+| Related-links rail | **TechRadar** (`popular-box`), **The Verge** ("Most Popular", "More in:"), **BBC** ("Related topics", "Get in touch", "More on this story") | — |
 
-Storage is not the tablet's problem — it is nearly empty. Note the Samsung was
-two commits behind at the start of the day; it has today's code now.
+### Before → after, same pages
 
----
-
-## The measurement had to be rebuilt before any number meant anything
-
-The brief specified `dumpsys gfxinfo io.getflash.app framestats`. **It reports
-nothing for this app.** On both devices:
-
-```
-** Graphics info for pid 20479 [io.getflash.app] **
-Total frames rendered: 0
-Janky frames: 0 (0.00%)
-```
-
-`gfxinfo` measures HWUI, which draws the Android View hierarchy. Flutter renders
-into a SurfaceView — visible in the layer list as
-`SurfaceView - io.getflash.app/...(BLAST)#0` — so HWUI genuinely has zero frames
-to report. Taken at face value, every reading in this report would have been
-"0% janky" and the pass would have concluded the app is flawless.
-
-Replaced with `dumpsys SurfaceFlinger --latency` on the app's BLAST layer, which
-gives real present timestamps. Details and the two traps it had to handle
-(layer naming differs between Android 12 and 15; the two devices have different
-refresh rates) are in `perf/baseline/METHOD.md`.
-
-All numbers are from `flutter build apk --profile`, as the brief required.
-
----
-
-## Performance: baseline vs final
-
-Nothing shipped, so **final = baseline**. Every fix I tried was measured and
-rejected.
-
-Janky frames, medians of 4 repetitions per build:
-
-| Symptom | Tablet | Samsung |
-|---|---|---|
-| **Scrolling the article list** | **0.3%** (p99 11.3ms) | **1.3%** (p99 33.3ms) |
-| **Switching tabs / categories** | **6.25%** (p95 22.2ms, worst 55.6ms) | **5.85%** (p95 33.3ms, worst 99.8ms) |
-| **Cold start** (`am start -W`, median of 3) | **~1944 ms** | **~1094 ms** |
-
-### The honest headline: the premise was wrong
-
-**The tablet is not slower at scrolling. It is better.** It holds 90fps almost
-perfectly — 0.3% janky, p99 11.3ms — while the Samsung drops four times as many
-frames. Whatever you are feeling on the tablet, the scroll frame timing does not
-show it.
-
-**Tab switching is genuinely janky, on both devices**, at 6-8% with worst frames
-of 3-6 budget periods. This is the real interaction defect and it is not
-tablet-specific.
-
-**Where the tablet is badly behind is cold start: 1.8x the Samsung**, on newer
-hardware with a higher refresh rate. If "the tablet feels slow" has a single
-measured cause in this data, it is this one.
-
----
-
-## What I tried, and why none of it shipped
-
-Four hypotheses, each applied as a single variable, rebuilt, reinstalled and
-re-measured with the identical interaction sequence.
-
-| Change | Tablet tabs | Samsung tabs | Verdict |
+| fixture | blocks before | after | what went |
 |---|---|---|---|
-| baseline | 6.25% | 5.85% | — |
-| Enable Impeller | 7.5%¹ | 7.0%¹ | **rejected** — startup +113ms tablet, +64ms Samsung |
-| Skip redundant rebuild when query == displayed | 5.95% | 5.75% | **rejected** — no effect |
-| PageView root-type stability + slot keys | 6.55% | 5.95% | **rejected** — no effect |
-| Defer DB work past the animation (260ms) | 6.20% | 8.20% | **rejected** — regressed the Samsung |
-| *Skip the DB work entirely (not shippable)* | *4.55%* | *6.45%* | *upper bound — tablet only* |
+| techradar_a | 18 | **15** | author photo, author bio, related rail |
+| techradar_b | 46 | **44** | author bio, related rail |
+| verge_a | 15 (1 dupe) | **10** | dupe image, tag list, "More in:", "Most Popular" |
+| verge_b | 12 (1 dupe) | **8** | same shape |
+| bbc_a | 33 | **29** | "Get in touch", "Related topics", tag list |
+| bbc_b | 30 | **27** | "Related topics", tag list, "More on this story" |
+| eurogamer_a | 19 | **19** | unchanged — control |
+| rps_a | 6 | **6** | unchanged — control |
 
-¹ single run; the repetition discipline came in later.
+The two unchanged fixtures are the point of the exercise, and their block counts
+are now pinned by tests. These heuristics have deleted whole pages twice before.
 
-**Impeller.** The app opts out (`AndroidManifest.xml:75-77`), so it runs on
-legacy Skia/OpenGL — plausible, since Skia compiles shaders lazily on first
-draw, which fits "tab switch janks, steady scroll does not". Enabling it did
-improve Samsung scroll p99 from 33.3ms to 17.0ms, a real gain worth revisiting.
-But it did not touch tab jank and it made cold start worse on both devices —
-landing squarely on the metric the tablet is already worst at. Shipping it would
-have meant reporting a change that made the headline complaint worse.
+### Judgement calls I made, for your review
 
-**PageView type stability.** A sub-agent found, and I verified, that the
-itemBuilder returns `RefreshIndicator` for the selected slot and a bare
-`ListView.builder` for unselected ones, unkeyed — so `Widget.canUpdate` fails
-and both the outgoing and incoming pages fully re-inflate on every switch. The
-mechanism is real. Making all branches share a root type and keying each slot
-moved no percentile. **The re-inflation happens; it is not what costs the
-frames.** Worth knowing, because it is a convincing story that turns out to be
-wrong.
+**Two proposed terms were not added.** `\bprofile\b` occurs in none of the ten
+fixtures, so there was nothing to validate it against, and it is the term most
+likely to collide with an article that *is* a profile. `\bmeta\b` matched only
+IGN's `meta-items`. Both are recorded in the source with the reasoning.
 
-**The one real finding.** Skipping the per-tap DB work entirely takes the tablet
-from 6.25% to 4.55% and halves p95 from 22.2ms to 11.5ms, consistently across
-all four repetitions — and does nothing for the Samsung. That is a genuine,
-device-specific cost, and it fits eMMC (tablet) versus UFS (Samsung).
+**The trailing trim takes the earliest match in the last 40%, not the latest.**
+The proposal searched backwards and cut at the last recirculation heading. On
+the BBC that is wrong: the page ends "Get in touch" → "Related topics" → tag
+list → "Related internet links", and cutting at the last one strips a single
+heading and leaves the other three. Earliest-in-window cuts all four.
 
-But **deferring** that same work past the animation bought nothing, and hurt the
-Samsung. So the cost is that the work happens at all, not when it happens. Every
-tab tap runs a DELETE (`retireAllRead`, unconditional), two COUNT queries
-(`_refreshCountsFromDb`), and a SELECT (`_articlesForTab`). The fix has to be
-*less work* — not later work. I did not ship a fourth guess without measuring
-it, which is the discipline this pass exists to enforce.
+**No fix helped one page and hurt another.** The controls are byte-identical
+before and after.
 
-### Cold start: mostly the device, partly fixable
+### Found, not fixed
 
-The gap is largely hardware. The purest control segment — process fork to
-`Using CollectorTypeCC GC.`, which executes zero Flash bytecode — is 53ms on the
-tablet versus 23ms on the Samsung (2.3x). The Dart-and-first-frame segment ratio
-(1.84x) is *lower* than the pre-Dart ratio, which rules out the app doing more
-work on the tablet. Lenovo Tab M11 is a Helio G88 on eMMC; the M51 is a
-Snapdragon 730G on UFS. Newer tablet, slower silicon.
-
-What is fixable is the size of the thing being multiplied. On both devices the
-dominant block is Android's application bind — `Slow dispatch took 1043ms main
-... m=110` on the tablet, and an explicit
-`handleBindApplication()++ → --` bracket of 503ms on the Samsung. That is
-roughly half of each device's cold start. Its content: 22 dex files, and **no
-baseline profile** — `Unable to open '.../base.dm': No such file or directory`,
-logged twice. Every cold start verifies and JITs that dex.
-
-**Untested.** Shipping a baseline profile via `androidx.profileinstaller` (which
-is already in the merged manifest with nothing to install) is the one app-side
-lever that would narrow the gap as well as the absolute, because the tablet
-applies a ~2x multiplier to every millisecond saved. I ran out of afternoon
-before testing it. Expected effect if real: 20-40% off bind, ~200-400ms on the
-tablet.
+**Both IGN fixtures extract to null — and did before this change too.** IGN
+ships an empty shell and hydrates client-side, the same shape as the Kotaku case
+already documented in `extractFromHtml`. Clean mode's "not available" banner is
+correct behaviour for those pages, not a bug. Pinned by a test so that if it
+ever starts working, someone notices.
 
 ---
 
-## Regression results
+## Stage 2 — Performance
 
-**The full pass was not executed. I am not going to claim otherwise.**
+### 2a. Impeller: measured, and NOT shipped
 
-`perf/regression-checklist.md` was built from the live repo (not the PRD, not
-memory): **516 rows** across every screen and interaction surface, each tagged
-`DESTRUCTIVE`, `BLOCKED (system UI)` or `TABLET-ONLY`, with file:line anchors
-and both device columns left empty. That is the Stage 1 deliverable and it is
-ready to walk.
+**The approval rested on numbers that do not reproduce.** Re-measured with the
+Stage 0 methodology at four repetitions instead of the audit's single run:
 
-What I actually verified on-device, all on the tablet's three-pane layout:
+| tablet | baseline | Impeller |
+|---|---|---|
+| tab-switch jank | **6.25%** | **10.7%** |
+| tab p99 | 33.3ms | **66.7ms** |
+| scroll jank, warm | 0.3% | ~1.1% (no gain) |
+| scroll, first launch after install | 0.3% | **24.3%** |
+| cold start | 1944ms | **2139ms** (+195ms, not the +113 predicted) |
 
-| # | Item | Tablet | Samsung | Evidence |
-|---|---|---|---|---|
-| 6 | **Drag feedback width** (the tablet-only fix from today) | **PASS** | n/a | Lifted card spans x≈128-736; list column is x≈110-722. Stops at the divider, does not enter the detail pane. Source row dimmed to 30% behind it. |
-| — | Quick Settings rightmost on Flash tab | **PASS** | **PASS** | Funnel left, tune icon rightmost, in both layouts |
-| — | Clean mode: extraction + button appears | **PASS** | not run | "Read clean version" appeared on a TechRadar article after the WebView had loaded |
-| — | Clean mode: toggle to clean view | **PASS** | not run | Clean text, lead image with "(Image credit: Shutterstock)" caption, ads and consent banner gone, button flipped to "View original page" |
-| — | App launches, no crash, correct layout | **PASS** | **PASS** | Both devices, profile and release builds |
+All three metrics are worse or unchanged on the tablet — the device the original
+complaint was about. Tab jank nearly doubles.
 
-**Not run:** everything else — 510+ rows. Including the Add Feed gating, the
-capitalization fields, the `NewContentCheck` resume behaviour, clean mode's
-failure banner and session cache, and the whole of Bookmarks, Alerts, Search,
-Settings and Onboarding.
+The audit read tablet scroll as 0.5% from one capture. Repeating it four times
+shows why that was unreliable: **the first launch after an install runs on a
+cold Impeller pipeline cache and measures 24.3% janky**, settling to ~1.1% once
+warm. The audit sampled near that transient.
 
-The destructive rows I would in any case not have run unattended on the Samsung,
-for the reason in the opening section: there is no working undo.
+That first-launch number is not only an artifact to discount. Every install and
+every update pays it, and a visibly janky first scroll after an update is
+something a user sees.
+
+The Samsung half of the approval — scroll p99 33.3 → 17.0ms — is **unverified**,
+because that device was not connected. Manifest left at `EnableImpeller=false`.
+**This needs your call with the Samsung attached**; I was not willing to ship a
+measured regression on all three tablet metrics into a release on the strength
+of one unreproduced number.
+
+### 2b. Baseline profile: not done, and the premise needs correcting
+
+**A baseline profile is already shipped.** The release APK contains
+`assets/dexopt/baseline.prof` (2267 bytes), `baseline.profm`, and the
+`androidx.profileinstaller` marker. The audit's "`base.dm` is missing" came from
+a logcat line about dex metadata delivered at *install* time, which is a
+different mechanism from the runtime profile installer — so the conclusion
+"nothing to install" was wrong.
+
+What is true is that 2.2KB is essentially the default that arrives transitively,
+not a profile generated from Flash's own startup path. Producing a useful one
+needs an `androidx.benchmark` macrobenchmark module driving real user journeys
+on a device, and `android/` contains only `app` — there is no benchmark module.
+That is real setup work, not a flag flip, and I did not start it.
+
+### 2c. `main.dart` init sequence: not done
+
+Untouched. The brief's own instruction is instrument first, and I did not get to
+the instrumentation, so there is nothing to report beyond what the audit already
+said.
+
+### 2d. Per-tap DB work: not done
+
+Deliberately not attempted in what was left of the session. It changes when read
+articles are retired — a documented lifecycle rule, and the same machinery that
+destroyed read state on both devices during the audit. The brief itself calls it
+"the one with real risk" and requires tests written independently, plus explicit
+verification that unread articles are never deleted and bookmarks survive. Doing
+that carefully needs a session where it is the main event, not the last item.
+
+The audit's finding still stands as the starting point: deferring the work does
+not help and regressed the Samsung; the fix has to be *less* work, not later
+work.
+
+---
+
+## Stage 3 — Full regression: not done
+
+`perf/regression-checklist.md` still holds its 516 rows, and it is still
+**out of date** — it predates the refresh-settings move and Stage 1's extraction
+changes. Re-validating it was the brief's own first instruction for this stage
+and has not happened.
+
+Nothing from the checklist was walked today. What was verified on-device today
+was the refresh-settings work in the previous session (five checks, all passing,
+including `dumpsys jobscheduler` confirming both the interval and the
+`NOT_METERED` constraint reaching the live registration).
+
+**The mark-as-read-on-scroll instruction is important and stands unused.** In
+this app scrolling is destructive; any future scrolling row must run with that
+setting off. That is written down here so the next pass does not repeat the data
+loss.
+
+---
+
+## Stage 4 — Housekeeping: done
+
+**4a.** The duplicated `"reading"` key is gone from all five ARB files. Values
+were identical in every locale. Kept the later occurrence, because in
+`app_en.arb` that is the one carrying the `@reading` description, and keeping
+the same position across all five keeps the files aligned.
+
+**4b.** `fab-bubbles` and `palabre-parity` deleted from origin, and locally.
+The gate ran first and passed cleanly:
+
+```
+origin/fab-bubbles      sha ddc84b8   unique commits vs main: 0   merged: YES
+origin/palabre-parity   sha 062eead   unique commits vs main: 0   merged: YES
+```
+
+Both were fully reachable from `main`, so nothing was lost. SHAs recorded above
+in case you ever want to recreate the refs.
 
 ---
 
 ## Commits on this branch
 
-| Commit | What and why |
+| Commit | What |
 |---|---|
-| `35c3cc2` | Stage 0 baseline. Replaces the specified `gfxinfo` instrument (which reports zero frames for a Flutter app) with SurfaceFlinger present times; adds `capture.sh` / `analyze.py` and the raw data for both devices. |
-| `adad003` | Impeller tested and rejected, with the before/after numbers that killed it. Manifest reverted; data kept. |
-| `9863256` | Three more fixes tested and rejected; repetition discipline added after single runs proved too noisy; the DB-cost finding isolated. Adds the 516-row regression checklist. |
+| `0e2810f` | Merge `main` so the branch carries the refresh-settings and clean-mode work |
+| `b3e8274` | Stage 1 — image dedupe, `<picture>` recursion, recirculation vocabulary, trailing trim, 10 real fixtures, 34 tests |
+| `c4d5b70` | Stage 4a — duplicate ARB key |
+| `9add01e` | Stage 2a — Impeller measured and rejected, data kept, manifest unchanged |
 
-No production code is changed on this branch. `git diff main..HEAD -- lib/ android/`
-is empty by design — everything under `perf/` is data and tooling.
+Earlier audit commits (`35c3cc2`, `adad003`, `9863256`, `5d0e290`) are unchanged
+beneath these.
 
----
-
-## Still open
-
-**Needs your judgment, not mine:**
-
-- **The Samsung's lost read state.** Nothing I can do restores it. Tell me if
-  you want the tablet re-seeded or left as it is.
-- **Impeller.** It genuinely fixes Samsung scroll p99 (33.3 → 17.0ms) and
-  genuinely costs ~100ms of startup. That is a trade, not a bug, and it is a
-  renderer swap across the whole app with possible visual side effects. Your
-  call, not mine.
-- **The per-tap DB work.** Removing it is worth ~1.7pp of janky frames and half
-  the p95 on the tablet. Doing that correctly means changing when read articles
-  are retired and when counts are recomputed — a behavioural change to a
-  lifecycle rule the codebase documents deliberately. I am not making that call
-  unattended.
-
-**Found but not fixed:**
-
-- No baseline profile is shipped; `base.dm` is missing and app bind is ~50% of
-  cold start on both devices. Highest-value untested lever.
-- `main.dart` awaits seven initialisations strictly in sequence before
-  `runApp`, including `refreshService.init()`, which re-registers WorkManager
-  that `androidx.work.WorkManagerInitializer` already initialised during bind.
-  Untested; instrument before restructuring.
-- `Image.file` at `article_card.dart:483,509` decodes local thumbnails at full
-  resolution for a 72×72dp box, while the network path correctly uses
-  `memCacheWidth: 144`. A real inefficiency — but scroll jank is already 0.3%,
-  so it is **not** the cause of any measured symptom. Do not "fix" it expecting
-  a frame-rate win.
-- `"reading"` is a duplicate key in all five ARB files (en lines 71 and 339).
-  Harmless, invisible to `arb_parity_test`, worth a separate cleanup.
-
-**Fixed but not re-verified:** nothing — nothing was fixed.
+**973 tests, `flutter analyze lib test` clean.**
 
 ---
 
-## Branch status
+## Needs your judgement
 
-`perf/tablet-samsung-audit-2026-09-08`, three commits, **local only**. Not
-merged, not pushed to `main`, not pushed to origin at all. Both devices are back
-on the release build they started the day with.
+1. **Impeller.** Measured worse on every tablet metric. Approved on numbers that
+   did not reproduce. Reconnect the Samsung and decide.
+2. **`\bprofile\b` and `\bmeta\b`.** Left out for lack of a page to validate
+   them against. If you have a profile-piece article in your feeds, that is the
+   test case.
+3. **Stage 2d.** The retirement-timing change. Wants its own session.
+4. **Whether the fixtures belong in the repo at all.** 1.3MB gzipped, and they
+   go stale as publishers re-template. The alternative is fetching them in CI,
+   which trades reproducibility for freshness.
+
+## Ready to merge
+
+Stages 1 and 4 are self-contained and green: extraction fixes with real-page
+tests, and two pieces of housekeeping. Stage 2a changes no production code — it
+adds measurement data and a commit message explaining why the approved change
+was not taken.
