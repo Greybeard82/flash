@@ -1,0 +1,4 @@
+tablet_impeller2_r1_tabs.latency              90.0     926   15.1%   11.1m   22.2m   33.3m    66.3m    88.9m
+tablet_impeller2_r2_tabs.latency              90.0     961   10.7%   11.1m   22.2m   33.3m    55.7m   100.1m
+tablet_impeller2_r3_tabs.latency              90.0     948   11.0%   11.1m   22.2m   33.3m    66.7m   111.0m
+tablet_impeller2_r4_tabs.latency              90.0     949   10.4%   11.1m   22.1m   33.3m    66.7m   100.0m
