@@ -5,6 +5,65 @@ at the top. Rows refer to `perf/regression-checklist.md`.
 
 ---
 
+## Session 3 — 2026-09-08 (late)
+
+### Counts by tier
+
+| Tier | Walked | Pass | Fail | Blocked | Remaining |
+|---|---|---|---|---|---|
+| 1 — today's changes | 9 | **9** | 0 | 5 | rows 6-9, 12-17, 19-26, 29-30, 487-513 |
+| 2 — core flows | 0 | 0 | 0 | 0 | all |
+| 3 — everything else | 0 | 0 | 0 | 0 | all |
+
+Both devices attached throughout; no row was run on only one.
+
+### Checklist re-validation: LANDED and applied
+
+The merge completed on the resumed run — only the trailing critic agent was cut
+off, so this was not resumed a fourth time. The delta was taken from the workflow
+journal and applied by hand.
+
+7 rows rewritten in place (3, 18, 22, 24, 27, 290, 322), 7 relocated out of
+"Quick Settings contents" and rewritten for the Settings screen (379-385), 27 new
+rows added (487-513). **486 rows before, 513 after.**
+
+### Rows walked this session
+
+| Row | What | Tablet | Samsung |
+|---|---|---|---|
+| 10 | Add Feed: field disabled and no keyboard before a category is picked | **pass** | **pass** |
+| 11 | Add Feed: chip selection enables the field, keyboard opens on tap | **pass** | **pass** |
+
+Both were verified objectively rather than by eye: `dumpsys input_method` reports
+`mInputShown=false` on opening the sheet and `mInputShown=true` after selecting a
+chip and tapping the field, on each device. That is the autofocus removal in
+`cf05ee1` doing exactly what it was meant to.
+
+### Blocked, not skipped
+
+Rows **1, 2, 3, 5** are tagged BLOCKED (system UI) — every one needs Home or
+recents to background the app, which is outside Flash's own UI and therefore
+outside what this session may drive. Row **4** reads the unread count
+"immediately after row 3's resume", so it inherits the block.
+
+That is the whole `NewContentCheck` resume block. It is the one part of tier 1
+that cannot be walked from here at all and needs a human with the device in hand.
+
+### Suspected regression, from the re-validation rather than a device
+
+Row **382** predicts that the interval menu's back-press handler broke when the
+picker moved out of the Quick Settings bubble in `5b81aa4` — my own change.
+`registerBackDismiss` is only consulted by the shell's `PopScope` in `app.dart`,
+which sits *below* a pushed Settings route, so the first back press probably pops
+Settings instead of closing the menu. It worked in the bubble because the bubble
+sat over the shell, and no code in the widget itself changed. Written as an
+observation row, to be walked with row 509.
+
+Also surfaced: `backgroundRefreshInterval` is now an orphan ARB key with no call
+site in `lib/`.
+
+---
+
 ## Session 2 — 2026-09-08 (evening)
 
 ### Counts by tier
