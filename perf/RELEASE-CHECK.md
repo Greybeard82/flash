@@ -53,6 +53,28 @@ the physical devices.
 That last row is the one that matters for the closed test: a tester who marks
 everything read does not lose what they deliberately saved.
 
+### Fresh install — row 506, the one that matters for 12 new testers
+
+Run on the emulator after a real `uninstall` + `install`, so the database was
+genuinely new and onboarding ran.
+
+| Check | Result |
+|---|---|
+| Onboarding appears on first launch | **pass** |
+| Settings → REFRESH reads **"Every 3 hours"** | **pass** |
+| Refresh on Wi-Fi only is **OFF** | **pass** |
+| Clean reading view is **ON** | **pass** |
+| Built-in viewer is **ON** | **pass** |
+| Live WorkManager job carries a 3-hour period | **pass** — `Minimum latency: +2h54m59s` |
+| Job network requirement has no NOT_METERED | **pass** — matches Wi-Fi-only being off |
+
+This is the check the schema-seed fix existed for. `defaultSettings` seeded
+`refresh_interval_minutes: '30'`, and the seeded row — not the `fromMap`
+fallback — is what a new install actually runs on. Left unfixed, this screen
+would read "Every 30 minutes" and the four-place default change would have been
+invisible to every one of the 12 testers. It now reaches all the way to the OS
+scheduler.
+
 ### C — core loop
 
 | Step | Result |
