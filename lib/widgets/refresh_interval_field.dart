@@ -83,7 +83,15 @@ class _RefreshIntervalFieldState extends State<RefreshIntervalField> {
 
   void _closeMenu(OverlayEntry entry) {
     if (entry.mounted) entry.remove();
-    if (identical(_menu, entry)) _menu = null;
+    if (identical(_menu, entry)) {
+      // setState, not a bare assignment: [_menu] drives PopScope.canPop in
+      // build, so the route has to learn that back is its own again.
+      if (mounted) {
+        setState(() => _menu = null);
+      } else {
+        _menu = null;
+      }
+    }
   }
 
   void _openMenu() {
@@ -105,7 +113,7 @@ class _RefreshIntervalFieldState extends State<RefreshIntervalField> {
       ),
     );
     Overlay.of(context).insert(entry);
-    _menu = entry;
+    setState(() => _menu = entry);
   }
 
   @override
@@ -121,6 +129,36 @@ class _RefreshIntervalFieldState extends State<RefreshIntervalField> {
       orElse: () => options.firstWhere((o) => o.$1 == 180),
     );
 
+    // PopScope, because registerBackDismiss alone is not enough here.
+    //
+    // That stack is only ever read by dismissTopBubblePanel(), and the only
+    // callers of it are three back handlers in the app shell (lib/app.dart).
+    // Those run when the shell itself is the thing handling back — true when
+    // this field lived inside the Quick Settings bubble, which is an overlay
+    // ABOVE the shell. It is false now: the field lives on SettingsScreen,
+    // which is a PUSHED ROUTE, so back is answered by that route's own pop and
+    // the shell handler is never consulted. The registered handler became
+    // unreachable, and the first back press popped Settings with the menu
+    // still open, riding above the outgoing screen for the length of the
+    // transition.
+    //
+    // A PopScope in this widget's own subtree fixes it wherever it is hosted:
+    // it is inside whatever route contains the field, so it intercepts that
+    // route's pop. registerBackDismiss is kept as well, so the widget still
+    // behaves correctly if it is ever put back inside a bubble; the two are
+    // idempotent because _closeMenu no-ops on an already-removed entry.
+    return PopScope(
+      canPop: _menu == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        final entry = _menu;
+        if (entry != null) _closeMenu(entry);
+      },
+      child: _buildField(theme, current.$2),
+    );
+  }
+
+  Widget _buildField(ThemeData theme, String label) {
     // The same full-width, underline-free look `isExpanded: true` gave the
     // DropdownButton this replaced.
     return InkWell(
@@ -132,7 +170,7 @@ class _RefreshIntervalFieldState extends State<RefreshIntervalField> {
         child: Row(
           children: [
             Expanded(
-              child: Text(current.$2, style: theme.textTheme.titleMedium),
+              child: Text(label, style: theme.textTheme.titleMedium),
             ),
             Icon(Icons.arrow_drop_down_rounded,
                 color: theme.colorScheme.onSurfaceVariant),

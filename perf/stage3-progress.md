@@ -5,6 +5,71 @@ at the top. Rows refer to `perf/regression-checklist.md`.
 
 ---
 
+## Session 4 — 2026-09-08 (night)
+
+### Counts by tier — MANUAL listed separately, never as unwalked
+
+| Tier | Walked | Pass | Fail | MANUAL (David) | Remaining for me |
+|---|---|---|---|---|---|
+| 1 — today's changes | 11 | **11** | 0 | 5 (rows 1-5) | rows 6-9, 12-17, 19-26, 29-30, 487-513 |
+| 2 — core flows | 0 | 0 | 0 | — | all |
+| 3 — everything else | 0 | 0 | 0 | — | all |
+
+Across the whole checklist, **50 rows** now carry `MANUAL`.
+
+### Row 382 — regression found, fixed, tested, verified
+
+Confirmed the mechanism in the code rather than inferring it:
+`dismissTopBubblePanel()` has exactly three callers, all in `lib/app.dart`, and
+`registerBackDismiss` feeds nothing else. `SettingsScreen` is a pushed route, so
+its own pop answers back and the shell handler never runs — the interval menu's
+registered handler was unreachable, and the first back press popped Settings with
+the menu still open. A regression from the refresh-settings move: the widget was
+relocated without accounting for a dismiss mechanism that only works inside the
+app shell.
+
+**Fix.** `RefreshIntervalField` now carries its own `PopScope`, in whatever
+route hosts it, so it intercepts that route's pop while its menu is open.
+`registerBackDismiss` is kept as well, so the widget still behaves correctly if
+it is ever put back inside a bubble; the two are idempotent because `_closeMenu`
+no-ops on an already-removed entry. `_menu` is now assigned through `setState`
+because it drives `canPop`.
+
+**Test** — `test/refresh_interval_back_test.dart`, 5 cases. The route is the
+point: pumping the field as `home:` would pass against the broken build, because
+there is no route to pop. Verified it discriminates by stashing the fix and
+re-running: **2 of 5 fail on the pre-fix build**, both being the "must not pop
+the hosting route" assertions. All 5 pass with the fix.
+
+**On device, both:** open Settings → REFRESH → tap the interval row → one back
+press. Menu closes, Settings stays. Second back returns to Flash, so the fix does
+not trap anyone on the screen.
+
+| | Tablet | Samsung |
+|---|---|---|
+| Back closes the menu, Settings stays open | **pass** | **pass** |
+| Second back leaves Settings normally | **pass** | **pass** |
+
+978 tests, analyze clean.
+
+### Blocked rows retagged MANUAL
+
+The 50 rows that need a surface outside Flash's own UI are now tagged `MANUAL`
+rather than `BLOCKED (system UI)`, with the legend rewritten to say David walks
+them and that they must be counted separately rather than read as unwalked. Rows
+1-5 carry an explicit "Press:" note — Home, recents, or nothing in row 4's case,
+which only inherits row 3's manual step.
+
+### Standing items
+
+- Mark-as-read-on-scroll is **still OFF on both devices**. Restore to ON when
+  Stage 3 finishes. **Not yet done.**
+- All four devices attached this session: tablet, Samsung, Pixel, emulator. The
+  tablet dropped off adb briefly during the test run and came back on
+  `adb reconnect`; no row was run while it was missing.
+
+---
+
 ## Session 3 — 2026-09-08 (late)
 
 ### Counts by tier
