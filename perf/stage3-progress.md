@@ -5,6 +5,57 @@ at the top. Rows refer to `perf/regression-checklist.md`.
 
 ---
 
+## Session 2 — 2026-09-08 (evening)
+
+### Counts by tier
+
+| Tier | Walked | Pass | Fail | Remaining |
+|---|---|---|---|---|
+| 1 — today's changes | 7 | **7** | 0 | most of rows 1-30 + the new refresh rows |
+| 2 — core flows | 0 | 0 | 0 | all |
+| 3 — everything else | 0 | 0 | 0 | all |
+
+Both devices attached for every row below, so none was run half.
+
+### Passed, both devices
+
+| Check | Tablet | Samsung | Evidence |
+|---|---|---|---|
+| Clean-mode button appears after background extraction | pass | pass | TechRadar article, FAB arrives after the page has loaded |
+| **No trailing author photo, author bio or related rail** (Stage 1 fix) | pass | pass | Clean view ends on "Follow TechRadar on Google News…" and stops |
+| Clean view renders images with captions, theme-driven colours | pass | pass | "(Image credit: Future)" / "(Image credit: Shutterstock / …)"; correct in the Samsung's dark+teal and the tablet's light+orange |
+| Last paragraph clears the floating button (96dp inset) | pass | pass | Visible gap under the final paragraph on both |
+| Quick Settings has no refresh control at all | pass | pass | Panel shows Theme / Summary / Palette / Newspaper / Mark-read / Confirm / Badge / More settings |
+| Mark-as-read-on-scroll toggles and persists | pass | pass | Turned OFF on both, verified visually |
+| Text column caps at 720dp and centres | pass | n/a | Tablet only — wide right margin in the detail pane |
+
+The Samsung's run used **the exact `techradar_a` fixture page** — the PS3-emulator
+article was live in its Tech tab — so the on-device result and the pinned test
+assertion are about the same bytes. Before Stage 1 that page ended
+`IMG P L5`: author portrait, author bio, `popular-box` rail. It now ends on prose.
+
+### Not yet walked
+
+The bulk of tier 1: the `NewContentCheck` resume rows (1-5), the feeds-screen
+rows (6-14), app-bar order (15-17), the rest of clean mode (19-26, 29-30), and
+every new refresh-settings row — those last ones do not exist yet, pending the
+re-validation.
+
+### Still in flight
+
+Checklist re-validation. Resumed this session after last session's run was cut
+off mid-merge; the three analysis passes are cached and complete, the merge is
+running.
+
+### Environment notes
+
+- Emulator `Flash_Medium_Tablet` booted and ready for the fresh-install rows.
+  Neither physical device will be wiped.
+- Tablet unread has fallen to All (12) — consumed by the audit's perf scrolls
+  earlier today, already reported. Samsung is at All (37) and recovering.
+
+---
+
 ## Session 1 — 2026-09-08
 
 ### Done
