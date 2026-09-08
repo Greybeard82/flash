@@ -1523,18 +1523,23 @@ class _FeedScreenState extends State<FeedScreen>
           // height out of the list's top padding, which is what produced the
           // empty band above the first article — an app-bar action reserves
           // nothing, because it isn't drawn over the content at all.
+          //
+          // Filter first, Quick Settings last: Quick Settings is reached from
+          // all four top-level screens and sits rightmost on every one (the
+          // rule is written out on its button in alerts_screen.dart). This
+          // screen was the only one with the two the other way round.
           if (_hasFeeds && !_booting) ...[
-            IconButton(
-              key: _quickSettingsFabKey,
-              onPressed: _openQuickSettingsBubble,
-              tooltip: l10n.quickSettingsTooltip,
-              icon: const Icon(Icons.tune_rounded),
-            ),
             IconButton(
               key: _filterFabKey,
               onPressed: _openFilterBubble,
               tooltip: l10n.filterTooltip,
               icon: const Icon(Icons.filter_alt_outlined),
+            ),
+            IconButton(
+              key: _quickSettingsFabKey,
+              onPressed: _openQuickSettingsBubble,
+              tooltip: l10n.quickSettingsTooltip,
+              icon: const Icon(Icons.tune_rounded),
             ),
           ],
         ],
