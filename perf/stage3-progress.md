@@ -5,6 +5,34 @@ at the top. Rows refer to `perf/regression-checklist.md`.
 
 ---
 
+## Session 5 — 2026-09-08 (close) — SCOPE CUT, release check complete
+
+Scope reduced on instruction: walk only recent changes, data-loss paths and the
+core loop. 101 rows tagged RELEASE, 412 DEFERRED. Full write-up in
+`perf/RELEASE-CHECK.md`.
+
+### Counts
+
+| Tier | Walked | Pass | Fail | MANUAL (David) | Deferred |
+|---|---|---|---|---|---|
+| A — recent changes | 12 | **12** | 0 | 6 | — |
+| B — data-loss | 4 | **4** | 0 | 8 | — |
+| C — core loop | 3 | **3** | 0 | 0 | — |
+| Everything else | — | — | — | — | **412** |
+
+The B rows ran on the emulator (360 articles, real feeds, none of David's data).
+Bookmarks survive mark-all-read — the assertion that matters for the closed test.
+
+### Standing items — ALL CLEARED
+
+- **Mark-as-read-on-scroll restored to ON on both devices**, verified visually on
+  each. This was the last blocking item and it is now done.
+- Both devices attached for every "both devices" row; none was run half.
+- Emulator used for the destructive and fresh-install work; neither physical
+  device was wiped.
+
+---
+
 ## Session 4 — 2026-09-08 (night)
 
 ### Counts by tier — MANUAL listed separately, never as unwalked
