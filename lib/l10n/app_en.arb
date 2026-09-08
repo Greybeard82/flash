@@ -355,5 +355,25 @@
   "summaryDetailed": "Detailed",
   "@summaryDetailed": {
     "description": "Longest AI summary tier, roughly 150-200 words."
+  },
+  "cleanModeReady": "Read clean version",
+  "@cleanModeReady": {
+    "description": "Floating button label once background extraction has produced a clutter-free version of the article."
+  },
+  "cleanModeBackToWeb": "View original page",
+  "@cleanModeBackToWeb": {
+    "description": "Same floating button's label while clean mode is active, switching back to the WebView."
+  },
+  "cleanModeUnavailable": "Clean view not available for this page",
+  "@cleanModeUnavailable": {
+    "description": "Brief NotificationBanner message when background extraction fails or the page has too little extractable text."
+  },
+  "cleanModeSettingTitle": "Clean reading view",
+  "@cleanModeSettingTitle": {
+    "description": "Settings screen switch, Reading section: enables background extraction and the floating offer button."
+  },
+  "cleanModeSettingSubtitle": "Offer a distraction-free version of articles when one can be extracted",
+  "@cleanModeSettingSubtitle": {
+    "description": "Subtitle under cleanModeSettingTitle."
   }
 }

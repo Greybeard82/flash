@@ -1273,6 +1273,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detailed'**
   String get summaryDetailed;
+
+  /// Floating button label once background extraction has produced a clutter-free version of the article.
+  ///
+  /// In en, this message translates to:
+  /// **'Read clean version'**
+  String get cleanModeReady;
+
+  /// Same floating button's label while clean mode is active, switching back to the WebView.
+  ///
+  /// In en, this message translates to:
+  /// **'View original page'**
+  String get cleanModeBackToWeb;
+
+  /// Brief NotificationBanner message when background extraction fails or the page has too little extractable text.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean view not available for this page'**
+  String get cleanModeUnavailable;
+
+  /// Settings screen switch, Reading section: enables background extraction and the floating offer button.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean reading view'**
+  String get cleanModeSettingTitle;
+
+  /// Subtitle under cleanModeSettingTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Offer a distraction-free version of articles when one can be extracted'**
+  String get cleanModeSettingSubtitle;
 }
 
 class _AppLocalizationsDelegate

@@ -220,5 +220,10 @@
   "summaryLength": "Länge der KI-Zusammenfassung",
   "summaryShort": "Kurz",
   "summaryStandard": "Standard",
-  "summaryDetailed": "Ausführlich"
+  "summaryDetailed": "Ausführlich",
+  "cleanModeReady": "Lesefassung öffnen",
+  "cleanModeBackToWeb": "Originalseite anzeigen",
+  "cleanModeUnavailable": "Keine Lesefassung für diese Seite verfügbar",
+  "cleanModeSettingTitle": "Ablenkungsfreie Leseansicht",
+  "cleanModeSettingSubtitle": "Eine ablenkungsfreie Fassung anbieten, wenn sie sich extrahieren lässt"
 }

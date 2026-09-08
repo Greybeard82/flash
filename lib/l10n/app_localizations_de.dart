@@ -700,4 +700,21 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get summaryDetailed => 'Ausführlich';
+
+  @override
+  String get cleanModeReady => 'Lesefassung öffnen';
+
+  @override
+  String get cleanModeBackToWeb => 'Originalseite anzeigen';
+
+  @override
+  String get cleanModeUnavailable =>
+      'Keine Lesefassung für diese Seite verfügbar';
+
+  @override
+  String get cleanModeSettingTitle => 'Ablenkungsfreie Leseansicht';
+
+  @override
+  String get cleanModeSettingSubtitle =>
+      'Eine ablenkungsfreie Fassung anbieten, wenn sie sich extrahieren lässt';
 }

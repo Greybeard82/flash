@@ -691,4 +691,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get summaryDetailed => 'Detailed';
+
+  @override
+  String get cleanModeReady => 'Read clean version';
+
+  @override
+  String get cleanModeBackToWeb => 'View original page';
+
+  @override
+  String get cleanModeUnavailable => 'Clean view not available for this page';
+
+  @override
+  String get cleanModeSettingTitle => 'Clean reading view';
+
+  @override
+  String get cleanModeSettingSubtitle =>
+      'Offer a distraction-free version of articles when one can be extracted';
 }

@@ -10,6 +10,7 @@ import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/article_opener.dart' show kEmbeddedWebViewSettingKey;
+import '../services/clean_reader.dart' show kCleanModeEnabledSettingKey;
 import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
 import '../services/local_backup_service.dart';
@@ -68,6 +69,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setUseEmbeddedWebView(bool value) async {
     setState(() => _settings = _settings?.copyWith(useEmbeddedWebView: value));
     await _settingsRepo.set(kEmbeddedWebViewSettingKey, value.toString());
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  Future<void> _setCleanModeEnabled(bool value) async {
+    setState(() => _settings = _settings?.copyWith(cleanModeEnabled: value));
+    await _settingsRepo.set(kCleanModeEnabledSettingKey, value.toString());
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -252,6 +259,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: Text(l10n.builtInViewer),
             value: s.useEmbeddedWebView,
             onChanged: _setUseEmbeddedWebView,
+          ),
+          // Subtitled, unlike the toggle above: "clean reading view" does not
+          // on its own say that the offer only appears when a page can
+          // actually be extracted, and a switch that looks inert on some
+          // articles needs to say why up front.
+          SwitchListTile(
+            title: Text(l10n.cleanModeSettingTitle),
+            subtitle: Text(l10n.cleanModeSettingSubtitle),
+            value: s.cleanModeEnabled,
+            onChanged: _setCleanModeEnabled,
           ),
 
           // ── Local backup file ──

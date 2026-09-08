@@ -79,6 +79,15 @@ class AppSettings {
   /// a full-screen route on a phone, the right-hand column on a tablet.
   final bool useEmbeddedWebView;
 
+  /// Whether a background extraction runs alongside the embedded reader so a
+  /// "read clean version" button can appear once one is available. Defaults on.
+  ///
+  /// Independent of [useEmbeddedWebView] — this governs only whether the
+  /// *offer* appears; the WebView itself is unaffected either way. The key is
+  /// never seeded in `schema.dart`, so the `fromMap` fallback below is the
+  /// real default.
+  final bool cleanModeEnabled;
+
   /// How long AI summaries should be: `'short'`, `'standard'` or
   /// `'detailed'`.
   ///
@@ -105,6 +114,7 @@ class AppSettings {
     this.markAllReadConfirm = true,
     this.unreadBadgeNotification = true,
     this.useEmbeddedWebView = true,
+    this.cleanModeEnabled = true,
     this.summaryLength = kSummaryLengthStandard,
     this.colorPalette = 'orange',
   });
@@ -135,6 +145,7 @@ class AppSettings {
           (map['unread_badge_notification'] ?? 'true') == 'true',
       useEmbeddedWebView:
           (map['use_embedded_webview'] ?? 'true') == 'true',
+      cleanModeEnabled: (map['clean_mode_enabled'] ?? 'true') == 'true',
       summaryLength:
           kSummaryTierLimits.containsKey(map['summary_length'])
               ? map['summary_length']!
@@ -159,6 +170,7 @@ class AppSettings {
     bool? markAllReadConfirm,
     bool? unreadBadgeNotification,
     bool? useEmbeddedWebView,
+    bool? cleanModeEnabled,
     String? summaryLength,
     String? colorPalette,
   }) {
@@ -179,6 +191,7 @@ class AppSettings {
       unreadBadgeNotification:
           unreadBadgeNotification ?? this.unreadBadgeNotification,
       useEmbeddedWebView: useEmbeddedWebView ?? this.useEmbeddedWebView,
+      cleanModeEnabled: cleanModeEnabled ?? this.cleanModeEnabled,
       summaryLength: summaryLength ?? this.summaryLength,
       colorPalette: colorPalette ?? this.colorPalette,
     );

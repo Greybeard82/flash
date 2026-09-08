@@ -220,5 +220,10 @@
   "summaryLength": "Lunghezza del riepilogo IA",
   "summaryShort": "Breve",
   "summaryStandard": "Standard",
-  "summaryDetailed": "Dettagliato"
+  "summaryDetailed": "Dettagliato",
+  "cleanModeReady": "Leggi la versione pulita",
+  "cleanModeBackToWeb": "Vedi la pagina originale",
+  "cleanModeUnavailable": "Nessuna vista pulita disponibile per questa pagina",
+  "cleanModeSettingTitle": "Vista di lettura pulita",
+  "cleanModeSettingSubtitle": "Proporre una versione senza distrazioni quando è possibile estrarla"
 }

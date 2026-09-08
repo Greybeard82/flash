@@ -701,4 +701,21 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get summaryDetailed => 'Détaillé';
+
+  @override
+  String get cleanModeReady => 'Lire la version épurée';
+
+  @override
+  String get cleanModeBackToWeb => 'Voir la page d\'origine';
+
+  @override
+  String get cleanModeUnavailable =>
+      'Aucune vue épurée disponible pour cette page';
+
+  @override
+  String get cleanModeSettingTitle => 'Vue de lecture épurée';
+
+  @override
+  String get cleanModeSettingSubtitle =>
+      'Proposer une version sans distraction lorsque l\'article s\'y prête';
 }
