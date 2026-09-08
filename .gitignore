@@ -62,3 +62,13 @@ graphify-out/
 .p17/
 .p18/
 .p19/
+
+# Release signing — NEVER commit these.
+# key.properties holds the keystore password in plain text, and the .jks is the
+# signing identity itself. Anyone with both can publish an update that Play and
+# every installed device will accept as genuine, and the key cannot be rotated
+# for an existing app listing.
+android/key.properties
+key.properties
+*.jks
+*.keystore
