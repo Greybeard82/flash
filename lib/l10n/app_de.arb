@@ -47,7 +47,7 @@
   "everyHour": "Jede Stunde",
   "every3Hours": "Alle 3 Stunden",
   "every6Hours": "Alle 6 Stunden",
-  "manualOnly": "Nur manuell",
+  "manualOnly": "Nie",
   "maxArticlesPerFeed": "Max. Artikel pro Feed",
   "filters": "Filter",
   "keywordBlocklist": "Stichwort-Sperrliste",
@@ -225,5 +225,10 @@
   "cleanModeBackToWeb": "Originalseite anzeigen",
   "cleanModeUnavailable": "Keine Lesefassung für diese Seite verfügbar",
   "cleanModeSettingTitle": "Ablenkungsfreie Leseansicht",
-  "cleanModeSettingSubtitle": "Eine ablenkungsfreie Fassung anbieten, wenn sie sich extrahieren lässt"
+  "cleanModeSettingSubtitle": "Eine ablenkungsfreie Fassung anbieten, wenn sie sich extrahieren lässt",
+  "every2Hours": "Alle 2 Stunden",
+  "every4Hours": "Alle 4 Stunden",
+  "every5Hours": "Alle 5 Stunden",
+  "refreshOnWifiOnly": "Nur über WLAN aktualisieren",
+  "refreshOnWifiOnlySubtitle": "Die Hintergrundaktualisierung läuft nur über WLAN. Das Öffnen der App und das manuelle Aktualisieren funktionieren immer, über jede Verbindung."
 }

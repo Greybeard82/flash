@@ -161,7 +161,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get every6Hours => 'Cada 6 horas';
 
   @override
-  String get manualOnly => 'Solo manual';
+  String get manualOnly => 'Nunca';
 
   @override
   String get maxArticlesPerFeed => 'Máx. artículos por fuente';
@@ -715,4 +715,20 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get cleanModeSettingSubtitle =>
       'Ofrecer una versión sin distracciones cuando se pueda extraer';
+
+  @override
+  String get every2Hours => 'Cada 2 horas';
+
+  @override
+  String get every4Hours => 'Cada 4 horas';
+
+  @override
+  String get every5Hours => 'Cada 5 horas';
+
+  @override
+  String get refreshOnWifiOnly => 'Actualizar solo con Wi-Fi';
+
+  @override
+  String get refreshOnWifiOnlySubtitle =>
+      'La actualización en segundo plano solo se ejecuta con Wi-Fi. Abrir la app o actualizar manualmente siempre funciona, con cualquier conexión.';
 }

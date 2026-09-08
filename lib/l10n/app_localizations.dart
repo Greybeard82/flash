@@ -383,7 +383,7 @@ abstract class AppLocalizations {
   /// No description provided for @manualOnly.
   ///
   /// In en, this message translates to:
-  /// **'Manual only'**
+  /// **'Never'**
   String get manualOnly;
 
   /// No description provided for @maxArticlesPerFeed.
@@ -1303,6 +1303,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Offer a distraction-free version of articles when one can be extracted'**
   String get cleanModeSettingSubtitle;
+
+  /// Background refresh interval option: two hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 2 hours'**
+  String get every2Hours;
+
+  /// Background refresh interval option: four hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 4 hours'**
+  String get every4Hours;
+
+  /// Background refresh interval option: five hours.
+  ///
+  /// In en, this message translates to:
+  /// **'Every 5 hours'**
+  String get every5Hours;
+
+  /// Settings switch, Refresh section: constrains the periodic background task to unmetered networks.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh on Wi-Fi only'**
+  String get refreshOnWifiOnly;
+
+  /// Subtitle under refreshOnWifiOnly, stating that foreground fetches are unaffected.
+  ///
+  /// In en, this message translates to:
+  /// **'Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.'**
+  String get refreshOnWifiOnlySubtitle;
 }
 
 class _AppLocalizationsDelegate

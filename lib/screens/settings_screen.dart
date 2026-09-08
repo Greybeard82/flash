@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
+import '../widgets/refresh_interval_field.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
@@ -13,6 +14,7 @@ import '../services/article_opener.dart' show kEmbeddedWebViewSettingKey;
 import '../services/clean_reader.dart' show kCleanModeEnabledSettingKey;
 import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
+import '../services/refresh_service.dart';
 import '../services/local_backup_service.dart';
 import '../services/settings_notifier.dart';
 
@@ -69,6 +71,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setUseEmbeddedWebView(bool value) async {
     setState(() => _settings = _settings?.copyWith(useEmbeddedWebView: value));
     await _settingsRepo.set(kEmbeddedWebViewSettingKey, value.toString());
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  /// Rescheduling is the whole point, not a side effect: WorkManager only
+  /// reads the interval and the network constraint when the periodic task is
+  /// registered, so persisting either without `forceReschedule` leaves the
+  /// live registration on the old settings until something else happens to
+  /// re-register it.
+  Future<void> _setRefreshInterval(int value) async {
+    setState(
+        () => _settings = _settings?.copyWith(refreshIntervalMinutes: value));
+    await _settingsRepo.set('refresh_interval_minutes', value.toString());
+    await RefreshService(_settingsRepo)
+        .schedulePeriodicRefresh(forceReschedule: true);
+    SettingsNotifier.instance.settingsChanged();
+  }
+
+  Future<void> _setRefreshOnWifiOnly(bool value) async {
+    setState(() => _settings = _settings?.copyWith(refreshOnWifiOnly: value));
+    await _settingsRepo.set('refresh_wifi_only', value.toString());
+    await RefreshService(_settingsRepo)
+        .schedulePeriodicRefresh(forceReschedule: true);
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -269,6 +293,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(l10n.cleanModeSettingSubtitle),
             value: s.cleanModeEnabled,
             onChanged: _setCleanModeEnabled,
+          ),
+
+          // ── Refresh ──
+          // Reuses the existing `refresh` string, which already reads
+          // "Refresh" and is translated in all five locales for the FAB
+          // tooltip; a second key for the same word would be an orphan.
+          _sectionHeader(l10n.refresh),
+          RefreshIntervalField(
+            value: s.refreshIntervalMinutes,
+            onChanged: _setRefreshInterval,
+          ),
+          SwitchListTile(
+            title: Text(l10n.refreshOnWifiOnly),
+            subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
+            value: s.refreshOnWifiOnly,
+            onChanged: _setRefreshOnWifiOnly,
           ),
 
           // ── Local backup file ──

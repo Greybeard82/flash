@@ -160,7 +160,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get every6Hours => 'Every 6 hours';
 
   @override
-  String get manualOnly => 'Manual only';
+  String get manualOnly => 'Never';
 
   @override
   String get maxArticlesPerFeed => 'Max articles per feed';
@@ -707,4 +707,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get cleanModeSettingSubtitle =>
       'Offer a distraction-free version of articles when one can be extracted';
+
+  @override
+  String get every2Hours => 'Every 2 hours';
+
+  @override
+  String get every4Hours => 'Every 4 hours';
+
+  @override
+  String get every5Hours => 'Every 5 hours';
+
+  @override
+  String get refreshOnWifiOnly => 'Refresh on Wi-Fi only';
+
+  @override
+  String get refreshOnWifiOnlySubtitle =>
+      'Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.';
 }
