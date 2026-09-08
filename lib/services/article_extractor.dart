@@ -47,7 +47,24 @@ class ArticleExtractor {
     r'\bad\b|\badvertisement\b|\bbanner\b|\bsidebar\b|\brelated\b|\bshare\b|'
     r'\bsocial\b|\bcomment\b|\breply\b|\bnewsletter\b|\bsubscribe\b|'
     r'\bcookie\b|\bpopup\b|\bmodal\b|\boverlay\b|\bpromo\b|\bmenu\b|'
-    r'\bbreadcrumb\b',
+    r'\bbreadcrumb\b|'
+    // End-of-article recirculation. Each term was checked against the saved
+    // fixtures before being added: \bauthor\b and \bbio\b both hit
+    // TechRadar's `author author__default-layout` and `slice-author-bio`
+    // wrappers — the author photo and bio reported as junk — and \bpopular\b
+    // hits its `popular-box` related-links rail.
+    //
+    // \bprofile\b was in the proposed list and is deliberately NOT here: it
+    // occurs in none of the fixtures, so there was nothing to validate it
+    // against, and it is the term most likely to collide with an article that
+    // is *about* a profile. \bmeta\b is absent for the same reason — it
+    // matched only IGN's `meta-items`, and a term that broad needs a page it
+    // demonstrably helps before it earns a place beside the ones that deleted
+    // whole pages twice already.
+    r'\bauthor\b|\bbyline\b|\bbio\b|\brecirculation\b|\btaboola\b|'
+    r'\boutbrain\b|\btrending\b|\bpopular\b|\brecommended\b|'
+    r'\bmore-from\b|\bread-more\b|\bread-next\b|\byou-may-also\b|'
+    r'\bnext-article\b|\bmost-read\b|\btags\b',
     caseSensitive: false,
   );
 
@@ -121,16 +138,87 @@ class ArticleExtractor {
           : [ParagraphBlock(rawText)];
     }
 
-    // Filter tracker images
+    blocks = _trimTrailingJunk(blocks);
+
+    // Filter tracker images, and dedupe images by resolved src.
+    //
+    // A hero image routinely appears twice in server-rendered HTML — once as
+    // a <figure> lead, once inside the body wrapper the walk later recurses
+    // into. Confirmed on The Verge, where both saved fixtures emit the same
+    // src twice in a row; TechRadar, BBC, IGN, Eurogamer and RPS emit none.
+    // There is no legitimate case for rendering the identical asset twice in
+    // one article. The first occurrence is kept, because that is the one
+    // carrying the real caption, and later repeats are dropped however far
+    // apart they are rather than only when adjacent.
+    final seenImageSrcs = <String>{};
     final filtered = blocks.where((b) {
       if (b is ImageBlock) {
         if (b.src.length < 50 && _trackerPattern.hasMatch(b.src)) return false;
+        if (!seenImageSrcs.add(b.src)) return false;
       }
       return true;
     }).toList();
 
     if (filtered.isEmpty) return null;
     return filtered;
+  }
+
+  /// Headings that announce end-of-article recirculation rather than more
+  /// article. Every entry beyond the obvious ones came from a real saved
+  /// fixture: "Most Popular" and "More in:" from The Verge, "Related topics",
+  /// "Related internet links" and "Get in touch" from the BBC.
+  static final _recircHeading = RegExp(
+    r'^(read (more|next)|more (from|on|stories|in)\b|related\b|you may also|'
+    r'recommended|trending|most (read|popular)|sign up|subscribe|follow us|'
+    r'about the author|get in touch|share this|more like this)',
+    caseSensitive: false,
+  );
+
+  /// Drops trailing blocks that are end-of-article recirculation rather than
+  /// article body: a heading that announces it and everything after it, then
+  /// any trailing link rolls the walk flattened into lists, and trailing
+  /// images such as an author portrait.
+  ///
+  /// Only ever trims from the end, and only looks inside the last 40%.
+  /// Cutting mid-article on a heuristic risks truncating a real piece at its
+  /// first subheading, which is a far worse failure than leaving some junk at
+  /// the bottom — a how-to with a legitimate "Related settings" section early
+  /// on must not lose everything after it. Across the saved fixtures the junk
+  /// consistently begins 70-85% of the way through, so the window is wide
+  /// enough to catch it and narrow enough to be safe.
+  ///
+  /// Within that window it takes the EARLIEST match, not the latest. The BBC
+  /// ends with "Get in touch", "Related topics", a tag list and then "Related
+  /// internet links"; cutting at the last match would strip one heading and
+  /// leave the other three behind.
+  List<ContentBlock> _trimTrailingJunk(List<ContentBlock> blocks) {
+    if (blocks.isEmpty) return blocks;
+
+    final windowStart = (blocks.length * 0.6).floor();
+    var end = blocks.length;
+
+    for (var i = windowStart; i < blocks.length; i++) {
+      final b = blocks[i];
+      if (b is HeadingBlock && _recircHeading.hasMatch(b.text.trim())) {
+        end = i;
+        break;
+      }
+    }
+
+    while (end > 0 &&
+        (blocks[end - 1] is ListBlock || blocks[end - 1] is ImageBlock)) {
+      end--;
+    }
+
+    // Never trim away the article itself. If the heuristics would leave
+    // nothing substantial they have misfired — keep everything, because
+    // showing some junk beats silently truncating a real article to nothing.
+    final trimmed = blocks.sublist(0, end);
+    return SummarySource.isSubstantial(
+      trimmed.whereType<ParagraphBlock>().map((p) => p.text).join(),
+    )
+        ? trimmed
+        : blocks;
   }
 
   int _blocksTextLength(List<ContentBlock> blocks) {
@@ -263,7 +351,16 @@ class ArticleExtractor {
             blocks.add(ImageBlock(resolvedSrc, caption: caption?.isNotEmpty == true ? caption : null));
           }
         }
-      } else if (tag == 'div' || tag == 'section' || tag == 'article' || tag == 'main') {
+      } else if (tag == 'div' ||
+          tag == 'section' ||
+          tag == 'article' ||
+          tag == 'main' ||
+          tag == 'picture') {
+        // 'picture' is here so a <picture><source...><img></picture> is
+        // reached through one predictable path. Without it the wrapper was
+        // skipped whole while a sibling <img> was still picked up, which is
+        // one of the two ways the same asset arrived twice. TechRadar uses 45
+        // of them on a single article page, the BBC 20.
         _visitChildren(node, baseUrl, blocks);
       }
     }
