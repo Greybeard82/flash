@@ -1,39 +1,65 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../models/keyword_block.dart';
 import 'backup_serializer.dart';
 
 class LocalBackupService {
-  /// Serialises folders/feeds/keywords to the same JSON format as Drive backup,
-  /// writes it to a temp file, then opens the system share sheet so the user
-  /// can save it to Downloads, email it, etc.
-  static Future<void> exportBackup({
+  /// The filename proposed to the system file picker.
+  ///
+  /// Date **and time**, to the minute. Exporting twice in one day is the normal
+  /// case — before and after a change the user is unsure about — and a
+  /// date-only stamp proposed the same name both times.
+  ///
+  /// That collision is not merely untidy. file_picker on Android writes over an
+  /// existing file *without truncating it*, so a smaller export landing on a
+  /// larger one leaves the tail of the previous file behind and produces valid
+  /// JSON followed by garbage. Not colliding is the fix; patching the plugin is
+  /// not. Pinned by backup_export_naming_test.dart.
+  @visibleForTesting
+  static String backupFileName(DateTime now) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'flash_backup_'
+        '${now.year}${two(now.month)}${two(now.day)}'
+        '_${two(now.hour)}${two(now.minute)}.json';
+  }
+
+  /// Serialises folders/feeds/keywords to JSON and opens the system file
+  /// picker in *create* mode so the user chooses where it lands — Downloads,
+  /// an SD card, Drive, anywhere the Storage Access Framework reaches.
+  ///
+  /// This deliberately does not use the share sheet. `ACTION_SEND` targets apps
+  /// that accept a file, and the phone's own storage is not an app: the sheet
+  /// offered Gmail, WhatsApp and Drive, and no way to simply save the file. SAF
+  /// via `ACTION_CREATE_DOCUMENT` is the mechanism for that, and `saveFile`
+  /// with `bytes` is how file_picker exposes it — the plugin writes the file
+  /// natively and hands back the path.
+  ///
+  /// Returns `true` when the file was written, `false` when the user dismissed
+  /// the picker. A cancel is a deliberate act and not an error.
+  static Future<bool> exportBackup({
     required List<Folder> folders,
     required List<Feed> feeds,
     required List<KeywordBlock> keywords,
+    String? dialogTitle,
   }) async {
-    final now = DateTime.now();
-    final data = BackupSerializer.toMap(folders: folders, feeds: feeds, keywords: keywords);
-
+    final data =
+        BackupSerializer.toMap(folders: folders, feeds: feeds, keywords: keywords);
     final json = const JsonEncoder.withIndent('  ').convert(data);
+    final bytes = Uint8List.fromList(utf8.encode(json));
 
-    // Write to a temp file the share sheet can attach
-    final tmp = await getTemporaryDirectory();
-    final dateStr = '${now.year}'
-        '${now.month.toString().padLeft(2, '0')}'
-        '${now.day.toString().padLeft(2, '0')}';
-    final file = File('${tmp.path}/flash_backup_$dateStr.json');
-    await file.writeAsString(json, encoding: utf8);
-
-    await Share.shareXFiles(
-      [XFile(file.path, mimeType: 'application/json')],
-      subject: 'Flash backup $dateStr',
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: dialogTitle,
+      fileName: backupFileName(DateTime.now()),
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+      bytes: bytes,
     );
+
+    return path != null;
   }
 
   /// Opens the system file picker, reads the selected JSON file, and

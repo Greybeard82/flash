@@ -173,7 +173,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hide articles matching specific words or phrases';
 
   @override
-  String get backupSuccess => 'Backup saved to Google Drive';
+  String get backupSuccess => 'Backup saved';
+
+  @override
+  String get exportDialogTitle => 'Save backup file';
 
   @override
   String restoreSuccess(int count) {
@@ -189,9 +192,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get restore => 'Restore';
-
-  @override
-  String get noBackupFound => 'No backup found in Drive';
 
   @override
   String get theme => 'Theme';

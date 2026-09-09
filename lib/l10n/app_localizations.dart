@@ -404,11 +404,17 @@ abstract class AppLocalizations {
   /// **'Hide articles matching specific words or phrases'**
   String get keywordBlocklistSubtitle;
 
-  /// No description provided for @backupSuccess.
+  /// Banner shown after the backup file is written via the system file picker.
   ///
   /// In en, this message translates to:
-  /// **'Backup saved to Google Drive'**
+  /// **'Backup saved'**
   String get backupSuccess;
+
+  /// Title of the system save dialog when exporting a backup file.
+  ///
+  /// In en, this message translates to:
+  /// **'Save backup file'**
+  String get exportDialogTitle;
 
   /// No description provided for @restoreSuccess.
   ///
@@ -433,12 +439,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Restore'**
   String get restore;
-
-  /// No description provided for @noBackupFound.
-  ///
-  /// In en, this message translates to:
-  /// **'No backup found in Drive'**
-  String get noBackupFound;
 
   /// No description provided for @theme.
   ///

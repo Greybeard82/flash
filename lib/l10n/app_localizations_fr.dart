@@ -174,7 +174,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Masquer les articles contenant des mots ou phrases spécifiques';
 
   @override
-  String get backupSuccess => 'Sauvegarde enregistrée sur Google Drive';
+  String get backupSuccess => 'Sauvegarde enregistrée';
+
+  @override
+  String get exportDialogTitle => 'Enregistrer le fichier de sauvegarde';
 
   @override
   String restoreSuccess(int count) {
@@ -190,9 +193,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get restore => 'Restaurer';
-
-  @override
-  String get noBackupFound => 'Aucune sauvegarde trouvée dans Drive';
 
   @override
   String get theme => 'Thème';

@@ -83,18 +83,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _exportLocalBackup() async {
     if (_localBusy) return;
+    final l10n = AppLocalizations.of(context)!;
     setState(() => _localBusy = true);
     try {
-      await LoadingController.instance.run(() async {
+      final saved = await LoadingController.instance.run(() async {
         final folders = await FolderRepository().getAll();
         final feeds = await FeedRepository().getAll();
         final keywords = await KeywordRepository().getAll();
-        await LocalBackupService.exportBackup(
+        return LocalBackupService.exportBackup(
           folders: folders,
           feeds: feeds,
           keywords: keywords,
+          dialogTitle: l10n.exportDialogTitle,
         );
       }, label: 'Exporting');
+      // Nothing on a cancel. Dismissing the picker is a deliberate act, and a
+      // banner reporting it would read as a failure the user has to dismiss in
+      // turn. Only a written file is worth saying anything about.
+      if (saved && mounted) {
+        _bannerKey.currentState?.show(l10n.backupSuccess);
+      }
     } catch (e) {
       if (mounted) {
         _bannerKey.currentState?.show(e.toString());

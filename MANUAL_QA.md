@@ -475,3 +475,25 @@ leave `alert_matches` completely untouched.
 | Long-press a keyword and rename it to a keyword that **already exists** | A banner says it already exists. Nothing is deleted — the old behaviour destroyed the snapshots and then threw silently |
 | Add a keyword that already exists | Same banner. No silent re-backfill with the wrong whole-word setting |
 | Repeat the delete confirmation in German | Longest strings; the dialog still fits and reads correctly |
+
+---
+
+## 31. Local Backup — Export and Import
+
+Export used to write a temp file and open the **share sheet**, which cannot save
+to the device: `ACTION_SEND` targets apps that accept a file, and the phone's
+own storage is not an app. The sheet offered Gmail, WhatsApp, Drive and Quick
+Share, and no way to simply keep the file. Export now goes through the Storage
+Access Framework — the system file picker in *create* mode — so the destination
+is the user's choice and Downloads is one of them.
+
+| Step | Expected |
+|------|----------|
+| Settings → Local backup file → **Export backup** | The **system file picker** opens in save mode — a folder tree with a filename field. **Not** the share sheet, and no app icons |
+| Note the proposed filename | `flash_backup_YYYYMMDD_HHmm.json` — date **and** time. Two exports in one day must not propose the same name |
+| Save it to Downloads | The picker closes and a **"Backup saved"** banner appears |
+| Open the phone's Files app → Downloads | The file is there, and opening it shows complete, valid JSON — feeds, folders and keywords, no truncated tail |
+| Export again and **dismiss** the picker (back gesture or Cancel) | **No banner and no error.** A cancel is deliberate, not a failure |
+| Export twice in the same minute-boundary crossing, then compare | Two distinct files. Overwriting a larger backup with a smaller one is what leaves garbage after the JSON |
+| **Import backup** → pick the saved file | The confirm dialog reads **"Restore from backup?"** — not "from Drive" — and restoring succeeds |
+| Repeat the export in Spanish or French | The banner is localised, with no missing-key placeholder. **Note:** the picker's own title is supplied by Android, not by Flash — `file_picker` 8.0.7 drops `dialogTitle` on Android, so the system wording is expected there |

@@ -81,7 +81,10 @@
   "filters": "Filters",
   "keywordBlocklist": "Keyword Blocklist",
   "keywordBlocklistSubtitle": "Hide articles matching specific words or phrases",
-  "backupSuccess": "Backup saved to Google Drive",
+  "backupSuccess": "Backup saved",
+  "@backupSuccess": { "description": "Banner shown after the backup file is written via the system file picker." },
+  "exportDialogTitle": "Save backup file",
+  "@exportDialogTitle": { "description": "Title of the system save dialog when exporting a backup file." },
   "restoreSuccess": "{count} feeds restored. Pull to refresh.",
   "@restoreSuccess": {
     "placeholders": { "count": { "type": "int" } }
@@ -89,7 +92,6 @@
   "restoreConfirmTitle": "Restore from backup?",
   "restoreConfirmMessage": "This will replace all your current feeds, categories and keywords with the saved backup. Articles will be re-fetched on next refresh.",
   "restore": "Restore",
-  "noBackupFound": "No backup found in Drive",
   "theme": "Theme",
   "themeSystem": "System",
   "themeLight": "Light",

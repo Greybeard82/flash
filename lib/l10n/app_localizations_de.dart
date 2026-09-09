@@ -176,7 +176,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Artikel mit bestimmten Wörtern oder Phrasen ausblenden';
 
   @override
-  String get backupSuccess => 'Sicherung auf Google Drive gespeichert';
+  String get backupSuccess => 'Sicherung gespeichert';
+
+  @override
+  String get exportDialogTitle => 'Sicherungsdatei speichern';
 
   @override
   String restoreSuccess(int count) {
@@ -192,9 +195,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get restore => 'Wiederherstellen';
-
-  @override
-  String get noBackupFound => 'Keine Sicherung in Drive gefunden';
 
   @override
   String get theme => 'Design';

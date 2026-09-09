@@ -174,7 +174,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ocultar artículos que coincidan con palabras o frases';
 
   @override
-  String get backupSuccess => 'Copia guardada en Google Drive';
+  String get backupSuccess => 'Copia de seguridad guardada';
+
+  @override
+  String get exportDialogTitle => 'Guardar archivo de copia';
 
   @override
   String restoreSuccess(int count) {
@@ -190,9 +193,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get restore => 'Restaurar';
-
-  @override
-  String get noBackupFound => 'No se encontró copia en Drive';
 
   @override
   String get theme => 'Tema';
