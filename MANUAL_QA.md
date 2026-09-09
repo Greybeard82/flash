@@ -90,21 +90,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 9. Google Drive Backup / Restore Round-Trip
-
-| Step | Expected |
-|------|----------|
-| Settings → Google Drive → Sign in | OAuth consent screen shown; sign-in completes |
-| Tap "Backup now" | "Backup saved" confirmation shown |
-| Open Google Drive (any device) → Storage → app data | `flash_backup.json` is NOT visible (private appdata, correct) |
-| Add a new feed and folder | New items appear in Flash |
-| Tap "Restore from Drive" | Shows feed/folder/keyword counts before confirming |
-| Confirm restore | App wipes existing data, re-inserts backup contents; new feed/folder gone |
-| Articles re-fetched on next refresh | ✓ |
-
----
-
-## 10. Folder Tabs Position (Thumb-Zone Hard Requirement)
+## 9. Folder Tabs Position (Thumb-Zone Hard Requirement)
 
 | Step | Expected |
 |------|----------|
@@ -115,7 +101,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 11. Minimum Tap Target Size
+## 10. Minimum Tap Target Size
 
 | Step | Expected |
 |------|----------|
@@ -124,7 +110,7 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 12. Swipe Mark-as-Read (Dims In-Place)
+## 11. Swipe Mark-as-Read (Dims In-Place)
 
 The height check below cannot be automated. `flutter_test` renders with a font
 whose glyphs all share identical metrics, so a font-weight change produces no
@@ -139,11 +125,11 @@ this regression is visible.
 | Pick an article whose title wraps to three lines, and watch it closely as it dims | **The card's height does not change.** Nothing below it moves. Read state is carried by colour and opacity only; the title weight is constant at `w600` |
 | Immediately after the swipe, check the list length | **Nothing has been removed.** A swipe marks read; it never retires. The row dims where it is |
 | Scroll away and back, with **Show read** on | Dimmed article is still present at its original position |
-| Same, with **Show read** off | The article is gone once it passes the retirement frontier, or at the next refresh — see §19 |
+| Same, with **Show read** off | The article is gone once it passes the retirement frontier, or at the next refresh — see §18 |
 
 ---
 
-## 13. Onboarding (First-Launch Only)
+## 12. Onboarding (First-Launch Only)
 
 | Step | Expected |
 |------|----------|
@@ -153,7 +139,7 @@ this regression is visible.
 
 ---
 
-## 14. Cross-Tab Unread Counts (Live)
+## 13. Cross-Tab Unread Counts (Live)
 
 | Step | Expected |
 |------|----------|
@@ -165,7 +151,7 @@ this regression is visible.
 
 ---
 
-## 15. Folder Tab Size
+## 14. Folder Tab Size
 
 | Step | Expected |
 |------|----------|
@@ -176,18 +162,18 @@ this regression is visible.
 
 ---
 
-## 16. Global Loading Indicator
+## 15. Global Loading Indicator
 
 | Step | Expected |
 |------|----------|
-| Add a feed, delete a folder, run an OPML import, open an AI summary, restore from Drive | Each operation shows a thin progress bar at the top of the content area |
+| Add a feed, delete a folder, run an OPML import, open an AI summary, import a local backup | Each operation shows a thin progress bar at the top of the content area |
 | Trigger a fast, near-instant operation (e.g. toggling a settings switch) | No flash of the indicator — it only appears after ~150ms |
 | Force an error (enable airplane mode, then add a feed) | The indicator disappears once the operation fails — it never hangs visible |
 | Trigger two operations back to back | Indicator stays visible continuously across both, only disappearing once the last one finishes |
 
 ---
 
-## 17. Resume Refresh
+## 16. Resume Refresh
 
 | Step | Expected |
 |------|----------|
@@ -201,7 +187,7 @@ this regression is visible.
 
 ---
 
-## 18. AI Summary Reads the Full Article
+## 17. AI Summary Reads the Full Article
 
 | Step | Expected |
 |------|----------|
@@ -214,7 +200,7 @@ this regression is visible.
 
 ---
 
-## 19. Retirement and the Show Read Toggle
+## 18. Retirement and the Show Read Toggle
 
 Read is not a state an article rests in — it is a step on the way out. An
 article is **retired** when the user is finished with it: the row is deleted
@@ -227,7 +213,7 @@ library you are willing to lose.
 | Step | Expected |
 |------|----------|
 | Open the Filter bubble (funnel button) and turn **Show read off**. Apply | The list re-queries and resets to the top |
-| Scroll down slowly past six or seven articles, then stop | Articles behind you are removed once they are two cards above the viewport. **The list does not move under you** — see §25 |
+| Scroll down slowly past six or seven articles, then stop | Articles behind you are removed once they are two cards above the viewport. **The list does not move under you** — see §24 |
 | Scroll back up to the top | The retired articles are gone. The ones still on screen are the ones you had not passed |
 | Now turn **Show read on** and Apply | Nothing you retired comes back. Retirement is not hiding |
 | With Show read **on**, scroll past several articles | They dim in place and stay. Nothing is removed while you scroll |
@@ -239,7 +225,7 @@ library you are willing to lose.
 
 ---
 
-## 20. Day Dividers
+## 19. Day Dividers
 
 | Step | Expected |
 |------|----------|
@@ -252,7 +238,7 @@ library you are willing to lose.
 
 ---
 
-## 21. Refresh Is Conditional
+## 20. Refresh Is Conditional
 
 A refresh either leaves the list completely alone or rebuilds it and jumps to
 the top. Which one depends on whether anything *visible* actually arrived —
@@ -280,7 +266,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 22. Feed Add / Remove Reaches the Article List
+## 21. Feed Add / Remove Reaches the Article List
 
 > ⚠️ **Not yet exercised on device.** The `needsFetch` branch below has been
 > verified only by unit test and by its `structureOnly` sibling (a category
@@ -296,7 +282,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 23. Categories Collapsed by Default
+## 22. Categories Collapsed by Default
 
 | Step | Expected |
 |------|----------|
@@ -308,7 +294,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 24. Filter Bubble — Article Age
+## 23. Filter Bubble — Article Age
 
 | Step | Expected |
 |------|----------|
@@ -319,7 +305,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 25. Tombstones — Retired Articles Stay Gone
+## 24. Tombstones — Retired Articles Stay Gone
 
 > **The single most important manual check in this sheet.** Dedup used to work
 > because a read article kept its row, and therefore its guid, to collide with.
@@ -337,7 +323,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 26. The List Never Moves
+## 25. The List Never Moves
 
 The invariant the whole retirement design is built around: the article list
 must never move by a single pixel while you are looking at it.
@@ -353,7 +339,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 27. Retiring Across a Day Boundary
+## 26. Retiring Across a Day Boundary
 
 | Step | Expected |
 |------|----------|
@@ -365,7 +351,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 28. Reaching the Bottom Zeroes the Badge
+## 27. Reaching the Bottom Zeroes the Badge
 
 | Step | Expected |
 |------|----------|
@@ -379,7 +365,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 29. "Don't Show Again" on Mark All as Read
+## 28. "Don't Show Again" on Mark All as Read
 
 | Step | Expected |
 |------|----------|
@@ -394,7 +380,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 30. Recovering Recently Removed Articles
+## 29. Recovering Recently Removed Articles
 
 Retirement is irreversible by design, so this is the only way back for a user
 who scrolled faster than they meant to. It cannot recover anything the feeds
@@ -413,7 +399,7 @@ have stopped offering.
 
 ---
 
-## 31. The Alerts tab
+## 30. The Alerts tab
 
 An alert match is now a row of its own in `alert_matches`, not a column on the
 article. That is the whole point: the article can be read, retired, cleaned up
@@ -424,7 +410,7 @@ The single most important invariant: `runCleanup`, `retireAllRead`, the
 tombstone system, the display-age filter and the per-feed article cap must all
 leave `alert_matches` completely untouched.
 
-### 31.1 The pill and the badges
+### 30.1 The pill and the badges
 
 | Step | Expected |
 |------|----------|
@@ -435,7 +421,7 @@ leave `alert_matches` completely untouched.
 | Find an article matching four keywords | Three chips plus `+1` |
 | Compare a read card with an unread one | Badge height is identical. Read state changes colour and opacity only — never layout |
 
-### 31.2 Notifications
+### 30.2 Notifications
 
 | Step | Expected |
 |------|----------|
@@ -446,7 +432,7 @@ leave `alert_matches` completely untouched.
 | Post an alert, then tap a *second* notification without restarting | Still opens the Alerts tab. Posting an alert used to silently de-register the tap handler |
 | Switch the phone to German and trigger an alert | The notification body is German, matching the rest of the app |
 
-### 31.3 Read state
+### 30.3 Read state
 
 | Step | Expected |
 |------|----------|
@@ -457,7 +443,7 @@ leave `alert_matches` completely untouched.
 | Open an alert-matched article from **Bookmarks**, return to Alerts | Dimmed there too |
 | Open one from **Search**, return to Alerts | Dimmed there too |
 
-### 31.4 Survival — the invariant
+### 30.4 Survival — the invariant
 
 | Step | Expected |
 |------|----------|
@@ -468,7 +454,7 @@ leave `alert_matches` completely untouched.
 | Long-press an Alerts card whose article has been retired and tap **Bookmark** | A banner: *That article is no longer in your feed*. No crash, the card stays |
 | Restore a backup, then refresh | Alert cards are **not** duplicated and no notification re-fires for articles already alerted |
 
-### 31.5 The radial menu
+### 30.5 The radial menu
 
 | Step | Expected |
 |------|----------|
@@ -477,7 +463,7 @@ leave `alert_matches` completely untouched.
 | Tap **Remove** | The card goes, a banner shows, counts update. The **article itself stays** in its category tab and no tombstone is written |
 | Long-press a card in the All tab | **Three** buttons, visually identical to before this change |
 
-### 31.6 Managing keywords
+### 30.6 Managing keywords
 
 | Step | Expected |
 |------|----------|

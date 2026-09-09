@@ -301,10 +301,7 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'refresh_interval_minutes', 'value': '180'},
   {'key': 'article_limit', 'value': '100'},
   {'key': 'mark_read_on_scroll', 'value': 'true'},
-  {'key': 'drive_backup_enabled', 'value': 'false'},
-  {'key': 'drive_last_backup_at', 'value': 'null'},
   {'key': 'feedly_api_key', 'value': 'null'},
-  {'key': 'google_account_email', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
   // NB: no 'schema_version' row. PRAGMA user_version — set by the `version:`
   // passed to openDatabase in database.dart — is the single source of truth

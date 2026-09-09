@@ -28,8 +28,6 @@ dependencies:
   flutter_local_notifications: ^18.0.0
 
   # --- Google services ---
-  google_sign_in: ^6.2.1
-  googleapis: ^12.0.0
 
   # --- UI & theming ---
   dynamic_color: ^1.7.0

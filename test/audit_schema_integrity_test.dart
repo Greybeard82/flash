@@ -27,7 +27,7 @@ import 'package:flash/repositories/settings_repository.dart';
 /// every migration test in this suite quietly stops one version short of the
 /// step it was written to exercise and still reports green — the new
 /// `if (oldVersion < n)` block simply never runs.
-const int kExpectedSchemaVersion = 16;
+const int kExpectedSchemaVersion = 17;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();

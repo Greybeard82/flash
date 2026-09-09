@@ -173,29 +173,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hide articles matching specific words or phrases';
 
   @override
-  String get backup => 'Backup';
-
-  @override
-  String get googleDriveBackup => 'Google Drive Backup';
-
-  @override
-  String get connectGoogle => 'Connect Google account';
-
-  @override
-  String get backupNow => 'Back up now';
-
-  @override
-  String get restoreFromDrive => 'Restore from Drive';
-
-  @override
-  String get signOut => 'Sign out';
-
-  @override
-  String lastBackup(String date) {
-    return 'Last backup: $date';
-  }
-
-  @override
   String get backupSuccess => 'Backup saved to Google Drive';
 
   @override
@@ -204,7 +181,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get restoreConfirmTitle => 'Restore from Drive?';
+  String get restoreConfirmTitle => 'Restore from backup?';
 
   @override
   String get restoreConfirmMessage =>

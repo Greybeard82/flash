@@ -404,48 +404,6 @@ abstract class AppLocalizations {
   /// **'Hide articles matching specific words or phrases'**
   String get keywordBlocklistSubtitle;
 
-  /// No description provided for @backup.
-  ///
-  /// In en, this message translates to:
-  /// **'Backup'**
-  String get backup;
-
-  /// No description provided for @googleDriveBackup.
-  ///
-  /// In en, this message translates to:
-  /// **'Google Drive Backup'**
-  String get googleDriveBackup;
-
-  /// No description provided for @connectGoogle.
-  ///
-  /// In en, this message translates to:
-  /// **'Connect Google account'**
-  String get connectGoogle;
-
-  /// No description provided for @backupNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Back up now'**
-  String get backupNow;
-
-  /// No description provided for @restoreFromDrive.
-  ///
-  /// In en, this message translates to:
-  /// **'Restore from Drive'**
-  String get restoreFromDrive;
-
-  /// No description provided for @signOut.
-  ///
-  /// In en, this message translates to:
-  /// **'Sign out'**
-  String get signOut;
-
-  /// No description provided for @lastBackup.
-  ///
-  /// In en, this message translates to:
-  /// **'Last backup: {date}'**
-  String lastBackup(String date);
-
   /// No description provided for @backupSuccess.
   ///
   /// In en, this message translates to:
@@ -461,7 +419,7 @@ abstract class AppLocalizations {
   /// No description provided for @restoreConfirmTitle.
   ///
   /// In en, this message translates to:
-  /// **'Restore from Drive?'**
+  /// **'Restore from backup?'**
   String get restoreConfirmTitle;
 
   /// No description provided for @restoreConfirmMessage.

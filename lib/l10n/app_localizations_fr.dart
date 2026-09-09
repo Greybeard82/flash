@@ -174,29 +174,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Masquer les articles contenant des mots ou phrases spécifiques';
 
   @override
-  String get backup => 'Sauvegarde';
-
-  @override
-  String get googleDriveBackup => 'Sauvegarde Google Drive';
-
-  @override
-  String get connectGoogle => 'Connecter un compte Google';
-
-  @override
-  String get backupNow => 'Sauvegarder maintenant';
-
-  @override
-  String get restoreFromDrive => 'Restaurer depuis Drive';
-
-  @override
-  String get signOut => 'Se déconnecter';
-
-  @override
-  String lastBackup(String date) {
-    return 'Dernière sauvegarde : $date';
-  }
-
-  @override
   String get backupSuccess => 'Sauvegarde enregistrée sur Google Drive';
 
   @override
@@ -205,7 +182,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get restoreConfirmTitle => 'Restaurer depuis Drive ?';
+  String get restoreConfirmTitle => 'Restaurer depuis la sauvegarde ?';
 
   @override
   String get restoreConfirmMessage =>

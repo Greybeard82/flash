@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/refresh_interval_field.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../repositories/feed_repository.dart';
@@ -12,7 +11,6 @@ import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/article_opener.dart' show kEmbeddedWebViewSettingKey;
 import '../services/clean_reader.dart' show kCleanModeEnabledSettingKey;
-import '../services/drive_backup_service.dart';
 import '../services/loading_controller.dart';
 import '../services/refresh_service.dart';
 import '../services/local_backup_service.dart';
@@ -35,32 +33,13 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _bannerKey = GlobalKey<NotificationBannerState>();
   final _settingsRepo = SettingsRepository();
-  final _backupService = DriveBackupService();
   AppSettings? _settings;
-  GoogleSignInAccount? _googleUser;
-  bool _backupBusy = false;
   bool _localBusy = false;
-  DateTime? _lastBackupAt;
 
   @override
   void initState() {
     super.initState();
     _load();
-    _initGoogle();
-  }
-
-  Future<void> _initGoogle() async {
-    final account = await _backupService.signInSilently();
-    final lastMs = int.tryParse(
-        await _settingsRepo.get('drive_last_backup_at') ?? '0');
-    if (mounted) {
-      setState(() {
-        _googleUser = account;
-        if (lastMs != null && lastMs > 0) {
-          _lastBackupAt = DateTime.fromMillisecondsSinceEpoch(lastMs);
-        }
-      });
-    }
   }
 
   Future<void> _load() async {
@@ -100,47 +79,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _settings = _settings?.copyWith(cleanModeEnabled: value));
     await _settingsRepo.set(kCleanModeEnabledSettingKey, value.toString());
     SettingsNotifier.instance.settingsChanged();
-  }
-
-  Future<void> _connectGoogle() async {
-    final account = await LoadingController.instance
-        .run(() => _backupService.signIn(), label: 'Connecting');
-    if (mounted) setState(() => _googleUser = account);
-  }
-
-  Future<void> _signOutGoogle() async {
-    await LoadingController.instance
-        .run(() => _backupService.signOut(), label: 'Signing out');
-    if (mounted) setState(() { _googleUser = null; _lastBackupAt = null; });
-  }
-
-  Future<void> _backupNow() async {
-    if (_backupBusy) return;
-    setState(() => _backupBusy = true);
-    try {
-      await LoadingController.instance.run(() async {
-        final folders = await FolderRepository().getAll();
-        final feeds = await FeedRepository().getAll();
-        final keywords = await KeywordRepository().getAll();
-        final when = await _backupService.backup(
-          folders: folders,
-          feeds: feeds,
-          keywords: keywords,
-        );
-        await _settingsRepo.set(
-            'drive_last_backup_at', when.millisecondsSinceEpoch.toString());
-        if (mounted) {
-          setState(() => _lastBackupAt = when);
-          _bannerKey.currentState?.show(AppLocalizations.of(context)!.backupSuccess);
-        }
-      }, label: 'Backing up');
-    } catch (e) {
-      if (mounted) {
-        _bannerKey.currentState?.show(e.toString());
-      }
-    } finally {
-      if (mounted) setState(() => _backupBusy = false);
-    }
   }
 
   Future<void> _exportLocalBackup() async {
@@ -211,47 +149,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _restoreFromDrive() async {
-    final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n.restoreConfirmTitle),
-        content: Text(l10n.restoreConfirmMessage),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.cancel),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
-            child: Text(l10n.restore),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-
-    setState(() => _backupBusy = true);
-    try {
-      final count = await LoadingController.instance
-          .run(() => _backupService.restore(), label: 'Restoring');
-      if (mounted) {
-        _bannerKey.currentState?.show(AppLocalizations.of(context)!.restoreSuccess(count));
-      }
-    } catch (e) {
-      if (mounted) {
-        _bannerKey.currentState?.show(e.toString());
-      }
-    } finally {
-      if (mounted) setState(() => _backupBusy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -315,10 +212,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionHeader(l10n.localBackup),
           _buildLocalBackupSection(l10n),
 
-          // ── Google Drive Backup ──
-          _sectionHeader(l10n.backup),
-          _buildBackupSection(l10n),
-
           const SizedBox(height: 24),
         ],
       ),
@@ -370,89 +263,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-  }
-
-  Widget _buildBackupSection(AppLocalizations l10n) {
-    final theme = Theme.of(context);
-    final isConnected = _googleUser != null;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (!isConnected)
-          ListTile(
-            leading: const Icon(Icons.account_circle_outlined),
-            title: Text(l10n.connectGoogle),
-            subtitle: Text(_googleUser?.email ?? ''),
-            trailing: const Icon(Icons.chevron_right_rounded),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _connectGoogle,
-          )
-        else ...[
-          ListTile(
-            leading: const Icon(Icons.account_circle_rounded),
-            title: Text(_googleUser!.email),
-            subtitle: _lastBackupAt != null
-                ? Text(l10n.lastBackup(_formatDate(_lastBackupAt!)))
-                : null,
-            trailing: TextButton(
-              onPressed: _signOutGoogle,
-              child: Text(l10n.signOut,
-                  style: TextStyle(color: theme.colorScheme.error)),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            // IntrinsicHeight sizes both cells to the taller button, so when
-            // "Restore from Drive" (or its French translation) wraps to two
-            // lines, "Back up now" grows to match rather than the pair looking
-            // mismatched. The 48dp is a floor for the tap target, not a cap —
-            // a fixed height is what clipped the label in the first place.
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 48),
-                      child: OutlinedButton.icon(
-                        onPressed: _backupBusy ? null : _backupNow,
-                        icon: _backupBusy
-                            ? SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: SpinningRefreshIcon(
-                                    size: 16,
-                                    color: theme.colorScheme.primary))
-                            : const Icon(Icons.cloud_upload_outlined),
-                        label: Text(l10n.backupNow, textAlign: TextAlign.center),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minHeight: 48),
-                      child: OutlinedButton.icon(
-                        onPressed: _backupBusy ? null : _restoreFromDrive,
-                        icon: const Icon(Icons.cloud_download_outlined),
-                        label: Text(l10n.restoreFromDrive,
-                            textAlign: TextAlign.center),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  String _formatDate(DateTime dt) {
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
 
   Widget _sectionHeader(String title) {

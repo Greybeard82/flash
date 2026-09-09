@@ -28,9 +28,6 @@ class AppSettings {
   final bool refreshOnWifiOnly;
 
   final bool markReadOnScroll;
-  final bool driveBackupEnabled;
-  final int? driveLastBackupAt;
-  final String? googleAccountEmail;
   final bool onboardingComplete;
   /// Age window for cleanup, in days. Meaning is unchanged — read articles
   /// older than this are purged — only the accepted range widened, from
@@ -111,9 +108,6 @@ class AppSettings {
     this.articleLimit = kFetchArticleLimit,
     this.articleSortOrder = kSortNewestFirst,
     this.markReadOnScroll = true,
-    this.driveBackupEnabled = false,
-    this.driveLastBackupAt,
-    this.googleAccountEmail,
     this.onboardingComplete = false,
     this.cleanupAgeDays = 7,
     this.newspaperMode = false,
@@ -138,11 +132,6 @@ class AppSettings {
           ? kSortOldestFirst
           : kSortNewestFirst,
       markReadOnScroll: (map['mark_read_on_scroll'] ?? 'true') == 'true',
-      driveBackupEnabled: (map['drive_backup_enabled'] ?? 'false') == 'true',
-      driveLastBackupAt: map['drive_last_backup_at'] != null && map['drive_last_backup_at'] != 'null'
-          ? int.tryParse(map['drive_last_backup_at']!)
-          : null,
-      googleAccountEmail: map['google_account_email'] == 'null' ? null : map['google_account_email'],
       onboardingComplete: (map['onboarding_complete'] ?? 'false') == 'true',
       cleanupAgeDays:
           (int.tryParse(map['cleanup_age_days'] ?? '7') ?? 7).clamp(2, 20),
@@ -170,9 +159,6 @@ class AppSettings {
     int? articleLimit,
     String? articleSortOrder,
     bool? markReadOnScroll,
-    bool? driveBackupEnabled,
-    int? driveLastBackupAt,
-    String? googleAccountEmail,
     bool? onboardingComplete,
     int? cleanupAgeDays,
     bool? newspaperMode,
@@ -192,9 +178,6 @@ class AppSettings {
       articleLimit: articleLimit ?? this.articleLimit,
       articleSortOrder: articleSortOrder ?? this.articleSortOrder,
       markReadOnScroll: markReadOnScroll ?? this.markReadOnScroll,
-      driveBackupEnabled: driveBackupEnabled ?? this.driveBackupEnabled,
-      driveLastBackupAt: driveLastBackupAt ?? this.driveLastBackupAt,
-      googleAccountEmail: googleAccountEmail ?? this.googleAccountEmail,
       onboardingComplete: onboardingComplete ?? this.onboardingComplete,
       cleanupAgeDays: cleanupAgeDays ?? this.cleanupAgeDays,
       newspaperMode: newspaperMode ?? this.newspaperMode,

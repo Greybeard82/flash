@@ -174,29 +174,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Ocultar artículos que coincidan con palabras o frases';
 
   @override
-  String get backup => 'Copia de seguridad';
-
-  @override
-  String get googleDriveBackup => 'Copia en Google Drive';
-
-  @override
-  String get connectGoogle => 'Conectar cuenta de Google';
-
-  @override
-  String get backupNow => 'Hacer copia ahora';
-
-  @override
-  String get restoreFromDrive => 'Restaurar desde Drive';
-
-  @override
-  String get signOut => 'Cerrar sesión';
-
-  @override
-  String lastBackup(String date) {
-    return 'Última copia: $date';
-  }
-
-  @override
   String get backupSuccess => 'Copia guardada en Google Drive';
 
   @override
@@ -205,7 +182,7 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
-  String get restoreConfirmTitle => '¿Restaurar desde Drive?';
+  String get restoreConfirmTitle => '¿Restaurar desde la copia de seguridad?';
 
   @override
   String get restoreConfirmMessage =>

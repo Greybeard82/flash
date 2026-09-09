@@ -41,7 +41,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 16,
+      version: 17,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -478,6 +478,19 @@ class AppDatabase {
         await _dropMatchedAlertKeywordByRebuild(db, cols);
       }
     }
+    if (oldVersion < 17) {
+      // Google Drive backup and Google Sign-In were removed. These three keys
+      // have no reader left in AppSettings.fromMap, so they are dead weight on
+      // every device that ever ran v3-v16. Deleted here so an upgraded database
+      // and a fresh install hold the same key set.
+      //
+      // Deliberately narrow: three named keys, no wildcard. A LIKE 'google%'
+      // sweep would be one typo away from taking something else with it.
+      await db.execute(
+        "DELETE FROM settings WHERE key IN "
+        "('drive_backup_enabled', 'drive_last_backup_at', 'google_account_email')",
+      );
+    }
   }
 
   Future<bool> _tableExists(Database db, String name) async {
@@ -624,7 +637,7 @@ class AppDatabase {
   @visibleForTesting
   Future<void> migrateForTesting({required int fromVersion}) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 16);
+    await _onUpgrade(db, fromVersion, 17);
   }
 
   Future<void> close() async {
