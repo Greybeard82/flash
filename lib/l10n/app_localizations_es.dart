@@ -708,4 +708,10 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get refreshOnWifiOnlySubtitle =>
       'La actualización en segundo plano solo se ejecuta con Wi-Fi. Abrir la app o actualizar manualmente siempre funciona, con cualquier conexión.';
+
+  @override
+  String get about => 'Acerca de';
+
+  @override
+  String get privacyPolicy => 'Política de privacidad';
 }

@@ -711,4 +711,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get refreshOnWifiOnlySubtitle =>
       'L\'actualisation en arrière-plan ne se fait qu\'en Wi-Fi. Ouvrir l\'application ou actualiser manuellement fonctionne toujours, quelle que soit la connexion.';
+
+  @override
+  String get about => 'À propos';
+
+  @override
+  String get privacyPolicy => 'Politique de confidentialité';
 }

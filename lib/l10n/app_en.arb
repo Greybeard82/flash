@@ -386,5 +386,9 @@
   "refreshOnWifiOnlySubtitle": "Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.",
   "@refreshOnWifiOnlySubtitle": {
     "description": "Subtitle under refreshOnWifiOnly, stating that foreground fetches are unaffected."
-  }
+  },
+  "about": "About",
+  "@about": { "description": "Settings section header above the privacy policy link." },
+  "privacyPolicy": "Privacy policy",
+  "@privacyPolicy": { "description": "Opens the hosted privacy policy in the browser. Google Play requires it to be reachable from inside the app." }
 }

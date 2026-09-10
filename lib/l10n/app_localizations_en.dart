@@ -700,4 +700,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refreshOnWifiOnlySubtitle =>
       'Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.';
+
+  @override
+  String get about => 'About';
+
+  @override
+  String get privacyPolicy => 'Privacy policy';
 }

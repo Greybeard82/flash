@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/refresh_interval_field.dart';
@@ -15,6 +16,15 @@ import '../services/loading_controller.dart';
 import '../services/refresh_service.dart';
 import '../services/local_backup_service.dart';
 import '../services/settings_notifier.dart';
+
+/// The hosted privacy policy.
+///
+/// Google Play requires the policy to be reachable from *inside* the app, not
+/// only from the store listing, which is what the About tile below is for.
+///
+/// A const rather than an inline literal so a typo in a legally-required link
+/// fails a test rather than shipping — see settings_privacy_link_test.dart.
+const String kPrivacyPolicyUrl = 'https://flashrssapp.github.io/privacy.html';
 
 /// The full settings screen.
 ///
@@ -220,6 +230,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionHeader(l10n.localBackup),
           _buildLocalBackupSection(l10n),
 
+          // ── About ──
+          _sectionHeader(l10n.about),
+          ListTile(
+            leading: const Icon(Icons.privacy_tip_outlined),
+            title: Text(l10n.privacyPolicy),
+            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: _openPrivacyPolicy,
+          ),
+
           const SizedBox(height: 24),
         ],
       ),
@@ -227,6 +248,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  /// Opens the policy in the browser, not the built-in reader.
+  ///
+  /// The embedded reader is built around an [Article] and runs Clean-mode
+  /// extraction over it, which is the wrong treatment for a legal document —
+  /// and a privacy policy is a trust document, so the user should see the real
+  /// URL and domain in a real browser. Same call the article opener uses for
+  /// an external open.
+  Future<void> _openPrivacyPolicy() async {
+    try {
+      final ok = await launchUrl(Uri.parse(kPrivacyPolicyUrl),
+          mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        _bannerKey.currentState?.show(kPrivacyPolicyUrl);
+      }
+    } catch (_) {
+      // No browser, or the launch was refused. Showing the URL at least lets
+      // the user reach the policy by hand rather than hitting a dead tile.
+      if (mounted) _bannerKey.currentState?.show(kPrivacyPolicyUrl);
+    }
   }
 
   Widget _buildLocalBackupSection(AppLocalizations l10n) {

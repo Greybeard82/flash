@@ -224,5 +224,9 @@
   "every4Hours": "Alle 4 Stunden",
   "every5Hours": "Alle 5 Stunden",
   "refreshOnWifiOnly": "Nur über WLAN aktualisieren",
-  "refreshOnWifiOnlySubtitle": "Die Hintergrundaktualisierung läuft nur über WLAN. Das Öffnen der App und das manuelle Aktualisieren funktionieren immer, über jede Verbindung."
+  "refreshOnWifiOnlySubtitle": "Die Hintergrundaktualisierung läuft nur über WLAN. Das Öffnen der App und das manuelle Aktualisieren funktionieren immer, über jede Verbindung.",
+  "about": "Über",
+  "@about": { "description": "Settings section header above the privacy policy link." },
+  "privacyPolicy": "Datenschutzerklärung",
+  "@privacyPolicy": { "description": "Opens the hosted privacy policy in the browser. Google Play requires it to be reachable from inside the app." }
 }

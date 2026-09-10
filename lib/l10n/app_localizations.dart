@@ -1291,6 +1291,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Background refresh only runs on Wi-Fi. Opening the app or refreshing manually always works, on any connection.'**
   String get refreshOnWifiOnlySubtitle;
+
+  /// Settings section header above the privacy policy link.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get about;
+
+  /// Opens the hosted privacy policy in the browser. Google Play requires it to be reachable from inside the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy policy'**
+  String get privacyPolicy;
 }
 
 class _AppLocalizationsDelegate

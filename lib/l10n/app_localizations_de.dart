@@ -710,4 +710,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get refreshOnWifiOnlySubtitle =>
       'Die Hintergrundaktualisierung läuft nur über WLAN. Das Öffnen der App und das manuelle Aktualisieren funktionieren immer, über jede Verbindung.';
+
+  @override
+  String get about => 'Über';
+
+  @override
+  String get privacyPolicy => 'Datenschutzerklärung';
 }

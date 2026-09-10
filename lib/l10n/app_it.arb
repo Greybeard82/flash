@@ -224,5 +224,9 @@
   "every4Hours": "Ogni 4 ore",
   "every5Hours": "Ogni 5 ore",
   "refreshOnWifiOnly": "Aggiorna solo con Wi-Fi",
-  "refreshOnWifiOnlySubtitle": "L'aggiornamento in background funziona solo con Wi-Fi. Aprire l'app o aggiornare manualmente funziona sempre, con qualsiasi connessione."
+  "refreshOnWifiOnlySubtitle": "L'aggiornamento in background funziona solo con Wi-Fi. Aprire l'app o aggiornare manualmente funziona sempre, con qualsiasi connessione.",
+  "about": "Informazioni",
+  "@about": { "description": "Settings section header above the privacy policy link." },
+  "privacyPolicy": "Informativa sulla privacy",
+  "@privacyPolicy": { "description": "Opens the hosted privacy policy in the browser. Google Play requires it to be reachable from inside the app." }
 }

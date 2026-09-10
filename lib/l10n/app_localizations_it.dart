@@ -708,4 +708,10 @@ class AppLocalizationsIt extends AppLocalizations {
   @override
   String get refreshOnWifiOnlySubtitle =>
       'L\'aggiornamento in background funziona solo con Wi-Fi. Aprire l\'app o aggiornare manualmente funziona sempre, con qualsiasi connessione.';
+
+  @override
+  String get about => 'Informazioni';
+
+  @override
+  String get privacyPolicy => 'Informativa sulla privacy';
 }
