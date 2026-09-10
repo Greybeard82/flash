@@ -1,40 +1,35 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'app.dart';
 import 'db/database.dart';
+import 'firebase_options.dart';
 import 'repositories/settings_repository.dart';
 import 'services/ad_blocklist.dart';
 import 'services/alert_navigation_intent.dart';
+import 'services/app_check_config.dart';
 import 'services/refresh_service.dart';
 import 'utils/form_factor.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ── NOT YET WIRED: Firebase AI Logic + App Check ────────────────────────
-  //
-  // Cloud summaries (gemini_cloud_service.dart) go through Firebase AI Logic
-  // so that no API key ships in the binary. That path is written and tested,
-  // but it is inert until Firebase is initialised here, because
-  // GeminiCloudService.isConfigured reports false when Firebase.apps is empty
-  // — so the app falls back to "no cloud summaries" exactly as a keyless build
-  // did. Nano is unaffected.
-  //
-  // This block cannot be written yet: it needs `DefaultFirebaseOptions` from
-  // lib/firebase_options.dart, which `flutterfire configure` generates and
-  // which is gitignored. Once that has been run, insert here — before
-  // FormFactor.init, so nothing else can touch FirebaseAI first:
-  //
-  //   await Firebase.initializeApp(
-  //       options: DefaultFirebaseOptions.currentPlatform);
-  //   await FirebaseAppCheck.instance
-  //       .activate(androidProvider: appCheckAndroidProvider);
-  //
-  // with imports for firebase_core, firebase_app_check, firebase_options.dart
-  // and services/app_check_config.dart. See app_check_config.dart for why the
-  // provider is chosen by --dart-define and not by kDebugMode, and §32 of
-  // MANUAL_QA.md for the debug-token step that sideloaded builds need.
-  // ────────────────────────────────────────────────────────────────────────
+  // Firebase AI Logic backs the cloud summary fallback (see
+  // gemini_cloud_service.dart). It is first because GeminiCloudService reports
+  // itself unconfigured while Firebase.apps is empty, and because nothing may
+  // touch FirebaseAI before initializeApp has completed. Nothing below depends
+  // on running before it: FormFactor reads a display metric, the database is
+  // local, and neither knows Firebase exists.
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // App Check attests that this is a genuine, untampered build before the
+  // gateway will talk to Gemini — which is what lets the API key stay
+  // server-side instead of shipping in the APK. See app_check_config.dart for
+  // why the provider is a --dart-define and deliberately not kDebugMode, and
+  // §32 of MANUAL_QA.md for the debug-token step sideloaded builds need.
+  await FirebaseAppCheck.instance
+      .activate(providerAndroid: appCheckAndroidProvider);
 
   // Detect TV / form factor before the first frame
   await FormFactor.init();

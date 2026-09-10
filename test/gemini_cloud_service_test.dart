@@ -198,11 +198,12 @@ void main() {
     // that Play cannot attest — and every cloud summary would fail on exactly
     // the devices used for testing.
     test('an ordinary build attests with Play Integrity', () {
-      expect(appCheckProviderFor(debug: false), AndroidProvider.playIntegrity);
+      expect(appCheckProviderFor(debug: false),
+          isA<AndroidPlayIntegrityProvider>());
     });
 
     test('a build with APP_CHECK_DEBUG uses the debug provider', () {
-      expect(appCheckProviderFor(debug: true), AndroidProvider.debug);
+      expect(appCheckProviderFor(debug: true), isA<AndroidDebugProvider>());
     });
 
     test('the shipped default follows the compile-time flag', () {
@@ -210,7 +211,7 @@ void main() {
       // be the attesting one. A default that silently fell back to debug would
       // ship an app that accepts unattested requests.
       expect(kAppCheckDebug, isFalse);
-      expect(appCheckAndroidProvider, AndroidProvider.playIntegrity);
+      expect(appCheckAndroidProvider, isA<AndroidPlayIntegrityProvider>());
     });
   });
 }

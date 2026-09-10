@@ -29,10 +29,15 @@ const bool kAppCheckDebug = bool.fromEnvironment('APP_CHECK_DEBUG');
 
 /// The selection itself, as a pure function so it can be asserted without a
 /// platform channel. Pinned by gemini_cloud_service_test.dart.
+///
+/// Returns the provider *objects*, not the older `AndroidProvider` enum:
+/// firebase_app_check 0.4.7 deprecated `activate(androidProvider:)` in favour
+/// of `activate(providerAndroid:)`, which takes these and is where the debug
+/// token can also be supplied programmatically if that is ever wanted.
 @visibleForTesting
-AndroidProvider appCheckProviderFor({required bool debug}) =>
-    debug ? AndroidProvider.debug : AndroidProvider.playIntegrity;
+AndroidAppCheckProvider appCheckProviderFor({required bool debug}) =>
+    debug ? const AndroidDebugProvider() : const AndroidPlayIntegrityProvider();
 
 /// What `main()` passes to `FirebaseAppCheck.activate`.
-final AndroidProvider appCheckAndroidProvider =
+final AndroidAppCheckProvider appCheckAndroidProvider =
     appCheckProviderFor(debug: kAppCheckDebug);
