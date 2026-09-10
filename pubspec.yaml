@@ -28,6 +28,13 @@ dependencies:
   flutter_local_notifications: ^18.0.0
 
   # --- Google services ---
+  # Cloud summaries go through Firebase AI Logic, not a direct Gemini call.
+  # The API key lives server-side; App Check (Play Integrity) attests the
+  # request came from a genuine, untampered build before it reaches Gemini.
+  # See gemini_cloud_service.dart and app_check_config.dart.
+  firebase_core: ^4.14.0
+  firebase_ai: ^4.0.0
+  firebase_app_check: ^0.4.7
 
   # --- UI & theming ---
   dynamic_color: ^1.7.0
@@ -40,7 +47,12 @@ dependencies:
   animations: ^2.0.11
 
   # --- Sharing ---
-  share_plus: ^9.0.0
+  # Bumped 9 -> 12 because firebase_app_check_web needs `web ^1.0.0` and
+  # share_plus 9 pinned `web ^0.5.0`, which made the two unresolvable. Flash
+  # ships Android only, so the `web` transitive is never built — but pub
+  # resolves the whole graph regardless of target platform. The upgrade costs
+  # one line in share_service.dart; see the note there.
+  share_plus: ^12.0.2
 
   # --- URL handling ---
   url_launcher: ^6.3.0

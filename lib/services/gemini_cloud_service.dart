@@ -1,7 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:firebase_ai/firebase_ai.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 import 'summary_formatter.dart' show kSummaryLengthStandard;
 import 'summary_prompt_builder.dart';
@@ -11,14 +12,23 @@ import 'summary_prompt_builder.dart';
 /// One rule, named rather than left inline at the call site: **Nano wins
 /// wherever it exists.** It is free, private and works offline, so the cloud
 /// is reached only when there is no Nano to use — never as a way to override
-/// it, and never when this build carries no key.
+/// it, and never when this build cannot reach Firebase.
 bool shouldUseCloud({
   required bool nanoAvailable,
   required bool cloudConfigured,
 }) =>
     !nanoAvailable && cloudConfigured;
 
-/// Summarising via the Gemini API, for devices that have no Nano.
+/// Produces the model's output for a prompt, one chunk at a time.
+///
+/// Each element is a *delta* — the newly generated text — which
+/// [GeminiCloudService] accumulates before handing on. Injectable because the
+/// real implementation crosses a platform channel and cannot run in a unit
+/// test; this is the seam that replaced the injected `http.Client` when the
+/// hand-rolled SSE parsing went away.
+typedef SummaryChunks = Stream<String> Function(String prompt);
+
+/// Summarising via Firebase AI Logic, for devices that have no Nano.
 ///
 /// Reached only when [GeminiNanoService.isAvailable] is false. Nano is always
 /// preferred where it exists: it is free, private and offline, and this path
@@ -27,28 +37,29 @@ bool shouldUseCloud({
 /// The prompt comes from [buildSummaryPrompt], the same function the Nano
 /// path uses, so both backends are asked for the same thing in the same
 /// words and `SummaryFormatter` clamps both the same way afterwards.
+///
+/// ## Why Firebase AI Logic rather than a direct Gemini call
+///
+/// This used to hold a `String.fromEnvironment('GEMINI_API_KEY')` and POST
+/// straight to `generativelanguage.googleapis.com`. A compile-time key is
+/// embedded in the binary in clear text and anyone with the APK can extract it
+/// in seconds, so that build could never ship. Obfuscating it harder is not a
+/// fix: anything inside the app can be extracted. The fix is for no key to
+/// ship at all.
+///
+/// Requests now go to the Firebase AI Logic gateway, which holds the key
+/// server-side and verifies an App Check token — Play Integrity, attesting a
+/// genuine untampered build — *before* the request reaches the Gemini backend.
+/// See app_check_config.dart for the one trap this creates locally.
+///
+/// Note what did **not** come back with the Firebase dependency: no Google
+/// Sign-In, no OAuth, no consent screen, no user account. Flash still asks the
+/// user for nothing.
 class GeminiCloudService {
-  /// ---------------------------------------------------------------------
-  /// TEST BUILD ONLY — NOT A SHIPPABLE WAY TO HOLD A KEY.
-  ///
-  /// This is a compile-time key, baked into one APK with
-  /// `--dart-define=GEMINI_API_KEY=...` for testing on David's own three
-  /// devices. A `String.fromEnvironment` value is embedded in the binary in
-  /// clear text: anyone with the APK can extract it in seconds. That is
-  /// acceptable for a build that never leaves his hands and unacceptable for
-  /// one that does.
-  ///
-  /// Shipping this to real users needs a backend holding the real key, with
-  /// the app calling that instead — a separate problem this pass does not
-  /// touch and does not answer. If you are reading this while preparing a
-  /// release, this is the thing that is not done.
-  /// ---------------------------------------------------------------------
-  static const String _apiKey = String.fromEnvironment('GEMINI_API_KEY');
-
   /// The flash-lite tier this project planned around.
   ///
   /// Not `gemini-2.5-flash-lite`, which the pass that added this asked for:
-  /// it still appears in the models list but the API refuses it outright for
+  /// it still appeared in the models list but the API refused it outright for
   /// keys created since it was retired --
   ///
   ///   404: This model models/gemini-2.5-flash-lite is no longer available
@@ -56,29 +67,59 @@ class GeminiCloudService {
   ///   models/gemini-3.5-flash-lite
   ///
   /// -- so it was never going to work on this build. Same tier, current
-  /// generation, and the replacement Google's own error names.
+  /// generation, and the replacement Google's own error names. 2.5 Flash and
+  /// 2.5 Flash-Lite shut down entirely on 16 October 2026, so the old string
+  /// is now doubly dead.
   static const String _model = 'gemini-3.5-flash-lite';
+
+  /// Exposed so the test suite can pin the model without reaching the network.
+  @visibleForTesting
+  static const String modelId = _model;
 
   /// A whole generation, not just the connection. A hung request must not
   /// leave the sheet on "Writing…" indefinitely.
   static const Duration _deadline = Duration(seconds: 15);
 
-  /// True when a key was compiled into this build.
-  bool get isConfigured => _apiKey.isNotEmpty;
+  /// True when Firebase has initialised, which is what "the cloud is reachable"
+  /// now means — there is no key to look for any more.
+  ///
+  /// Guarded because reading [Firebase.apps] before the platform side is set up
+  /// throws, and "cannot tell" has to resolve to "not available" rather than
+  /// taking the app down at startup.
+  bool get isConfigured {
+    try {
+      return Firebase.apps.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
 
-  /// Seam for tests: lets the routing be exercised without a real key or a
-  /// network, since [_apiKey] is a compile-time constant and cannot be set.
+  /// Seam for tests: lets the routing be exercised without Firebase, since
+  /// [isConfigured] depends on platform state a unit test has no way to create.
   static bool? configuredOverrideForTesting;
 
   bool get configured => configuredOverrideForTesting ?? isConfigured;
 
-  final http.Client _client;
+  final SummaryChunks _chunks;
 
-  GeminiCloudService({http.Client? client}) : _client = client ?? http.Client();
+  GeminiCloudService({SummaryChunks? chunks}) : _chunks = chunks ?? _liveChunks;
+
+  /// The real backend: Gemini Developer API through Firebase AI Logic.
+  ///
+  /// No generation config is set. The prompt carries the length tier in words,
+  /// and the sampling parameters that would otherwise go here — `temperature`,
+  /// `topP`, `topK` — are deprecated on current Gemini models, so setting them
+  /// would be adding a knob that is on its way out.
+  static Stream<String> _liveChunks(String prompt) {
+    final model = FirebaseAI.googleAI().generativeModel(model: _model);
+    return model
+        .generateContentStream([Content.text(prompt)])
+        .map((r) => r.text ?? '');
+  }
 
   /// Mirrors [GeminiNanoService.summarizeStream]: emits the accumulated text
-  /// so far on each chunk, and closes when generation ends. Null when no key
-  /// is configured, which is the caller's signal to fall through.
+  /// so far on each chunk, and closes when generation ends. Null when the
+  /// cloud is not reachable, which is the caller's signal to fall through.
   ///
   /// Errors arrive on the stream rather than as exceptions, again matching
   /// the Nano path, so the sheet has one way of handling failure.
@@ -100,54 +141,16 @@ class GeminiCloudService {
   }
 
   Future<void> _run(String prompt, StreamController<String> out) async {
-    // `alt=sse` turns the streaming endpoint into ordinary server-sent
-    // events — one `data: {json}` line per chunk — which is a few lines to
-    // parse. Without it the same endpoint returns a JSON array that only
-    // becomes valid once the last byte arrives, which would mean waiting for
-    // the whole response and giving up the live-text behaviour Nano has.
-    final uri = Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/'
-        '$_model:streamGenerateContent?alt=sse');
-
     var buffer = '';
     try {
-      final request = http.Request('POST', uri)
-        ..headers['content-type'] = 'application/json'
-        ..headers['x-goog-api-key'] = _apiKey
-        ..body = jsonEncode({
-          'contents': [
-            {
-              'parts': [
-                {'text': prompt}
-              ]
-            }
-          ],
-        });
+      final chunks = _chunks(prompt).timeout(_deadline);
 
-      final response = await _client.send(request).timeout(_deadline);
-
-      if (response.statusCode != 200) {
-        // Read the body for the message Google puts in it — "API key not
-        // valid", a quota name — which is the part worth showing under
-        // "Show details".
-        final body = await response.stream.bytesToString().timeout(_deadline);
-        out.addError('HTTP ${response.statusCode}: ${_apiError(body)}');
-        await out.close();
-        return;
-      }
-
-      final lines = response.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .timeout(_deadline);
-
-      await for (final line in lines) {
-        if (!line.startsWith('data:')) continue;
-        final payload = line.substring(5).trim();
-        if (payload.isEmpty || payload == '[DONE]') continue;
-        final text = _textFrom(payload);
-        if (text == null || text.isEmpty) continue;
-        buffer += text;
+      await for (final delta in chunks) {
+        // A text-free chunk — a safety verdict, a usage-metadata frame — is
+        // normal mid-generation and must not be re-emitted as a duplicate
+        // event or mistaken for a failure.
+        if (delta.isEmpty) continue;
+        buffer += delta;
         if (!out.isClosed) out.add(buffer);
       }
 
@@ -157,7 +160,14 @@ class GeminiCloudService {
       if (buffer.isNotEmpty) {
         // Partial text is still worth keeping — the formatter will clamp it,
         // and half a summary reads better than an error over nothing.
-        if (!out.isClosed) out.add(buffer);
+        //
+        // Nothing is re-sent here: every non-empty delta was already emitted
+        // inside the loop, so the sheet is holding the latest text and closing
+        // simply leaves it on screen. The old http implementation added the
+        // buffer again at this point, which emitted a value the consumer
+        // already had — invisible in the UI, since the sheet keeps only the
+        // last value, but a duplicate event all the same. It had no test
+        // covering a timeout *after* partial text, which is why it survived.
         await out.close();
         return;
       }
@@ -167,45 +177,5 @@ class GeminiCloudService {
       out.addError(e.toString());
       if (!out.isClosed) await out.close();
     }
-  }
-
-  /// The text of one SSE chunk, or null if this chunk carries none — a
-  /// safety-block verdict or a usage-metadata-only frame, both of which are
-  /// normal and must not be mistaken for a failure.
-  static String? _textFrom(String jsonLine) {
-    try {
-      final decoded = jsonDecode(jsonLine);
-      if (decoded is! Map) return null;
-      final candidates = decoded['candidates'];
-      if (candidates is! List || candidates.isEmpty) return null;
-      final content = (candidates.first as Map)['content'];
-      if (content is! Map) return null;
-      final parts = content['parts'];
-      if (parts is! List || parts.isEmpty) return null;
-      final buf = StringBuffer();
-      for (final part in parts) {
-        if (part is Map && part['text'] is String) buf.write(part['text']);
-      }
-      return buf.toString();
-    } catch (_) {
-      // A malformed frame mid-stream is not worth failing the whole
-      // generation over; the ones around it still carry text.
-      return null;
-    }
-  }
-
-  /// Pulls Google's own message out of an error body, falling back to the
-  /// raw body when the shape is not what we expect.
-  static String _apiError(String body) {
-    try {
-      final decoded = jsonDecode(body);
-      if (decoded is Map && decoded['error'] is Map) {
-        final message = (decoded['error'] as Map)['message'];
-        if (message is String && message.isNotEmpty) return message;
-      }
-    } catch (_) {
-      // fall through
-    }
-    return body.length > 200 ? '${body.substring(0, 200)}…' : body;
   }
 }

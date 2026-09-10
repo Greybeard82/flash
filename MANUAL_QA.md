@@ -497,3 +497,48 @@ is the user's choice and Downloads is one of them.
 | Export twice in the same minute-boundary crossing, then compare | Two distinct files. Overwriting a larger backup with a smaller one is what leaves garbage after the JSON |
 | **Import backup** → pick the saved file | The confirm dialog reads **"Restore from backup?"** — not "from Drive" — and restoring succeeds |
 | Repeat the export in Spanish or French | The banner is localised, with no missing-key placeholder. **Note:** the picker's own title is supplied by Android, not by Flash — `file_picker` 8.0.7 drops `dialogTitle` on Android, so the system wording is expected there |
+
+---
+
+## 32. Cloud Summaries via Firebase AI Logic + App Check
+
+Cloud summaries no longer carry an API key. Requests go to the Firebase AI
+Logic gateway, which holds the key server-side and verifies an **App Check**
+token — Play Integrity, attesting a genuine untampered build — before the
+request reaches Gemini. Nano is untouched and still wins wherever it exists.
+
+### ⚠ Read this before filing a bug: sideloaded builds need a debug token
+
+Play Integrity attests that the app is a build **Google Play distributed**. A
+locally-built APK is not, so it fails attestation, App Check refuses to issue a
+token, and **every cloud summary fails**. That is the system working, not a
+defect.
+
+So local builds must be made with the debug provider:
+
+```
+flutter build apk --release --dart-define=APP_CHECK_DEBUG=true
+```
+
+On first launch that build prints an App Check debug token to logcat:
+
+```
+adb -s <serial> logcat -s DebugAppCheckProvider:D
+```
+
+Register it in Firebase console → App Check → Apps → ⋮ → **Manage debug
+tokens**. Until it is registered, cloud summaries fail on that device and that
+is expected. The AAB uploaded to Play is built **without** the flag, so it uses
+Play Integrity.
+
+A registered debug token bypasses attestation entirely — treat it like a key.
+It is per device, read from logcat, and must never be committed.
+
+| Step | Expected |
+|------|----------|
+| **Samsung Galaxy M51** (no Nano) — tap ✦ on a real article | A summary streams in and completes. This is the point of the migration: this device had no working cloud path that did not depend on a baked-in key |
+| **Pixel 11 Pro** (Nano-capable) — tap ✦ | The summary comes from **Nano**, not the cloud. Confirm with `adb logcat \| grep -i aicore` that on-device inference ran. If this device reaches the cloud, `shouldUseCloud` precedence is broken — that is a regression, not an improvement |
+| **Lenovo Tab M11** (no Nano) — tap ✦ | Summary streams in, and the three-column layout still renders the sheet correctly |
+| Aeroplane mode on a non-Nano device, then tap ✦ | The existing failure state appears — not a hang and not a crash. The 15-second deadline still applies |
+| Feed refresh, favicons and the embedded reader, after all of the above | No regression. Firebase initialisation now runs before them in `main()` |
+| Settings, end to end | **No API key field anywhere**, and no backend choice. The device decides, and the user is asked for nothing |

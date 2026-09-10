@@ -11,6 +11,31 @@ import 'utils/form_factor.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // ── NOT YET WIRED: Firebase AI Logic + App Check ────────────────────────
+  //
+  // Cloud summaries (gemini_cloud_service.dart) go through Firebase AI Logic
+  // so that no API key ships in the binary. That path is written and tested,
+  // but it is inert until Firebase is initialised here, because
+  // GeminiCloudService.isConfigured reports false when Firebase.apps is empty
+  // — so the app falls back to "no cloud summaries" exactly as a keyless build
+  // did. Nano is unaffected.
+  //
+  // This block cannot be written yet: it needs `DefaultFirebaseOptions` from
+  // lib/firebase_options.dart, which `flutterfire configure` generates and
+  // which is gitignored. Once that has been run, insert here — before
+  // FormFactor.init, so nothing else can touch FirebaseAI first:
+  //
+  //   await Firebase.initializeApp(
+  //       options: DefaultFirebaseOptions.currentPlatform);
+  //   await FirebaseAppCheck.instance
+  //       .activate(androidProvider: appCheckAndroidProvider);
+  //
+  // with imports for firebase_core, firebase_app_check, firebase_options.dart
+  // and services/app_check_config.dart. See app_check_config.dart for why the
+  // provider is chosen by --dart-define and not by kDebugMode, and §32 of
+  // MANUAL_QA.md for the debug-token step that sideloaded builds need.
+  // ────────────────────────────────────────────────────────────────────────
+
   // Detect TV / form factor before the first frame
   await FormFactor.init();
 
