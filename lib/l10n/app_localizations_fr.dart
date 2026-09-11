@@ -780,4 +780,32 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get emailUs => 'Écrivez-nous';
+
+  @override
+  String get opml => 'OPML';
+
+  @override
+  String get opmlSubtitle =>
+      'Transférez vos flux vers un autre lecteur ou depuis celui-ci. L’import complète vos flux, il ne les remplace jamais.';
+
+  @override
+  String get importOpml => 'Importer un OPML';
+
+  @override
+  String get exportOpml => 'Exporter en OPML';
+
+  @override
+  String opmlImportedBanner(int feeds, int folders, int skipped) {
+    return '$feeds flux importés dans $folders catégories, $skipped ignorés';
+  }
+
+  @override
+  String get opmlImportFailed =>
+      'Ce fichier n’est pas un fichier OPML valide. Rien n’a été modifié.';
+
+  @override
+  String get opmlImportedFolderName => 'Importés';
+
+  @override
+  String get opmlExportEmpty => 'Il n’y a pas encore de flux à exporter.';
 }

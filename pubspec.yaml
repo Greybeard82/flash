@@ -1,6 +1,6 @@
 name: flash
 description: A fast, local-first RSS reader with AI-powered filtering.
-version: 0.1.0+3
+version: 0.1.0+4
 publish_to: none
 
 environment:
@@ -22,6 +22,10 @@ dependencies:
   http: ^1.2.1
   dart_rss: ^3.0.2
   html: ^0.15.4
+  # OPML import/export. Already present transitively (dart_rss depends on it);
+  # promoted to a direct dependency at the version already resolved in
+  # pubspec.lock, so this adds nothing to the build that was not already there.
+  xml: ^6.6.1
 
   # --- Background processing ---
   workmanager: ^0.9.0

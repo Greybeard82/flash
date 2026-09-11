@@ -5,6 +5,7 @@ import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/refresh_interval_field.dart';
 import '../l10n/app_localizations.dart';
+import '../models/feed.dart';
 import '../models/settings.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
@@ -15,6 +16,7 @@ import '../services/clean_reader.dart' show kCleanModeEnabledSettingKey;
 import '../services/loading_controller.dart';
 import '../services/refresh_service.dart';
 import '../services/local_backup_service.dart';
+import '../services/opml_service.dart';
 import '../services/settings_notifier.dart';
 
 /// The hosted privacy policy.
@@ -59,6 +61,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _settingsRepo = SettingsRepository();
   AppSettings? _settings;
   bool _localBusy = false;
+
+  /// Separate from [_localBusy] so an OPML operation greys out only the OPML
+  /// buttons, not the backup ones.
+  bool _opmlBusy = false;
 
   @override
   void initState() {
@@ -244,6 +250,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _sectionHeader(l10n.localBackup),
           _buildLocalBackupSection(l10n),
 
+          // ── OPML ──
+          _sectionHeader(l10n.opml),
+          _buildOpmlSection(l10n),
+
           // ── About ──
           _sectionHeader(l10n.about),
           // Above the privacy policy, not below it: Play requires contact
@@ -333,6 +343,127 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {
       if (mounted) _bannerKey.currentState?.show(kContactEmail);
     }
+  }
+
+  /// Imports an OPML file into the library.
+  ///
+  /// No confirmation dialog, unlike backup restore. Restore is destructive —
+  /// it wipes and re-inserts, so it asks first. An OPML import only ever adds,
+  /// so the worst outcome of a mistaken tap is some feeds to delete, and a
+  /// dialog in front of every import would be a toll on the safe operation to
+  /// protect against the dangerous one.
+  Future<void> _importOpml() async {
+    if (_opmlBusy) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _opmlBusy = true);
+    try {
+      final service = OpmlService();
+      final result = await LoadingController.instance.run(
+        () => service.importFromPicker(
+          fallbackFolderName: l10n.opmlImportedFolderName,
+        ),
+        label: 'Importing OPML',
+      );
+      if (!mounted || result == null) return; // null: picker dismissed
+      // Not awaited — an import of fifty feeds is fifty favicon round trips,
+      // and the banner should not wait behind them.
+      unawaited(service.warmFavicons(result.addedFeeds));
+      _bannerKey.currentState?.show(l10n.opmlImportedBanner(
+        result.feedsImported,
+        result.foldersCreated,
+        result.skipped,
+      ));
+    } on OpmlParseException {
+      // The file was not usable and nothing was written. One message for every
+      // flavour of bad file: the distinction between "not XML", "not OPML" and
+      // "unreadable" is not something the user can act on differently.
+      if (mounted) {
+        _bannerKey.currentState
+            ?.show(AppLocalizations.of(context)!.opmlImportFailed);
+      }
+    } catch (e) {
+      if (mounted) _bannerKey.currentState?.show(e.toString());
+    } finally {
+      if (mounted) setState(() => _opmlBusy = false);
+    }
+  }
+
+  /// Writes the library out as OPML.
+  Future<void> _exportOpml() async {
+    if (_opmlBusy) return;
+    final l10n = AppLocalizations.of(context)!;
+    setState(() => _opmlBusy = true);
+    try {
+      final saved = await LoadingController.instance.run(() async {
+        final folders = await FolderRepository().getAll();
+        final feedRepo = FeedRepository();
+        final feedsByFolder = <int, List<Feed>>{
+          for (final folder in folders)
+            folder.id!: await feedRepo.getByFolder(folder.id!),
+        };
+        if (feedsByFolder.values.every((f) => f.isEmpty)) return null;
+        return OpmlService.exportToPicker(
+          folders: folders,
+          feedsByFolder: feedsByFolder,
+          dialogTitle: l10n.exportOpml,
+        );
+      }, label: 'Exporting OPML');
+      if (!mounted) return;
+      if (saved == null) {
+        // An empty file is a worse outcome than being told there is nothing
+        // to write: the user would hand it to another reader and find out
+        // there.
+        _bannerKey.currentState?.show(l10n.opmlExportEmpty);
+        return;
+      }
+      // Same as the backup export: silence on a cancel, which is a deliberate
+      // act rather than a failure.
+      if (saved) _bannerKey.currentState?.show(l10n.backupSuccess);
+    } catch (e) {
+      if (mounted) _bannerKey.currentState?.show(e.toString());
+    } finally {
+      if (mounted) setState(() => _opmlBusy = false);
+    }
+  }
+
+  Widget _buildOpmlSection(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            l10n.opmlSubtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.6),
+                ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _opmlBusy ? null : _exportOpml,
+                  icon: const Icon(Icons.upload_file_outlined),
+                  label: Text(l10n.exportOpml),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _opmlBusy ? null : _importOpml,
+                  icon: const Icon(Icons.download_outlined),
+                  label: Text(l10n.importOpml),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildLocalBackupSection(AppLocalizations l10n) {

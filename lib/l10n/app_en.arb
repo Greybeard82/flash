@@ -420,5 +420,21 @@
   "contactSupport": "Contact & support",
   "@contactSupport": { "description": "Settings > About row opening the hosted support page. Google Play requires contact details reachable in-app." },
   "emailUs": "Email us",
-  "@emailUs": { "description": "Settings > About row launching a mailto: to the support address." }
+  "@emailUs": { "description": "Settings > About row launching a mailto: to the support address." },
+  "opml": "OPML",
+  "@opml": { "description": "Settings section header for OPML import/export, beside the local backup file section." },
+  "opmlSubtitle": "Move your feeds to or from another reader. Importing adds to your feeds, it never replaces them.",
+  "@opmlSubtitle": { "description": "Explains that OPML moves feeds between readers and that import merges rather than replaces." },
+  "importOpml": "Import OPML",
+  "@importOpml": { "description": "Button opening the file picker to import an OPML file." },
+  "exportOpml": "Export OPML",
+  "@exportOpml": { "description": "Button saving the library as an OPML file." },
+  "opmlImportedBanner": "Imported {feeds} feeds into {folders} folders, {skipped} skipped",
+  "@opmlImportedBanner": {"description": "Banner after a successful OPML import. feeds/folders are what was added, skipped is what was already subscribed.", "placeholders": {"feeds": {"type": "int"}, "folders": {"type": "int"}, "skipped": {"type": "int"}}},
+  "opmlImportFailed": "That file is not a valid OPML file. Nothing was changed.",
+  "@opmlImportFailed": { "description": "Banner shown when the chosen file is not a usable OPML document. Nothing was changed." },
+  "opmlImportedFolderName": "Imported",
+  "@opmlImportedFolderName": { "description": "Folder name given to feeds that sit at the root of an OPML file with no parent outline." },
+  "opmlExportEmpty": "There are no feeds to export yet.",
+  "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." }
 }

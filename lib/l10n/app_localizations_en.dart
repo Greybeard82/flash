@@ -769,4 +769,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emailUs => 'Email us';
+
+  @override
+  String get opml => 'OPML';
+
+  @override
+  String get opmlSubtitle =>
+      'Move your feeds to or from another reader. Importing adds to your feeds, it never replaces them.';
+
+  @override
+  String get importOpml => 'Import OPML';
+
+  @override
+  String get exportOpml => 'Export OPML';
+
+  @override
+  String opmlImportedBanner(int feeds, int folders, int skipped) {
+    return 'Imported $feeds feeds into $folders folders, $skipped skipped';
+  }
+
+  @override
+  String get opmlImportFailed =>
+      'That file is not a valid OPML file. Nothing was changed.';
+
+  @override
+  String get opmlImportedFolderName => 'Imported';
+
+  @override
+  String get opmlExportEmpty => 'There are no feeds to export yet.';
 }

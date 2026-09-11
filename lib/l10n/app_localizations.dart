@@ -1393,6 +1393,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Email us'**
   String get emailUs;
+
+  /// Settings section header for OPML import/export, beside the local backup file section.
+  ///
+  /// In en, this message translates to:
+  /// **'OPML'**
+  String get opml;
+
+  /// Explains that OPML moves feeds between readers and that import merges rather than replaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Move your feeds to or from another reader. Importing adds to your feeds, it never replaces them.'**
+  String get opmlSubtitle;
+
+  /// Button opening the file picker to import an OPML file.
+  ///
+  /// In en, this message translates to:
+  /// **'Import OPML'**
+  String get importOpml;
+
+  /// Button saving the library as an OPML file.
+  ///
+  /// In en, this message translates to:
+  /// **'Export OPML'**
+  String get exportOpml;
+
+  /// Banner after a successful OPML import. feeds/folders are what was added, skipped is what was already subscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {feeds} feeds into {folders} folders, {skipped} skipped'**
+  String opmlImportedBanner(int feeds, int folders, int skipped);
+
+  /// Banner shown when the chosen file is not a usable OPML document. Nothing was changed.
+  ///
+  /// In en, this message translates to:
+  /// **'That file is not a valid OPML file. Nothing was changed.'**
+  String get opmlImportFailed;
+
+  /// Folder name given to feeds that sit at the root of an OPML file with no parent outline.
+  ///
+  /// In en, this message translates to:
+  /// **'Imported'**
+  String get opmlImportedFolderName;
+
+  /// Banner shown when export is tapped with no feeds to export.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no feeds to export yet.'**
+  String get opmlExportEmpty;
 }
 
 class _AppLocalizationsDelegate

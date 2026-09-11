@@ -502,9 +502,28 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 ### 4.13 OPML Import / Export
 
-- Import: reads an OPML file and adds all feeds, preserving folder structure where possible
-- Export: generates a standard OPML file shared via the system share sheet
-- Accessible from Settings
+Both live in Settings, in their own section beside the local backup file buttons.
+
+**Import merges, it never replaces.** Backup restore wipes and re-inserts, which is right for a backup: it is a snapshot of the whole library. An OPML file is not a snapshot — it is another reader's export, a subset, or something hand-edited — so importing one is additive or it silently destroys what the user already had. There is no confirmation dialog for that reason: the worst outcome of a mistaken tap is some feeds to delete.
+
+**Import**
+- `FileType.any`, not an extension filter. Android's MIME mapping for `.opml` is unreliable — the Storage Access Framework often reports `application/octet-stream` or nothing — so a filter greys out the very file the user came to pick. The content is validated instead
+- A feed is any `<outline>` carrying an `xmlUrl` whose scheme is `http` or `https`. Everything else is skipped: link bookmarks, text notes, empty folders, and `feed://` or `ftp://` URLs, which `RssService` could never fetch and which would be stored as permanently empty feeds
+- **One folder level.** The feed's folder is the title of its *top-level* parent outline, however deep it actually sits — three levels of nesting flatten to the top-level name. Flash has one level of categories; preserving deeper structure needs a schema change, and dropping the feeds would be worse than flattening them. A feed at the root with no parent goes into a folder named by `opmlImportedFolderName` ("Imported")
+- Feed title: `title`, else `text`, else the URL's host — a nameless feed is still a feed. Folder name: `text`, else `title` (the opposite precedence, because OPML folders are conventionally named by `text`). `htmlUrl` becomes `siteUrl`
+- A folder whose name matches an existing one case-insensitively (trimmed) is **reused**, and keeps the name the user gave it. The rule is `folder_matching.dart`, shared with the starter pack (§4.1) so the two cannot drift apart
+- A feed URL already subscribed is **skipped and never moved or renamed** — the user may have filed it themselves. A URL repeated inside the file yields one entry, the first occurrence winning
+- New folders are appended after existing ones; new feeds after a reused folder's existing feeds
+- Database writes only, through the existing repositories. No network during import. Favicons are warmed afterwards and never awaited. The Flash tab fetches on return through `FeedsChangedNotifier`, exactly as after adding a feed by hand
+- Banner: "Imported {feeds} feeds into {folders} folders, {skipped} skipped". A file that is not valid XML, is not OPML, or cannot be read shows an error banner and **changes nothing**
+
+**Export**
+- OPML 2.0. One parent outline per folder in Categories order, each holding its feeds in theirs
+- Each feed outline carries `type="rss"`, `text`, `title`, `xmlUrl`, and `htmlUrl` when known. `text` and `title` carry the same value because readers disagree about which they display
+- Saved through `FilePicker.saveFile` as `flash_feeds_YYYYMMDD.opml` — the Storage Access Framework, the same mechanism as the local backup export, not the share sheet
+- Date only in the filename, unlike the backup export's date-and-time: an OPML export is a one-off handed to another reader, not something taken repeatedly in one sitting
+
+**Known limitation:** an **empty** folder does not survive a round trip. Import is feed-driven — a folder exists because a feed lands in it — so a category with no feeds is exported as an empty outline with nothing to recreate it.
 
 ---
 
@@ -607,7 +626,7 @@ Settings live in three places. The **Settings screen** keeps what is configured 
 | Local backup | — | Settings screen | Export, Import |
 | Contact & support | — | Settings screen (About) | Opens the hosted support page |
 | Email us | — | Settings screen (About) | Launches `mailto:` to the support address |
-| OPML | — | Settings screen | Import, Export |
+| OPML | — | Settings screen | Import (merges), Export |
 
 The Filter bubble's four controls are staged behind an **Apply** button rather than written on release: dragging a slider is exploratory, and persisting each intermediate value re-queried the feed several times on the way to the one the user actually wanted. Apply is disabled until something differs, so it doubles as an indicator of whether anything is pending.
 
@@ -698,6 +717,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - **Onboarding that ends with articles on screen** — the starter-pack picker replaces the feature bullets, "Start reading" seeds and stays on Flash, "Skip, I'll add my own" keeps the old destination (§4.14)
 - **Publisher and publication date** on the AI summary sheet and in the reading pane's top bar, localised and absolute rather than relative — both Play News and Magazines requirements
 - **Contact & support and Email us** in Settings → About, with the support URL pinned by a test to the one declared in the Play Console
+- **OPML import + export** (§4.13) — genuinely, this time. It was listed here from the start while nothing in `lib/` implemented it; the entry moved to Not Yet Built in build 3 and comes back in build 4. Import merges rather than replaces, flattens to one folder level, and shares its folder-reuse rule with the starter pack
 
 ### Regressions Worth Remembering
 - **Retirement-on-scroll deleted articles that were still on screen** (shipped in pass 05, disabled in pass 07). Three compounding causes: row heights were guessed at a hardcoded 120px for every row `ListView.builder` had disposed — real cards measure **96.8dp and 121.9dp** on a Pixel 11 Pro, so the guess was wrong in both directions and the error accumulated down the list; `jumpTo` dispatches `ScrollEndNotification`, so every programmatic scroll ran retirement; and retirement re-entered itself through its own offset correction. Fixed by caching measured heights, gating on `MarkReadGate`, a re-entrancy flag, and — the part that matters — a hard ceiling that confines retirement to rows the ListView has **disposed**, so no future arithmetic error can delete something visible.
@@ -710,7 +730,6 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - **In-app reader view.** Articles open in the system browser. A reader mode existed and was removed (schema v8 purges its settings and per-domain compatibility cache); it was never reliable enough across sites to be worth maintaining. This is the most likely gap a reviewer would name if the app were distributed publicly
 
 ### Not Yet Built
-- OPML import + export — scheduled for the next pass. Listed as Shipped until Sep 2026; nothing in `lib/` has ever implemented it (the only match for "opml" is a comment in `feeds_changed_notifier.dart`)
 - iOS support
 - Home screen widget
 - Per-feed custom refresh intervals

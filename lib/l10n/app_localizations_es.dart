@@ -777,4 +777,32 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get emailUs => 'Escríbenos';
+
+  @override
+  String get opml => 'OPML';
+
+  @override
+  String get opmlSubtitle =>
+      'Lleva tus fuentes a otro lector o tráelas desde él. La importación añade fuentes, nunca las sustituye.';
+
+  @override
+  String get importOpml => 'Importar OPML';
+
+  @override
+  String get exportOpml => 'Exportar OPML';
+
+  @override
+  String opmlImportedBanner(int feeds, int folders, int skipped) {
+    return '$feeds fuentes importadas en $folders categorías, $skipped omitidas';
+  }
+
+  @override
+  String get opmlImportFailed =>
+      'Ese archivo no es un archivo OPML válido. No se ha cambiado nada.';
+
+  @override
+  String get opmlImportedFolderName => 'Importadas';
+
+  @override
+  String get opmlExportEmpty => 'Aún no hay fuentes que exportar.';
 }

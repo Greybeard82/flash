@@ -659,3 +659,36 @@ physical device, install over the top with `adb install -r <apk>` — never
 | Tap **Email us** | A mail app opens, composing to `flashrssapp@gmail.com`. If nothing opens, the manifest `<queries>` entry for `SENDTO`/`mailto` is missing |
 | Airplane mode, then tap each | No crash. The URL or the address is shown in the banner, so both stay reachable by hand |
 | Repeat in all four other locales | Both labels are localised, with no missing-key placeholder |
+
+---
+
+## 35. OPML Import and Export
+
+Settings → OPML, beside the local backup file buttons.
+
+The rule this section exists to protect is **merge, never replace**. Backup
+restore wipes and re-inserts; an OPML import must only ever add. If any step
+below leaves the tester with fewer feeds than they started with, stop.
+
+| Step | Expected |
+|------|----------|
+| Settings → scroll to **OPML** | Section sits between Local backup file and About, with **Export OPML** and **Import OPML**, and the line "Importing adds to your feeds, it never replaces them." |
+| **Export OPML** with feeds present | The system save dialog opens proposing `flash_feeds_YYYYMMDD.opml`. Saving shows the success banner |
+| **Export OPML** with no feeds at all | Banner: "There are no feeds to export yet." No file dialog, no empty file written |
+| Cancel the save dialog | No banner. A cancel is a deliberate act, not a failure |
+| Open the exported file in a text editor | OPML 2.0, one outline per category in Categories order, each feed carrying `type="rss" text title xmlUrl`, and `htmlUrl` where the feed has a site URL |
+| **Import OPML** → pick the file you just exported | Banner: "Imported 0 feeds into 0 folders, N skipped". **Nothing duplicates** and no second copy of any category appears |
+| Import an OPML with one new feed in a new folder | Banner counts 1 feed and 1 folder. The category appears on the Categories screen, and the Flash tab shows its articles on return — no manual refresh |
+| Before importing, rename a category to lower case with spaces around it, then import a file using the normal spelling | The existing category is **reused** and keeps **your** spelling. No second folder |
+| Move a feed into a category of your own, then re-import a file containing it | The feed **stays where you put it**, under the name you gave it. Counted as skipped |
+| Import a file with three levels of nesting | Every feed lands in a category named after its **top-level** outline. Flash has one folder level; deeper nesting flattens rather than being dropped |
+| Import a file with feeds at the root and no folders | They land in a category called **Imported** (localised) |
+| Import a file containing `feed://` or `ftp://` URLs | Those are skipped. Only `http` and `https` feeds are added — anything else could never fetch |
+| Import a `.txt`, a photo, or a malformed XML file | Banner: "That file is not a valid OPML file. Nothing was changed." Verify the feed count is **unchanged** |
+| Import the same file twice in a row | The second import reports 0 added and everything skipped |
+| Round trip: export, delete a category, import the export | The deleted category and its feeds come back. Categories you kept are untouched |
+| Repeat the section in German, Spanish, French and Italian | Section header, both buttons, the subtitle, the banner and the **Imported** folder name are localised, with no missing-key placeholder |
+
+**Known limitation, not a bug:** an *empty* category is not recreated by a
+round trip. Import is feed-driven — a category exists because a feed lands in
+it — so a category with no feeds has nothing to bring it back.

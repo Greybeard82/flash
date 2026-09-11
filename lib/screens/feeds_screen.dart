@@ -7,6 +7,7 @@ import '../models/feed.dart';
 import '../models/folder.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
+import '../services/feeds_changed_notifier.dart';
 import '../services/section_actions_controller.dart';
 import '../services/favicon_service.dart';
 import '../services/feedly_service.dart';
@@ -48,6 +49,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
 
   @override
   void dispose() {
+    FeedsChangedNotifier.instance.removeListener(_onFeedsChangedElsewhere);
     _autoScrollTimer?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -56,15 +58,39 @@ class _FeedsScreenState extends State<FeedsScreen> {
   @override
   void initState() {
     super.initState();
+    // Settings is a pushed route, not a tab, so an OPML import or a backup
+    // restore can rewrite the library while this screen sits underneath it
+    // with no visibility transition coming to tell it. Without this listener
+    // the imported category was in the database and invisible until the app
+    // was restarted.
+    FeedsChangedNotifier.instance.addListener(_onFeedsChangedElsewhere);
     _load();
   }
 
-  Future<void> _load() async {
+  /// Something wrote feeds or folders somewhere else. Re-query.
+  ///
+  /// Deliberately does *not* [FeedsChangedNotifier.consume] the pending
+  /// change: that belongs to the Flash tab, which uses it to decide whether to
+  /// fetch. Swallowing it here would leave the newly imported feeds with no
+  /// articles.
+  void _onFeedsChangedElsewhere() {
+    if (mounted) unawaited(_load(showSpinner: false));
+  }
+
+  /// Re-queries folders, feeds and unread counts.
+  ///
+  /// [showSpinner] swaps the list for a centred spinner while the query runs,
+  /// which is right when the user has just asked for something and is waiting.
+  /// It is wrong for [_onFeedsChangedElsewhere], which fires after writes this
+  /// screen has *already* applied optimistically — a drag-reorder, a delete, a
+  /// rename. Flashing a spinner over a list the user just rearranged, 300ms
+  /// after they let go, looks like the app undoing their work.
+  Future<void> _load({bool showSpinner = true}) async {
     // _load is the completion callback for the add-feed, edit-feed and folder
     // sheets, each of which awaits network and DB work first — so this can
     // fire after the user has already left the tab.
     if (!mounted) return;
-    setState(() => _loading = true);
+    if (showSpinner) setState(() => _loading = true);
     final feeds = await _feedRepo.getAll();
     final folders = await _folderRepo.getAll();
     final counts = await _feedRepo.getUnreadCounts();

@@ -81,4 +81,74 @@ void main() {
     FeedsChangedNotifier.instance.feedAdded();
     expect(notifier.pending, FeedsChange.needsFetch);
   });
+
+  // ── Broadcasting to screens already showing the structure ────────────────
+  //
+  // The regression: Settings is a pushed route, not a tab. An OPML import with
+  // Categories underneath it wrote the folder and told nobody, because the
+  // only mechanism was a queued change that FeedsScreen has no visibility
+  // transition to consume. The folder existed and was invisible until the app
+  // was restarted.
+
+  test('a change notifies listeners', () async {
+    var notified = 0;
+    void listener() => notified++;
+    notifier.addListener(listener);
+    addTearDown(() => notifier.removeListener(listener));
+
+    notifier.feedAdded();
+    expect(notified, 0, reason: 'the notification is debounced, not immediate');
+
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(notified, 1);
+  });
+
+  test('a burst of writes collapses to one notification', () async {
+    // Importing fifty feeds is fifty inserts. A reload each would re-query the
+    // whole Categories screen fifty times.
+    var notified = 0;
+    void listener() => notified++;
+    notifier.addListener(listener);
+    addTearDown(() => notifier.removeListener(listener));
+
+    for (var i = 0; i < 50; i++) {
+      notifier.feedAdded();
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    expect(notified, 1);
+  });
+
+  test('listening does not consume the pending change', () async {
+    // The whole point. FeedsScreen re-queries on the broadcast; the Flash tab
+    // still needs the queued change to know it must fetch. If the listener
+    // swallowed it, the imported feeds would sit there with no articles.
+    var notified = 0;
+    void listener() => notified++;
+    notifier.addListener(listener);
+    addTearDown(() => notifier.removeListener(listener));
+
+    notifier.feedAdded();
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(notified, 1);
+    expect(notifier.consume(), FeedsChange.needsFetch,
+        reason: 'the broadcast must leave the record intact');
+  });
+
+  test('reset cancels a pending notification', () async {
+    // app.dart calls reset() on the with-pack onboarding path, where the fetch
+    // is already handled by FeedScreen mounting fresh. A notification arriving
+    // afterwards would be a reload nobody asked for.
+    var notified = 0;
+    void listener() => notified++;
+    notifier.addListener(listener);
+    addTearDown(() => notifier.removeListener(listener));
+
+    notifier.feedAdded();
+    notifier.reset();
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+
+    expect(notified, 0);
+    expect(notifier.isDirty, isFalse);
+  });
 }

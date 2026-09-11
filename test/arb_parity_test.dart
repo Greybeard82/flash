@@ -37,6 +37,9 @@ const Map<String, List<String>> _sameAsEnglishIsFine = {
   // "Deportes", so none of those are listed.)
   'starterCategoryTech': ['fr'],
   'starterCategorySports': ['fr'],
+  // The name of a file format. "OPML" is the same four letters everywhere —
+  // translating it would name a thing that does not exist.
+  'opml': ['de', 'es', 'fr', 'it'],
 };
 
 Map<String, String> _load(String locale) {

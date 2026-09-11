@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
 /// What kind of structural change happened to the feed or folder set.
 enum FeedsChange {
   /// Feeds removed, moved between categories or reordered; categories
@@ -29,19 +33,44 @@ enum FeedsChange {
 ///    One choke point, so OPML import, backup restore and onboarding are
 ///    covered for free instead of being three more call sites to remember.
 ///
-/// 2. **Records rather than broadcasts.** Unlike `ReadStateNotifier` this is
-///    not a `ChangeNotifier`, because the article list cannot be on screen
-///    when this fires — every writer lives on another tab. Queueing the
-///    change and consuming it on the next visibility transition means adding
-///    six feeds costs one fetch instead of six, and the fetch happens when
-///    the user arrives at the Flash tab rather than while they are still
-///    working in Categories.
-class FeedsChangedNotifier {
+/// 2. **Records *and* broadcasts, which are two different jobs.**
+///
+///    The *record* is for the article list. `FeedScreen` cannot be on screen
+///    when a write happens on another tab, so the change is queued and
+///    [consume]d on the next visibility transition: adding six feeds costs one
+///    fetch instead of six, and the fetch happens when the user arrives at the
+///    Flash tab rather than while they are still working in Categories. That
+///    is what [consume] is for, and it must stay single-consumer — a second
+///    consumer would swallow the change and the new feeds would arrive empty.
+///
+///    The *broadcast* is for screens that are already showing the structure
+///    and have no visibility transition coming. This used to be nothing, on
+///    the reasoning that "every writer lives on another tab" — which stopped
+///    being true once Settings could write. Settings is a pushed route, not a
+///    tab: with Categories underneath it, an OPML import (or a backup restore,
+///    which had the same bug and gets the fix for free) changed the database
+///    under a `FeedsScreen` that had loaded once in `initState` and was never
+///    told to look again. The folder was there; you had to restart the app to
+///    see it.
+///
+///    [notifyListeners] is debounced rather than fired per write, because the
+///    writes come from a loop: importing fifty feeds is fifty inserts, and a
+///    reload each would re-query the whole Categories screen fifty times.
+class FeedsChangedNotifier extends ChangeNotifier {
   static final FeedsChangedNotifier instance = FeedsChangedNotifier._();
 
   FeedsChangedNotifier._();
 
   FeedsChange? _pending;
+
+  /// Coalesces a burst of writes into one notification.
+  ///
+  /// A [Timer] rather than a microtask: the inserts are awaited one after
+  /// another with real database I/O between them, so every microtask queue
+  /// drains long before the next insert lands and nothing would ever be
+  /// merged. 300ms comfortably spans a bulk import without being noticeable
+  /// after a single add.
+  Timer? _notifyDebounce;
 
   /// The strongest change queued since the last [consume], or null.
   FeedsChange? get pending => _pending;
@@ -60,6 +89,9 @@ class FeedsChangedNotifier {
   /// pending change and the new feed would arrive empty.
   void _record(FeedsChange change) {
     if (_pending != FeedsChange.needsFetch) _pending = change;
+    _notifyDebounce?.cancel();
+    _notifyDebounce =
+        Timer(const Duration(milliseconds: 300), notifyListeners);
   }
 
   /// Takes the pending change and clears it. Null if there was none.
@@ -70,5 +102,9 @@ class FeedsChangedNotifier {
   }
 
   /// Test seam.
-  void reset() => _pending = null;
+  void reset() {
+    _pending = null;
+    _notifyDebounce?.cancel();
+    _notifyDebounce = null;
+  }
 }

@@ -258,5 +258,21 @@
   "contactSupport": "Contacto y soporte",
   "@contactSupport": { "description": "Settings > About row opening the hosted support page. Google Play requires contact details reachable in-app." },
   "emailUs": "Escríbenos",
-  "@emailUs": { "description": "Settings > About row launching a mailto: to the support address." }
+  "@emailUs": { "description": "Settings > About row launching a mailto: to the support address." },
+  "opml": "OPML",
+  "@opml": { "description": "Settings section header for OPML import/export, beside the local backup file section." },
+  "opmlSubtitle": "Lleva tus fuentes a otro lector o tráelas desde él. La importación añade fuentes, nunca las sustituye.",
+  "@opmlSubtitle": { "description": "Explains that OPML moves feeds between readers and that import merges rather than replaces." },
+  "importOpml": "Importar OPML",
+  "@importOpml": { "description": "Button opening the file picker to import an OPML file." },
+  "exportOpml": "Exportar OPML",
+  "@exportOpml": { "description": "Button saving the library as an OPML file." },
+  "opmlImportedBanner": "{feeds} fuentes importadas en {folders} categorías, {skipped} omitidas",
+  "@opmlImportedBanner": {"description": "Banner after a successful OPML import. feeds/folders are what was added, skipped is what was already subscribed.", "placeholders": {"feeds": {"type": "int"}, "folders": {"type": "int"}, "skipped": {"type": "int"}}},
+  "opmlImportFailed": "Ese archivo no es un archivo OPML válido. No se ha cambiado nada.",
+  "@opmlImportFailed": { "description": "Banner shown when the chosen file is not a usable OPML document. Nothing was changed." },
+  "opmlImportedFolderName": "Importadas",
+  "@opmlImportedFolderName": { "description": "Folder name given to feeds that sit at the root of an OPML file with no parent outline." },
+  "opmlExportEmpty": "Aún no hay fuentes que exportar.",
+  "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." }
 }

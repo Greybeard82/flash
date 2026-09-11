@@ -3,6 +3,7 @@ import '../models/feed.dart';
 import '../models/folder.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
+import '../utils/folder_matching.dart';
 import 'favicon_service.dart';
 
 /// What one seeding run actually did.
@@ -82,10 +83,9 @@ class StarterPackService {
 
       // Reuse before create. Someone who already keeps a "world news"
       // category should get the feeds put in it, not a second one beside it
-      // with different capitalisation.
-      final key = name.trim().toLowerCase();
-      var folder = _firstWhereOrNull(
-          existingFolders, (f) => f.name.trim().toLowerCase() == key);
+      // with different capitalisation. The rule itself lives in
+      // folder_matching.dart because OPML import needs exactly the same one.
+      var folder = findFolderByName(existingFolders, name);
 
       if (folder == null) {
         final now = DateTime.now().millisecondsSinceEpoch;
@@ -155,13 +155,5 @@ class StarterPackService {
         // Best effort, by design.
       }
     }
-  }
-
-  /// `firstWhereOrNull` without taking a dependency on `collection` for it.
-  static T? _firstWhereOrNull<T>(List<T> items, bool Function(T) test) {
-    for (final item in items) {
-      if (test(item)) return item;
-    }
-    return null;
   }
 }
