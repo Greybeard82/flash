@@ -808,4 +808,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Il n’y a pas encore de flux à exporter.';
+
+  @override
+  String get swapSides => 'Inverser les côtés';
 }

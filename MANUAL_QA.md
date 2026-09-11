@@ -692,3 +692,42 @@ below leaves the tester with fewer feeds than they started with, stop.
 **Known limitation, not a bug:** an *empty* category is not recreated by a
 round trip. Import is feed-driven — a category exists because a feed lands in
 it — so a category with no feeds has nothing to bring it back.
+
+---
+
+## 36. Swap sides (tablets)
+
+Tablets only. Phones have no navigation bar to move, and TV never swaps.
+Run every row **twice**: once normal, once swapped.
+
+Two tiers, and they behave differently enough to be worth doing both:
+
+| Tier | Width | Normal | Swapped |
+|------|-------|--------|---------|
+| Three-column | ≥840dp (M11 landscape) | bar, feed, web view | web view, feed, bar |
+| Rail | 600–839dp (M11 portrait) | rail, content | content, rail |
+
+| Step | Expected |
+|------|----------|
+| Find the button | **Swap sides** — a ↔ icon with its label under it — pinned to the **bottom** of the bar, below the entries. Scrolling the bar does not move it |
+| Tap it | The columns **slide** to their new positions in about a fifth of a second. The bar ends flush against the opposite screen edge |
+| Look at the chrome | The thin column rule is still between the bar and the content, on whichever side the bar is. Nav entries and section actions are still top-aligned |
+| **The one that matters:** scroll the feed halfway, open an article, scroll inside the page, then tap Swap sides twice | The feed is still where you scrolled it, the article is still open, and the page has **not** reloaded or jumped to the top. If anything resets, the shell is remounting — stop and report it |
+| Drag the divider right, normal | The article list gets **wider** |
+| Drag the divider right, swapped | The article list gets **narrower**. The handle must follow the finger, not run from it |
+| Drag the divider, then swap | The width you dragged to survives the swap |
+| Double-tap the divider | Back to the automatic split, in both states |
+| Force-stop Flash, relaunch | It comes back on the side you left it, with **no** slide on launch — that would be the app animating a state it was already in |
+| Rotate the tablet while swapped (portrait ↔ landscape) | Still swapped, across the tier change |
+| Visit Flash, Categories, Bookmarks and Alerts swapped | All four work. Section actions fire. Quick Settings and the Filter bubble open **fully on screen** and anchored to their buttons, not clipped by the edge the bar moved away from |
+| Back, swapped | Closes an open article first, then returns to Flash, then exits — unchanged by the swap |
+| Look at the bar's edges | Bar content is not under the status bar, the gesture bar or a display cutout, on **either** side |
+| Large tablet, swapped | The bar is flush to the right edge and the content group stays centred. No wide gutter beside the bar — that was the original sidebar bug, and mirroring is where it would come back |
+| German, at 1.3× font scale (emulator) | "Seiten tauschen" fits or wraps to two lines and ellipsises cleanly. No overflow stripes, and the bar does not get wider because of the label |
+| Turn animations off (emulator: animator duration scale 0) | The swap is **instant**, not a 220ms slide |
+| Fresh install, before finishing onboarding | No bar and no Swap sides button. After **Start reading**, both appear |
+| Android TV | No Swap sides button at all. A TV has no way to put the layout back, so it is never offered |
+
+**Emulator only** for anything that changes a device setting — font scale,
+locale, animator scale, `wm size`. Never on the M11, the M51 or the Pixel; see
+`CLAUDE.md`.

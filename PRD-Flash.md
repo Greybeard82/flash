@@ -601,6 +601,31 @@ text is scaled up 1.4× for couch legibility; the article card also drops its
 swipe and long-press gestures there, since there is no touchscreen — D-pad OK
 opens the article, and share/bookmark remain reachable inside the summary sheet.
 
+**Swap sides.** Tablets can mirror the whole layout, putting the navigation bar
+on the right and the reading pane on the left. It is a pure mirror: the column
+order reverses and nothing inside a column changes — same widths, same
+top-aligned entries, same card swipe directions. Both wide tiers support it:
+three-column becomes web view / feed / bar, and the rail tier becomes content /
+rail.
+
+The control is a **Swap sides** button pinned to the bottom of the bar itself,
+below the scrollable entries, and it follows the bar to whichever side it is on.
+It is deliberately not in Settings: handedness is a choice you make by looking
+at the thing it moves, and it is cheap and instantly reversible. The columns
+slide to their new positions over the app's page-transition duration (220ms,
+`kPageTransitionDuration`), or jump instantly when the platform has animations
+turned off.
+
+Two details are load-bearing. Swapping must not remount the screens — the shell
+lays its children out by position rather than by order, so the feed keeps its
+scroll position and an open article stays open and unreloaded. And when the
+layout is mirrored the divider drag inverts, because the article list is then to
+the right of the reading pane and dragging right has to narrow it.
+
+The side is persisted under `layout_swapped`; a missing key means not swapped, so
+nothing migrates. Phones have no bar to swap, and TV is never swapped — there is
+no button there to put it back.
+
 ---
 
 ## 7. Settings
@@ -627,6 +652,7 @@ Settings live in three places. The **Settings screen** keeps what is configured 
 | Contact & support | — | Settings screen (About) | Opens the hosted support page |
 | Email us | — | Settings screen (About) | Launches `mailto:` to the support address |
 | OPML | — | Settings screen | Import (merges), Export |
+| Swap sides | Not swapped | **The tablet bar itself**, not Settings | Mirrors the column order; persisted across launches. Absent on phones and TV |
 
 The Filter bubble's four controls are staged behind an **Apply** button rather than written on release: dragging a slider is exploratory, and persisting each intermediate value re-queried the feed several times on the way to the one the user actually wanted. Apply is disabled until something differs, so it doubles as an indicator of whether anything is pending.
 
@@ -700,6 +726,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Configurable end-of-feed auto mark-as-read (off, immediate, or 5–30s)
 - Animated read-state dim (~180ms) on card text, thumbnail and favicon
 - Wide-layout `NavigationRail` at ≥600dp and full Android TV support (extended rail, 1.4× text, D-pad-only interaction)
+- Swap sides on tablets — mirrors both wide tiers from a button in the bar, animated, persisted, and without remounting the screens
 - Theme correctness: System mode tracks the live OS theme across cold start, resume and foreground changes; the native window background follows the *app's* theme rather than the OS, so a dark app on a light system no longer flashes white
 - Faster Material motion: 220ms page transitions on all theme variants (subclassing `PredictiveBackPageTransitionsBuilder`, so predictive back is retained), 150ms swipe snap-back
 - Scroll-driven FAB fade, plus Filter and Quick Settings bubble panels anchored to the buttons that open them

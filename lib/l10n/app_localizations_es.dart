@@ -805,4 +805,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Aún no hay fuentes que exportar.';
+
+  @override
+  String get swapSides => 'Cambiar de lado';
 }

@@ -1441,6 +1441,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'There are no feeds to export yet.'**
   String get opmlExportEmpty;
+
+  /// Label under the Swap sides button in the tablet navigation bar. Mirrors the column order for right-handed use.
+  ///
+  /// In en, this message translates to:
+  /// **'Swap sides'**
+  String get swapSides;
 }
 
 class _AppLocalizationsDelegate

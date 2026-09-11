@@ -268,10 +268,19 @@ class _SectionsColumn extends StatelessWidget {
   final ValueChanged<int> onSelected;
   final int alertsCount;
 
+  /// Which screen edge the bar is pinned to. Only the safe-area inset cares:
+  /// the contents of the column are identical either way.
+  final bool swapped;
+
+  /// Mirrors the layout. Null on TV, which has no way to put it back.
+  final VoidCallback? onSwapSides;
+
   const _SectionsColumn({
     required this.currentIndex,
     required this.onSelected,
     required this.alertsCount,
+    required this.swapped,
+    required this.onSwapSides,
   });
 
   @override
@@ -323,28 +332,42 @@ class _SectionsColumn extends StatelessWidget {
             : Icons.notifications_none_rounded);
 
     return SafeArea(
-      right: false,
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 8),
-            entry(0, const FlashBolt(), l10n.appTitle),
-            entry(
-                1,
-                Icon(currentIndex == 1
-                    ? Icons.rss_feed_rounded
-                    : Icons.rss_feed_outlined),
-                l10n.categories),
-            entry(
-                2,
-                Icon(currentIndex == 2
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded),
-                l10n.bookmarks),
-            entry(kAlertsNavIndex, alertsIcon, l10n.alertsTab),
-            const SectionActionsList(),
-          ],
-        ),
+      // Pad the edge the bar is actually against. A hardcoded `right: false`
+      // was right for as long as the bar could only be on the left; mirrored,
+      // it would put the icons under a cutout.
+      left: !swapped,
+      right: swapped,
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 8),
+                  entry(0, const FlashBolt(), l10n.appTitle),
+                  entry(
+                      1,
+                      Icon(currentIndex == 1
+                          ? Icons.rss_feed_rounded
+                          : Icons.rss_feed_outlined),
+                      l10n.categories),
+                  entry(
+                      2,
+                      Icon(currentIndex == 2
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded),
+                      l10n.bookmarks),
+                  entry(kAlertsNavIndex, alertsIcon, l10n.alertsTab),
+                  const SectionActionsList(),
+                ],
+              ),
+            ),
+          ),
+          // Pinned below the scrollable entries rather than part of them.
+          // Everything above leads somewhere; this one moves the bar itself,
+          // and a short window must not be able to scroll it out of reach.
+          if (onSwapSides != null) _SwapSidesButton(onPressed: onSwapSides!),
+        ],
       ),
     );
   }
@@ -429,6 +452,92 @@ class SectionActionsList extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// Mirrors the tablet layout, from the bar it moves.
+///
+/// Deliberately not in Settings. This is a handedness choice — which thumb
+/// reaches the navigation — and the only way to know whether you want it is
+/// to look at the thing it moves while you move it. It is also cheap and
+/// reversible, which is the test for whether a control belongs on the surface
+/// it affects rather than two screens away from it.
+///
+/// Styled as one more entry in the column above it, because that is what it
+/// reads as; the divider is the only thing saying it is a different kind of
+/// entry, the same way [SectionActionsList] separates itself from the
+/// destinations.
+class _SwapSidesButton extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  /// Rail tiers get less vertical room per entry, as in [SectionActionsList].
+  final bool compact;
+
+  const _SwapSidesButton({required this.onPressed, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final colour = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+
+    Widget button = Tooltip(
+      message: l10n.swapSides,
+      child: InkWell(
+        onTap: onPressed,
+        child: ConstrainedBox(
+          // A 24dp icon and an 11sp label already clear this; stated anyway,
+          // because the thing that would quietly break it is a future edit
+          // dropping the label, and nobody would notice the target shrinking.
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Padding(
+            padding:
+                EdgeInsets.symmetric(vertical: compact ? 8 : 12, horizontal: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.swap_horiz_rounded, size: 24, color: colour),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.swapSides,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: colour, height: 1.15),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (compact) {
+      // The three-column bar is a fixed 72dp, so its label is constrained by
+      // the column. A rail is not: Flutter sizes it to its widest child, so
+      // without this the German label — "Seiten tauschen", longer than every
+      // destination — would be the thing deciding how wide the rail is.
+      button = ConstrainedBox(
+        constraints: BoxConstraints(
+            maxWidth: NavigationRailTheme.of(context).minWidth ?? 80),
+        child: button,
+      );
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Divider(
+          height: compact ? 12 : 20,
+          indent: 12,
+          endIndent: 12,
+          color: theme.dividerColor,
+        ),
+        button,
+      ],
     );
   }
 }
@@ -573,6 +682,132 @@ double maxDraggableMiddleWidth(double available) =>
   return (middle: middle, detail: available - middle);
 }
 
+/// Where one piece of the tablet shell sits: its left edge, and how wide it is.
+typedef ShellSlot = ({double left, double width});
+
+/// The five pieces of the three-column layout, named for what they are rather
+/// than ordered by where they appear — which side each ends up on is exactly
+/// what [threeColumnSlots]' `swapped` decides.
+typedef ThreeColumnSlots = ({
+  ShellSlot bar,
+  ShellSlot rule,
+  ShellSlot content,
+  ShellSlot divider,
+  ShellSlot detail,
+});
+
+/// The three pieces of the rail layout.
+typedef RailSlots = ({ShellSlot bar, ShellSlot rule, ShellSlot content});
+
+/// Reflects a slot about the middle of a shell [total] wide.
+///
+/// This line is the entire definition of "swap sides", and keeping it to one
+/// line is the point: the mirrored layout is never computed a second way, so
+/// it cannot disagree with the normal one about a width, a gap, or which rule
+/// belongs to which column. Only the reflection can be wrong, and it is
+/// wrong or right for all five pieces at once.
+double mirrorLeft(double left, double width, double total) =>
+    total - left - width;
+
+/// Where the three-column layout's pieces go, given the column widths
+/// [resolvedColumnWidths] chose.
+///
+/// The bar is pinned to a screen edge, *outside* the centred group — the same
+/// arrangement the Row had and for the same reason: on a wide tablet the
+/// leftover width belongs beside the content, not between the navigation and
+/// the edge of the display. Mirroring moves the bar to the other edge and
+/// takes the margin with it, rather than trapping it behind the bar.
+ThreeColumnSlots threeColumnSlots({
+  required double total,
+  required double middleWidth,
+  required double detailWidth,
+  required bool swapped,
+}) {
+  const ruleWidth = 1.0;
+  const regionStart = kSectionsColumnWidth + ruleWidth;
+
+  // What Center used to do: the two columns and their handle sit in the
+  // middle of whatever is left beside the bar. A dragged divider makes the
+  // group exactly as wide as that space, so the gutter goes to zero and the
+  // composition fills the display — which is why the bar appeared to snap
+  // flush on first interaction before it was moved out of the group.
+  final group = middleWidth + kResizeHandleWidth + detailWidth;
+  final gutter = math.max(0.0, (total - regionStart - group) / 2);
+
+  final contentLeft = regionStart + gutter;
+  final dividerLeft = contentLeft + middleWidth;
+
+  ShellSlot at(double left, double width) => (
+        left: swapped ? mirrorLeft(left, width, total) : left,
+        width: width,
+      );
+
+  return (
+    bar: at(0, kSectionsColumnWidth),
+    rule: at(kSectionsColumnWidth, ruleWidth),
+    content: at(contentLeft, middleWidth),
+    divider: at(dividerLeft, kResizeHandleWidth),
+    detail: at(dividerLeft + kResizeHandleWidth, detailWidth),
+  );
+}
+
+/// Where the rail layout's pieces go.
+///
+/// [barWidth] is measured rather than assumed. A [NavigationRail] sizes
+/// itself to its widest child, and this app puts the section actions in its
+/// `trailing` slot — those are phrases where the destinations are single
+/// words, so the rail is not the 80dp Flutter's default suggests.
+RailSlots railSlots({
+  required double total,
+  required double barWidth,
+  required bool swapped,
+}) {
+  const ruleWidth = 1.0;
+
+  // A rail is as wide as its widest label, and labels grow with the locale
+  // and the font scale. Nothing guarantees one fits, and a content column of
+  // negative width is not a cramped layout, it is a crash.
+  final bar = math.min(barWidth, total);
+  final content = math.max(0.0, total - bar - ruleWidth);
+
+  ShellSlot at(double left, double width) => (
+        left: swapped ? mirrorLeft(left, width, total) : left,
+        width: width,
+      );
+
+  return (
+    bar: at(0, bar),
+    rule: at(bar, ruleWidth),
+    content: at(bar + ruleWidth, content),
+  );
+}
+
+/// The constraints the navigation bar is measured under.
+///
+/// **The width is unbounded, and it has to be.** [NavigationRail] aligns its
+/// destinations with an [Align], and an Align with no size factor fills its
+/// constraints whenever they are bounded — so handing the rail a bounded
+/// maxWidth makes it as wide as whatever it is given. At the 600dp rail
+/// boundary that meant the rail took the entire display and the content column
+/// was left with nothing: four labels centred on an empty screen.
+///
+/// Unbounded is also simply what the [Row] this replaced did. A Row lays its
+/// non-flexible children out with an infinite main-axis constraint, which is
+/// why the rail shrink-wrapped there. Reproducing that exactly is the whole
+/// requirement: swapping sides must not change how anything is sized.
+BoxConstraints barMeasurementConstraints(double height) =>
+    BoxConstraints(minHeight: height, maxHeight: height);
+
+/// How far a horizontal drag on the divider moves the article list's edge.
+///
+/// Swapped, the list sits to the *right* of the reading pane, so the same
+/// gesture has to mean the opposite thing: drag right and the list gives up
+/// width instead of gaining it. Without this the handle runs away from the
+/// finger — the kind of bug that is obvious the instant anyone touches it and
+/// invisible in any amount of reading.
+double dividerDragDelta(double dx, {required bool swapped}) =>
+    swapped ? -dx : dx;
+
 /// A column rule that stops below the status bar.
 ///
 /// The app draws edge-to-edge, which is the current platform guidance and
@@ -661,7 +896,180 @@ class _ResizableDivider extends StatelessWidget {
   }
 }
 
-class _AppShellState extends State<_AppShell> {
+/// Which piece of the shell a laid-out child is.
+///
+/// The rail tier uses three of these and the three-column tier all five; the
+/// names are the same in both so the two delegates read as the same idea at
+/// two sizes.
+enum _Shell { bar, rule, content, divider, detail }
+
+/// Lays the three-column shell out by position instead of by order.
+///
+/// This is the whole reason the layout is not a [Row]. Swapping sides by
+/// reordering a Row's children would hand every column a new slot in the
+/// child list, and Flutter matches elements to children by position — so the
+/// article list would be offered the reading pane's element, both would be
+/// discarded, and the feed would silently reload, lose its scroll position
+/// and drop whatever article was open. The children below never change
+/// order. Only where they are put changes.
+///
+/// It is also what makes the slide cost nothing: [MultiChildLayoutDelegate]'s
+/// `relayout` hook re-runs layout on every tick of the animation without
+/// rebuilding a single widget.
+class _ThreeColumnShellLayout extends MultiChildLayoutDelegate {
+  _ThreeColumnShellLayout({
+    required this.swapProgress,
+    required this.middleWidth,
+    required this.detailWidth,
+  }) : super(relayout: swapProgress);
+
+  /// 0 is the normal order, 1 is mirrored, and everything between is the
+  /// columns on their way across.
+  final Animation<double> swapProgress;
+  final double middleWidth;
+  final double detailWidth;
+
+  @override
+  void performLayout(Size size) {
+    final normal = threeColumnSlots(
+      total: size.width,
+      middleWidth: middleWidth,
+      detailWidth: detailWidth,
+      swapped: false,
+    );
+    final mirrored = threeColumnSlots(
+      total: size.width,
+      middleWidth: middleWidth,
+      detailWidth: detailWidth,
+      swapped: true,
+    );
+    final t = swapProgress.value;
+
+    void place(_Shell id, ShellSlot from, ShellSlot to) {
+      layoutChild(id, BoxConstraints.tight(Size(from.width, size.height)));
+      positionChild(id, Offset(from.left + (to.left - from.left) * t, 0));
+    }
+
+    place(_Shell.bar, normal.bar, mirrored.bar);
+    place(_Shell.rule, normal.rule, mirrored.rule);
+    place(_Shell.content, normal.content, mirrored.content);
+    place(_Shell.divider, normal.divider, mirrored.divider);
+    place(_Shell.detail, normal.detail, mirrored.detail);
+  }
+
+  @override
+  bool shouldRelayout(_ThreeColumnShellLayout old) =>
+      old.middleWidth != middleWidth ||
+      old.detailWidth != detailWidth ||
+      old.swapProgress != swapProgress;
+}
+
+/// The same idea one tier down, where the bar is a [NavigationRail].
+///
+/// The rail is measured rather than told a width: it sizes itself to its
+/// widest child, and this app puts the section actions in its `trailing`
+/// slot, so it is not the 80dp a bare rail would be.
+class _RailShellLayout extends MultiChildLayoutDelegate {
+  _RailShellLayout({required this.swapProgress})
+      : super(relayout: swapProgress);
+
+  final Animation<double> swapProgress;
+
+  @override
+  void performLayout(Size size) {
+    // The rail is measured, not told — and measured unbounded. See
+    // barMeasurementConstraints: a bounded width makes the rail fill it.
+    final bar = layoutChild(
+      _Shell.bar,
+      barMeasurementConstraints(size.height),
+    );
+
+    final normal =
+        railSlots(total: size.width, barWidth: bar.width, swapped: false);
+    final mirrored =
+        railSlots(total: size.width, barWidth: bar.width, swapped: true);
+    final t = swapProgress.value;
+
+    double slide(ShellSlot from, ShellSlot to) =>
+        from.left + (to.left - from.left) * t;
+
+    positionChild(_Shell.bar, Offset(slide(normal.bar, mirrored.bar), 0));
+
+    void place(_Shell id, ShellSlot from, ShellSlot to) {
+      layoutChild(id, BoxConstraints.tight(Size(from.width, size.height)));
+      positionChild(id, Offset(slide(from, to), 0));
+    }
+
+    place(_Shell.rule, normal.rule, mirrored.rule);
+    place(_Shell.content, normal.content, mirrored.content);
+  }
+
+  @override
+  bool shouldRelayout(_RailShellLayout old) =>
+      old.swapProgress != swapProgress;
+}
+
+/// The rail and the button under it, inset from whichever edge they are
+/// pinned to.
+///
+/// [NavigationRail] applies `SafeArea(left: true, right: false)` of its own,
+/// which is exactly right flush left and exactly wrong flush right — mirrored,
+/// its icons would sit under a display cutout. So the [MediaQuery] below hands
+/// it only the top inset, which is the one it should still handle itself, and
+/// the horizontal and bottom insets are applied out here where the Swap sides
+/// button is also in scope. The [ColoredBox] keeps the rail's background
+/// running under the inset and behind the button, which the internal SafeArea
+/// did for free by sitting inside the rail's own [Material].
+class _RailColumn extends StatelessWidget {
+  final bool swapped;
+  final Widget rail;
+
+  /// Null on TV, and during onboarding there is no rail at all.
+  final VoidCallback? onSwapSides;
+
+  const _RailColumn({
+    required this.swapped,
+    required this.rail,
+    required this.onSwapSides,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final theme = Theme.of(context);
+    final inset = swapped ? media.padding.right : media.padding.left;
+
+    return ColoredBox(
+      color: theme.navigationRailTheme.backgroundColor ??
+          theme.colorScheme.surface,
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: swapped ? 0 : inset,
+          right: swapped ? inset : 0,
+          bottom: media.padding.bottom,
+        ),
+        child: MediaQuery(
+          data: media.copyWith(
+            padding: EdgeInsets.only(top: media.padding.top),
+          ),
+          child: Column(
+            children: [
+              Expanded(child: rail),
+              // At the bottom of the rail, not under the destinations: the
+              // rail's own `trailing` slot already holds the section actions
+              // directly beneath them, and this is not one of those.
+              if (onSwapSides != null)
+                _SwapSidesButton(compact: true, onPressed: onSwapSides!),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AppShellState extends State<_AppShell>
+    with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
   bool _onboardingComplete = true; // assume complete until checked
   int _alertsCount = 0;
@@ -680,6 +1088,21 @@ class _AppShellState extends State<_AppShell> {
   /// something worth neither yet.
   double? _manualMiddleWidth;
 
+  /// Which side the navigation bar is on.
+  ///
+  /// Persisted, where [_manualMiddleWidth] deliberately is not: a dragged
+  /// divider is a reading position and costs one gesture to re-make, but
+  /// handedness does not change between launches, and a layout that un-swaps
+  /// itself every morning would be worse than not offering the choice.
+  bool _layoutSwapped = false;
+
+  /// Drives the slide: 0 is the normal order, 1 is mirrored.
+  ///
+  /// Set outright rather than animated when the saved side is restored at
+  /// launch, and when the platform has animations turned off.
+  late final AnimationController _swapController;
+  late final CurvedAnimation _swapProgress;
+
   // Incremented each time the Feed tab is tapped while already on Feed —
   // triggers a reload via didUpdateWidget without remounting FeedScreen.
   int _feedRefreshTrigger = 0;
@@ -687,7 +1110,12 @@ class _AppShellState extends State<_AppShell> {
   @override
   void initState() {
     super.initState();
+    _swapController =
+        AnimationController(vsync: this, duration: kPageTransitionDuration);
+    _swapProgress =
+        CurvedAnimation(parent: _swapController, curve: Easing.standard);
     _checkOnboarding();
+    _restoreLayoutSide();
     AlertNavigationIntent.instance.addListener(_onAlertsRequested);
     AlertsChangedNotifier.instance.addListener(_refreshAlertsCount);
     _refreshAlertsCount();
@@ -698,6 +1126,8 @@ class _AppShellState extends State<_AppShell> {
     AlertNavigationIntent.instance.removeListener(_onAlertsRequested);
     AlertsChangedNotifier.instance.removeListener(_refreshAlertsCount);
     _detailController.dispose();
+    _swapProgress.dispose();
+    _swapController.dispose();
     super.dispose();
   }
 
@@ -725,6 +1155,41 @@ class _AppShellState extends State<_AppShell> {
   Future<void> _refreshAlertsCount() async {
     final count = await AlertMatchRepository().totalEntryCount();
     if (mounted && count != _alertsCount) setState(() => _alertsCount = count);
+  }
+
+  /// Puts the bar back where the reader left it, without animating there.
+  ///
+  /// TV is skipped rather than clamped: it has no Swap sides button, so a
+  /// true here could only have arrived from a backup taken on a tablet, and
+  /// honouring it would mirror a layout with no control to mirror back.
+  Future<void> _restoreLayoutSide() async {
+    if (FormFactor.isTV) return;
+    final swapped =
+        (await SettingsRepository().get('layout_swapped')) == 'true';
+    if (!mounted || !swapped) return;
+    setState(() => _layoutSwapped = true);
+    // Not forward(): the layout was already this way round when the app was
+    // closed, so there is nothing to show moving.
+    _swapController.value = 1;
+  }
+
+  /// Mirror the layout, and remember which way round it ended up.
+  void _toggleLayoutSide() {
+    final swapped = !_layoutSwapped;
+    setState(() => _layoutSwapped = swapped);
+
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _swapController.value = swapped ? 1 : 0;
+    } else if (swapped) {
+      _swapController.forward();
+    } else {
+      _swapController.reverse();
+    }
+
+    // Not awaited: the columns are already moving, and the write has nothing
+    // to tell them.
+    unawaited(SettingsRepository()
+        .set('layout_swapped', swapped ? 'true' : 'false'));
   }
 
   Future<void> _checkOnboarding() async {
@@ -845,6 +1310,9 @@ class _AppShellState extends State<_AppShell> {
     final useThreeColumn =
         !isTV && _onboardingComplete && width >= kThreeColumnBreakpoint;
     final useRail = !useThreeColumn && (isTV || width >= 600);
+    // TV is never mirrored. It is a d-pad UI with no Swap sides button,
+    // so a swapped layout there would be one nobody could put back.
+    final swapped = _layoutSwapped && !isTV;
 
     final railDestinations = [
       NavigationRailDestination(
@@ -873,14 +1341,11 @@ class _AppShellState extends State<_AppShell> {
     ];
 
     if (useThreeColumn) {
-      // Total the three columns and their dividers want. Past this the Row is
-      // centred rather than stretched — see kDetailPaneMaxWidth.
-      // The two columns divide whatever is left once the rail and the two
-      // dividers have taken theirs. Past their combined preferred width the
-      // sum stops growing, and Center turns the remainder into equal margins
-      // rather than stretching a web page across the whole of a large
-      // tablet.
-      // The static rule beside the rail, plus the draggable handle.
+      // What the bar, its rule and the drag handle take before the two
+      // content columns divide the rest. Past their combined preferred width
+      // the sum stops growing and the remainder becomes equal margins either
+      // side of the group — see kDetailPaneMaxWidth, and threeColumnSlots,
+      // which is where that centring now lives.
       const chrome = kSectionsColumnWidth + 1 + kResizeHandleWidth;
       final available = width - chrome;
       final columns = resolvedColumnWidths(available, _manualMiddleWidth);
@@ -890,7 +1355,8 @@ class _AppShellState extends State<_AppShell> {
       // then sits still for the first inch of the drag back.
       void dragDivider(double dx) {
         setState(() {
-          _manualMiddleWidth = ((_manualMiddleWidth ?? columns.middle) + dx)
+          _manualMiddleWidth = ((_manualMiddleWidth ?? columns.middle) +
+                  dividerDragDelta(dx, swapped: swapped))
               .clamp(kSectionColumnMinWidth, maxDraggableMiddleWidth(available))
               .toDouble();
         });
@@ -918,71 +1384,65 @@ class _AppShellState extends State<_AppShell> {
           child: ArticleDetailScope(
             controller: _detailController,
             child: Scaffold(
-              body: Row(
-                // Stretch, not the default centre: without it each column
-                // shrink-wraps to its own content height and the sections
-                // list floats in the middle of the screen instead of
-                // starting at the top.
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              // Positions, not order — see _ThreeColumnShellLayout. The bar
+              // is still pinned to a screen edge outside the centred group,
+              // which is what threeColumnSlots encodes: it used to sit inside
+              // it, which put the whole wide-screen margin to its left, and on
+              // a 1707dp tablet the composition caps at ~1385dp so the rail
+              // began 161dp in. Since the margin is the same colour as the
+              // rail, that read as one enormous gutter.
+              body: CustomMultiChildLayout(
+                delegate: _ThreeColumnShellLayout(
+                  swapProgress: _swapProgress,
+                  middleWidth: columns.middle,
+                  detailWidth: columns.detail,
+                ),
+                // This order is fixed and has to stay fixed: it is what keeps
+                // the feed, the open article and the reading pane from being
+                // torn down and rebuilt every time the sides are swapped.
+                // Painting runs content first and the bar last, so while the
+                // two cross, the bar slides over the columns rather than
+                // vanishing behind them.
                 children: [
-                  // Pinned to the screen edge, outside the centred group.
-                  //
-                  // It used to sit inside it, which put the whole wide-screen
-                  // margin to its left: on a 1707dp tablet the composition
-                  // caps at ~1385dp and centres, so the rail began 161dp in,
-                  // and since the margin is the same colour as the rail it
-                  // read as one enormous gutter. Dragging the divider switched
-                  // to the manual split, which fills the width, and the rail
-                  // snapped flush — which is why it looked like the rail
-                  // "fixed itself" on first interaction. Navigation belongs at
-                  // the edge; only the content columns want centring.
-                  SizedBox(
-                    width: kSectionsColumnWidth,
+                  LayoutId(id: _Shell.content, child: _buildScreenStack()),
+                  LayoutId(
+                    id: _Shell.divider,
+                    child: _ResizableDivider(
+                      onDrag: dragDivider,
+                      onReset: () =>
+                          setState(() => _manualMiddleWidth = null),
+                    ),
+                  ),
+                  LayoutId(
+                    id: _Shell.detail,
+                    child: AnimatedBuilder(
+                      animation: _detailController,
+                      builder: (context, _) {
+                        final article = _detailController.article;
+                        if (article == null) {
+                          return const ArticleDetailPlaceholder();
+                        }
+                        return ArticleDetailPane(
+                          article: article,
+                          onClose: _detailController.clear,
+                        );
+                      },
+                    ),
+                  ),
+                  LayoutId(
+                    id: _Shell.rule,
+                    child: const _ColumnRule(
+                        child: VerticalDivider(thickness: 1, width: 1)),
+                  ),
+                  LayoutId(
+                    id: _Shell.bar,
                     child: _SectionsColumn(
                       currentIndex: _currentIndex,
                       onSelected: _navigateTo,
                       alertsCount: _alertsCount,
-                    ),
-                  ),
-                  const _ColumnRule(
-                      child: VerticalDivider(thickness: 1, width: 1)),
-                  Expanded(
-                    child: Center(
-                      child: SizedBox(
-                        width: columns.middle +
-                            kResizeHandleWidth +
-                            columns.detail,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            SizedBox(
-                              width: columns.middle,
-                              child: _buildScreenStack(),
-                            ),
-                            _ResizableDivider(
-                              onDrag: dragDivider,
-                              onReset: () =>
-                                  setState(() => _manualMiddleWidth = null),
-                            ),
-                            SizedBox(
-                              width: columns.detail,
-                              child: AnimatedBuilder(
-                                animation: _detailController,
-                                builder: (context, _) {
-                                  final article = _detailController.article;
-                                  if (article == null) {
-                                    return const ArticleDetailPlaceholder();
-                                  }
-                                  return ArticleDetailPane(
-                                    article: article,
-                                    onClose: _detailController.clear,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      swapped: swapped,
+                      // Never TV here: useThreeColumn rules it out above.
+                      onSwapSides: _toggleLayoutSide,
                     ),
                   ),
                 ],
@@ -994,35 +1454,47 @@ class _AppShellState extends State<_AppShell> {
     }
 
     if (useRail) {
-      Widget shell = SectionActionsHost(
-        child: Scaffold(
-          body: Row(
-            children: [
-              if (_onboardingComplete) ...[
-                NavigationRail(
-                  selectedIndex: _currentIndex,
-                  onDestinationSelected: _navigateTo,
-                  extended: isTV,
-                  labelType: isTV
-                      ? NavigationRailLabelType.none
-                      : NavigationRailLabelType.all,
-                  destinations: railDestinations,
-                  // NavigationRail lays its children out in a Column and gives
-                  // `trailing` whatever height it asks for, so this has to be
-                  // a single self-sizing widget rather than something that
-                  // expects to fill the rail. Compact spacing because the
-                  // destinations above it are already taller here than in the
-                  // custom sidebar.
-                  trailing: const SectionActionsList(compact: true),
+      // Onboarding has no bar to put on either side, so the screen takes the
+      // whole width until it is done — as it always has.
+      final Widget body = _onboardingComplete
+          ? CustomMultiChildLayout(
+              delegate: _RailShellLayout(swapProgress: _swapProgress),
+              // Fixed order, for the same reason as the tier above.
+              children: [
+                LayoutId(id: _Shell.content, child: _buildScreenStack()),
+                LayoutId(
+                  id: _Shell.rule,
+                  child: const _ColumnRule(
+                      child: VerticalDivider(thickness: 1, width: 1)),
                 ),
-                const _ColumnRule(
-                    child: VerticalDivider(thickness: 1, width: 1)),
+                LayoutId(
+                  id: _Shell.bar,
+                  child: _RailColumn(
+                    swapped: swapped,
+                    onSwapSides: isTV ? null : _toggleLayoutSide,
+                    rail: NavigationRail(
+                      selectedIndex: _currentIndex,
+                      onDestinationSelected: _navigateTo,
+                      extended: isTV,
+                      labelType: isTV
+                          ? NavigationRailLabelType.none
+                          : NavigationRailLabelType.all,
+                      destinations: railDestinations,
+                      // NavigationRail lays its children out in a Column and
+                      // gives `trailing` whatever height it asks for, so this
+                      // has to be a single self-sizing widget rather than
+                      // something that expects to fill the rail. Compact
+                      // spacing because the destinations above it are already
+                      // taller here than in the custom sidebar.
+                      trailing: const SectionActionsList(compact: true),
+                    ),
+                  ),
+                ),
               ],
-              Expanded(child: _buildScreenStack()),
-            ],
-          ),
-        ),
-      );
+            )
+          : _buildScreenStack();
+
+      Widget shell = SectionActionsHost(child: Scaffold(body: body));
 
       // On TV scale text up so it's legible from the couch
       if (isTV) {

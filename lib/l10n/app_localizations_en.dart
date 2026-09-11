@@ -797,4 +797,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'There are no feeds to export yet.';
+
+  @override
+  String get swapSides => 'Swap sides';
 }

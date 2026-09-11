@@ -107,18 +107,25 @@ ColorScheme _applyAccentOverride(
 /// that isn't a back gesture. Swapping to plain FadeForwards would look
 /// identical for ordinary navigation while quietly dropping predictive-back
 /// support on Android 14+.
+/// How long the app takes to move one surface out of the way of another.
+///
+/// Stock Material is 450ms, which reads as sluggish on a device this fast.
+/// Named rather than repeated because page navigation is no longer the only
+/// thing moving at this tempo -- swapping the tablet layout's sides slides
+/// the columns for exactly as long, and two literals would drift apart.
+const Duration kPageTransitionDuration = Duration(milliseconds: 220);
+
 class _SnappyAndroidPageTransitions
     extends PredictiveBackPageTransitionsBuilder {
   const _SnappyAndroidPageTransitions();
 
-  // Stock is 450ms, which reads as sluggish on a device this fast.
   @override
-  Duration get transitionDuration => const Duration(milliseconds: 220);
+  Duration get transitionDuration => kPageTransitionDuration;
 
   // Defaults to transitionDuration on the base class, but stated explicitly
   // so a future edit can't leave back navigation at a different tempo.
   @override
-  Duration get reverseTransitionDuration => const Duration(milliseconds: 220);
+  Duration get reverseTransitionDuration => kPageTransitionDuration;
 }
 
 const PageTransitionsTheme kFlashPageTransitions = PageTransitionsTheme(

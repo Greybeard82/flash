@@ -274,5 +274,6 @@
   "opmlImportedFolderName": "Importiert",
   "@opmlImportedFolderName": { "description": "Folder name given to feeds that sit at the root of an OPML file with no parent outline." },
   "opmlExportEmpty": "Es gibt noch keine Feeds zum Exportieren.",
-  "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." }
+  "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." },
+  "swapSides": "Seiten tauschen"
 }

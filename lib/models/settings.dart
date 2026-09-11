@@ -91,6 +91,20 @@ class AppSettings {
   /// real default.
   final bool cleanModeEnabled;
 
+  /// Whether the tablet layout is mirrored: the navigation bar on the right,
+  /// the reading pane on the left.
+  ///
+  /// Toggled from the bar itself rather than from Settings — it is a
+  /// handedness choice you make while looking at the thing it moves, and
+  /// burying it two screens away would mean leaving the layout to go and
+  /// change it. Phones have no bar to swap and TV is never swapped, so on
+  /// those this is read and ignored.
+  ///
+  /// The key is never seeded in `schema.dart`: a missing row means not
+  /// swapped, which is exactly what every existing install expects, so there
+  /// is nothing to migrate.
+  final bool layoutSwapped;
+
   /// How long AI summaries should be: `'short'`, `'standard'` or
   /// `'detailed'`.
   ///
@@ -118,6 +132,7 @@ class AppSettings {
     this.cleanModeEnabled = true,
     this.summaryLength = kSummaryLengthStandard,
     this.colorPalette = 'orange',
+    this.layoutSwapped = false,
   });
 
   factory AppSettings.fromMap(Map<String, String> map) {
@@ -149,6 +164,7 @@ class AppSettings {
               ? map['summary_length']!
               : kSummaryLengthStandard,
       colorPalette: map['color_palette'] ?? 'orange',
+      layoutSwapped: (map['layout_swapped'] ?? 'false') == 'true',
     );
   }
 
@@ -169,6 +185,7 @@ class AppSettings {
     bool? cleanModeEnabled,
     String? summaryLength,
     String? colorPalette,
+    bool? layoutSwapped,
   }) {
     return AppSettings(
       theme: theme ?? this.theme,
@@ -189,6 +206,7 @@ class AppSettings {
       cleanModeEnabled: cleanModeEnabled ?? this.cleanModeEnabled,
       summaryLength: summaryLength ?? this.summaryLength,
       colorPalette: colorPalette ?? this.colorPalette,
+      layoutSwapped: layoutSwapped ?? this.layoutSwapped,
     );
   }
 }

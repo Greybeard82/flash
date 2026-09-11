@@ -807,4 +807,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Es gibt noch keine Feeds zum Exportieren.';
+
+  @override
+  String get swapSides => 'Seiten tauschen';
 }

@@ -805,4 +805,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Non ci sono ancora feed da esportare.';
+
+  @override
+  String get swapSides => 'Inverti i lati';
 }
