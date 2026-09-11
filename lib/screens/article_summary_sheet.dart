@@ -219,6 +219,8 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
+    final attribution = _attribution(context);
+
     // useSafeArea: true on the enclosing showModalBottomSheet (radial_menu.dart)
     // already insets for the safe area, so subtracting padding.top here would
     // double-count it. 90% of the screen height keeps this reading as a sheet
@@ -281,10 +283,10 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
             // feedTitle is nullable because it arrives from a join that not
             // every query performs, so each half is omitted independently
             // rather than rendering a stray separator.
-            if (_attribution(context).isNotEmpty) ...[
+            if (attribution.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(
-                _attribution(context),
+                attribution,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(

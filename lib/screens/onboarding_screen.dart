@@ -49,26 +49,44 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final l10n = AppLocalizations.of(context)!;
     setState(() => _seeding = true);
 
-    final service = StarterPackService();
-    final result = await service.addCategories(
-      kStarterPack.map((c) => c.id).where(_selected.contains).toList(),
-      starterFolderNames(l10n),
-    );
-    // Deliberately not awaited. Favicons are decoration; the articles are the
-    // point, and a dozen HTTP round trips here would be a dozen round trips
-    // the user spends looking at onboarding.
-    unawaited(service.warmFavicons(result.addedFeeds));
+    try {
+      final service = StarterPackService();
+      final result = await service.addCategories(
+        kStarterPack.map((c) => c.id).where(_selected.contains).toList(),
+        starterFolderNames(l10n),
+      );
+      // Deliberately not awaited. Favicons are decoration; the articles are
+      // the point, and a dozen HTTP round trips here would be a dozen round
+      // trips the user spends looking at onboarding.
+      unawaited(service.warmFavicons(result.addedFeeds));
 
-    await SettingsRepository().set('onboarding_complete', 'true');
-    if (!mounted) return;
-    widget.onDone(withStarterPack: true);
+      await SettingsRepository().set('onboarding_complete', 'true');
+      if (!mounted) return;
+      widget.onDone(withStarterPack: true);
+    } catch (_) {
+      // Both buttons are disabled while seeding, so a throw that left the
+      // flag set would strand the user on the first screen of the app with
+      // nothing on it they can press — no feeds, no Skip, no way forward.
+      // Re-enabling them is the whole fix: the pack can be retried, and Skip
+      // is still there for someone who would rather just get in.
+      //
+      // Nothing is said about the failure because this screen has no banner
+      // and gaining one is not worth it here: the DB write that failed is the
+      // same one every other screen depends on, so an app that cannot do it
+      // has larger problems than this message would describe.
+      if (mounted) setState(() => _seeding = false);
+    }
   }
 
   Future<void> _skip() async {
     setState(() => _seeding = true);
-    await SettingsRepository().set('onboarding_complete', 'true');
-    if (!mounted) return;
-    widget.onDone(withStarterPack: false);
+    try {
+      await SettingsRepository().set('onboarding_complete', 'true');
+      if (!mounted) return;
+      widget.onDone(withStarterPack: false);
+    } catch (_) {
+      if (mounted) setState(() => _seeding = false);
+    }
   }
 
   @override
