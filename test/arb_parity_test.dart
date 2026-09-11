@@ -31,6 +31,12 @@ const Map<String, List<String>> _sameAsEnglishIsFine = {
   'alertsMoreKeywords': ['de', 'es', 'fr', 'it'],
   // "Standard" is the ordinary word in German, French and Italian too.
   'summaryStandard': ['de', 'fr', 'it'],
+  // French media call the section "Tech" and "Sports" — both are the ordinary
+  // French headings, not untranslated English. (German and Italian take
+  // "Technik"/"Tecnologia" and "Sport"; Spanish takes "Tecnología" and
+  // "Deportes", so none of those are listed.)
+  'starterCategoryTech': ['fr'],
+  'starterCategorySports': ['fr'],
 };
 
 Map<String, String> _load(String locale) {

@@ -1303,6 +1303,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Privacy policy'**
   String get privacyPolicy;
+
+  /// Label above the starter-pack category picker on the onboarding screen.
+  ///
+  /// In en, this message translates to:
+  /// **'Start with a few feeds'**
+  String get onboardingStarterTitle;
+
+  /// Helper text under onboardingStarterTitle, saying the selection is reversible.
+  ///
+  /// In en, this message translates to:
+  /// **'Popular publishers, sorted into categories. Remove any of them later.'**
+  String get onboardingStarterSubtitle;
+
+  /// Primary onboarding button. Seeds the ticked starter categories and opens the Flash tab.
+  ///
+  /// In en, this message translates to:
+  /// **'Start reading'**
+  String get startReadingButton;
+
+  /// Secondary onboarding button. Completes onboarding with no feeds and opens Categories.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip, I\'ll add my own'**
+  String get skipAddOwnFeedsButton;
+
+  /// Button on both empty states that opens the starter-pack sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add starter pack'**
+  String get addStarterPackButton;
+
+  /// Title of the starter-pack bottom sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'Starter pack'**
+  String get starterPackSheetTitle;
+
+  /// Confirm button in the starter-pack sheet; count is the feeds in the ticked categories.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Add 1 feed} other{Add {count} feeds}}'**
+  String addStarterFeedsButton(int count);
+
+  /// Banner on the Categories screen after seeding. Zero means everything picked was already subscribed.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No new feeds added} one{1 feed added} other{{count} feeds added}}'**
+  String starterPackAddedBanner(int count);
+
+  /// Starter-pack category name. Becomes the folder name at seeding time, then ordinary user data.
+  ///
+  /// In en, this message translates to:
+  /// **'World News'**
+  String get starterCategoryWorldNews;
+
+  /// Starter-pack category name. Becomes the folder name at seeding time, then ordinary user data.
+  ///
+  /// In en, this message translates to:
+  /// **'Tech'**
+  String get starterCategoryTech;
+
+  /// Starter-pack category name. Becomes the folder name at seeding time, then ordinary user data.
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness / Health'**
+  String get starterCategoryFitnessHealth;
+
+  /// Starter-pack category name. Becomes the folder name at seeding time, then ordinary user data.
+  ///
+  /// In en, this message translates to:
+  /// **'Travelling'**
+  String get starterCategoryTravel;
+
+  /// Starter-pack category name. Becomes the folder name at seeding time, then ordinary user data.
+  ///
+  /// In en, this message translates to:
+  /// **'Sports'**
+  String get starterCategorySports;
+
+  /// Settings > About row opening the hosted support page. Google Play requires contact details reachable in-app.
+  ///
+  /// In en, this message translates to:
+  /// **'Contact & support'**
+  String get contactSupport;
+
+  /// Settings > About row launching a mailto: to the support address.
+  ///
+  /// In en, this message translates to:
+  /// **'Email us'**
+  String get emailUs;
 }
 
 class _AppLocalizationsDelegate

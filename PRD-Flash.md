@@ -94,6 +94,16 @@ Specific mandates:
 - Feeds are assigned to a folder at add time or can be moved later
 - Feedly search integration for feed discovery
 
+**Starter pack**
+- An optional, fixed set of feeds from well-known publishers, grouped into five categories: World News, Tech, Fitness / Health, Travelling, Sports
+- Offered in three places and nowhere else: the onboarding screen, the Flash tab's empty state, and the Categories empty state. No Settings entry, no menu item
+- All categories are ticked by default; the user can untick any of them, or skip the pack entirely
+- Category **display names** come from the ARB and are resolved at seeding time, so a German device creates "Weltnachrichten". Once created the folder is ordinary user data — renameable, and never re-translated when the device language changes
+- **Reuse before create:** a folder whose trimmed name matches the localised name case-insensitively is used as-is rather than duplicated. New folders are appended after whatever the user already has, and new feeds after a reused folder's existing feeds
+- **Skip, never move:** a feed whose URL is already subscribed is skipped and left exactly where it is, under whatever name the user gave it. Adding the pack a second time is therefore a no-op
+- The service performs database writes only. The fetch that fills the categories is the one `FeedScreen` already runs, triggered through `FeedsChangedNotifier` — see *Feed changes reach the article list* below. Favicons are warmed in the background and never awaited
+- **Live gate:** `test/starter_pack_live_test.dart` runs every pack feed through the real fetch/parse/threshold pipeline and fails if any one of them yields no articles. It is skipped unless run with `--dart-define=LIVE_NETWORK=true`, so the ordinary suite does not depend on fifteen third-party servers. The gate exists because a feed can be reachable, well-formed and still seed a visibly empty category: anything published outside the 7-day fetch window (§4.9) is discarded before it reaches the database. Two categories currently ship one feed each, recorded in `kSingleFeedStarterCategories`, because no second feed clearing that window could be found for either
+
 **Edit / Remove Feed**
 - Swipe to delete, tap to edit
 - Deletion confirmed via dialog
@@ -449,6 +459,7 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 **UI:**
 - Bottom sheet sized to its content (not forced full-screen, capped at 90% of screen height) slides up immediately, showing an animated loading indicator with a status line: "Reading the article…" during extraction, then "Writing the summary…" once generation starts
 - Content scrolls only when it exceeds the sheet — `ClampingScrollPhysics`, not a fixed one-page assumption. A full-budget summary (one focal line plus five bullets) does exceed one page at the body density used here (16px / 1.8 line height), so scrolling is the normal case rather than the exception; readability of the text was chosen over fitting it above the fold
+- Under the dimmed article title, a one-line `{publisher} · {date}` attribution — the feed's name and the article's absolute publication date, localised. Either half is omitted when missing (`feedTitle` is nullable; it depends on the query that built the `Article`). Required by Google Play's News and Magazines policy, and this sheet is the place a reader is furthest from both: the summary is not the publisher's words, and nothing else here says whose article it is
 - All text is selectable
 - Footer: disclaimer + "Copy" button (+ the teaser-only note when applicable)
 - Dismiss: tap outside or swipe down
@@ -499,9 +510,23 @@ Entirely **on-device** via **Gemini Nano** (Android AICore, `GeminiNanoPlugin.kt
 
 ### 4.14 Onboarding
 
-- Shown on first launch only
-- Walks the user through adding their first feed and creating a folder
-- Once completed, the flag is persisted and onboarding never appears again
+Shown on first launch only. Once completed the flag is persisted and onboarding never appears again.
+
+Onboarding is no longer an introduction — it is the moment the app has to acquire content. Google Play made the app unavailable under the News and Magazines policy on 11 Sep 2026 because a fresh install had none: the screen's only button ("Add a feed") landed the reviewer on Categories with an empty add sheet, and every tab in the app was empty behind it.
+
+**Layout**
+- Icon, app name and tagline, unchanged
+- The three feature bullets are gone. They sat between the tagline and the button, and the space is better spent on what the user is actually deciding
+- In their place: "Start with a few feeds", the helper line "Popular publishers, sorted into categories. Remove any of them later.", and the starter-pack category picker (§4.1)
+- The middle section scrolls; both buttons are pinned at the bottom, in the thumb zone (§5). A primary action that can scroll off the bottom of a first-run screen is the same failure as the empty one it replaces
+
+**Two exits**
+- **Start reading** (primary) — seeds the ticked categories, marks onboarding complete and stays on the Flash tab, which is about to fill with articles. Disabled when nothing is ticked
+- **Skip, I'll add my own** (secondary) — marks onboarding complete with no feeds and opens Categories, exactly as the old single button did
+- Both are disabled while the seed is writing
+
+**Exactly one fetch**
+Finishing onboarding is what puts the `IndexedStack` into the tree for the first time, so `FeedScreen` mounts fresh and its `initState` runs `_boot` → `_backgroundRefresh`. That is the fetch. Seeding also queued a `needsFetch` on `FeedsChangedNotifier` (pinged from inside the repository writes), which would buy a second, identical fetch on the next visibility change — so the with-pack path clears it with `FeedsChangedNotifier.instance.reset()`.
 
 ---
 
@@ -580,6 +605,8 @@ Settings live in three places. The **Settings screen** keeps what is configured 
 | Keyword alerts | — | Settings screen | Manage list |
 | Google Drive backup | — | Settings screen | Sign in / Sign out, Backup now, Restore |
 | Local backup | — | Settings screen | Export, Import |
+| Contact & support | — | Settings screen (About) | Opens the hosted support page |
+| Email us | — | Settings screen (About) | Launches `mailto:` to the support address |
 | OPML | — | Settings screen | Import, Export |
 
 The Filter bubble's four controls are staged behind an **Apply** button rather than written on release: dragging a slider is exploratory, and persisting each intermediate value re-queried the feed several times on the way to the one the user actually wanted. Apply is disabled until something differs, so it doubles as an indicator of whether anything is pending.
@@ -639,7 +666,6 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Onboarding flow
 - Google Drive backup + restore
 - Local file backup + restore (via share sheet)
-- OPML import + export
 - AI article summary — on-device Gemini Nano, single streaming pass, no API key
 - Localisation: EN, DE, ES, FR, IT
 - Dynamic colour theming (Material You)
@@ -668,6 +694,10 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - Feed and category changes reach the article list on return to the Flash tab, via `FeedsChangedNotifier` pinged from the repository writes
 - Categories collapsed by default on the Categories screen
 - Mark-all-read confirmation dialog (the strings existed, translated, in all five locales; nothing ever showed them)
+- **Starter pack** — an optional set of feeds from well-known publishers across five categories, offered from onboarding and both empty states, idempotent on a second run, and gated by a live test that proves every feed still publishes inside the fetch window (§4.1)
+- **Onboarding that ends with articles on screen** — the starter-pack picker replaces the feature bullets, "Start reading" seeds and stays on Flash, "Skip, I'll add my own" keeps the old destination (§4.14)
+- **Publisher and publication date** on the AI summary sheet and in the reading pane's top bar, localised and absolute rather than relative — both Play News and Magazines requirements
+- **Contact & support and Email us** in Settings → About, with the support URL pinned by a test to the one declared in the Play Console
 
 ### Regressions Worth Remembering
 - **Retirement-on-scroll deleted articles that were still on screen** (shipped in pass 05, disabled in pass 07). Three compounding causes: row heights were guessed at a hardcoded 120px for every row `ListView.builder` had disposed — real cards measure **96.8dp and 121.9dp** on a Pixel 11 Pro, so the guess was wrong in both directions and the error accumulated down the list; `jumpTo` dispatches `ScrollEndNotification`, so every programmatic scroll ran retirement; and retirement re-entered itself through its own offset correction. Fixed by caching measured heights, gating on `MarkReadGate`, a re-entrancy flag, and — the part that matters — a hard ceiling that confines retirement to rows the ListView has **disposed**, so no future arithmetic error can delete something visible.
@@ -680,6 +710,7 @@ There is **no language setting** — the app follows the device locale (§3.10).
 - **In-app reader view.** Articles open in the system browser. A reader mode existed and was removed (schema v8 purges its settings and per-domain compatibility cache); it was never reliable enough across sites to be worth maintaining. This is the most likely gap a reviewer would name if the app were distributed publicly
 
 ### Not Yet Built
+- OPML import + export — scheduled for the next pass. Listed as Shipped until Sep 2026; nothing in `lib/` has ever implemented it (the only match for "opml" is a comment in `feeds_changed_notifier.dart`)
 - iOS support
 - Home screen widget
 - Per-feed custom refresh intervals

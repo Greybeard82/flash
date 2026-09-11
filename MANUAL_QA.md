@@ -601,3 +601,61 @@ not only from the store listing.
 | Tap **Privacy policy** | The system browser opens `https://flashrssapp.github.io/privacy.html`. It deliberately does **not** open in the built-in reader: that pane is built around an `Article` and runs Clean-mode extraction, which is the wrong treatment for a legal document, and the user should see the real domain |
 | Repeat in German, Spanish, French and Italian | The section header and the tile label are localised, with no missing-key placeholder |
 | Airplane mode, then tap it | No crash. The URL is shown in the banner so the policy is still reachable by hand |
+
+---
+
+## 34. Starter Pack and First Run (Play requirement)
+
+Google Play made the app unavailable under the **News and Magazines** policy on
+11 Sep 2026. The reviewer's account: a fresh install, onboarding's only button
+("Add a feed") landed them on Categories with an empty add sheet, the Flash tab
+read "Nothing here yet", and Bookmarks and Alerts were empty. Verdict — news
+section empty / static content.
+
+Everything below is the fix, so it is the section to run first on a release
+candidate.
+
+**Use an emulator for every fresh-install row.** These steps need a device with
+no database, and wiping one is not something to do to a real phone. On a
+physical device, install over the top with `adb install -r <apk>` — never
+`flutter install`, which uninstalls first and takes the library with it.
+
+| Step | Expected |
+|------|----------|
+| Fresh install, launch | Onboarding shows the icon, name and tagline, then **"Start with a few feeds"**, the helper line, and five ticked categories: World News, Tech, Fitness / Health, Travelling, Sports. Each subtitle names that category's publishers. No feature bullets |
+| Scroll the onboarding screen | The middle scrolls; **Start reading** and **Skip, I'll add my own** stay pinned at the bottom. Neither can be scrolled out of reach on a short screen |
+| Untick every category | **Start reading** goes disabled. **Skip** stays enabled |
+| Tick one category | The button label counts that category's feeds — "Add 3 feeds", or "Add 1 feed" for a single-feed category |
+| Fresh install → keep all → **Start reading** | Lands on the **Flash** tab, not Categories. Articles appear and all five category tabs have articles within ~15s, with **no further taps** |
+| `adb logcat` across the step above | **One** refresh cycle, not two. Two means the queued `needsFetch` was not cleared — see §4.14 |
+| Fresh install → **Skip, I'll add my own** | Lands on **Categories**, empty, exactly as before this pass. No feeds created |
+| From the skip path: Flash tab | Empty state shows **Add a feed** and, below it, **Add starter pack** |
+| Tap **Add starter pack** on the Flash tab | The sheet opens, seeds on confirm, and articles appear **without leaving the tab**. This path consumes the queued change by hand — if the list stays empty until you switch tabs and come back, that is the bug |
+| From the skip path: Categories empty state → **Add starter pack** | Banner reads "{n} feeds added", the categories and feeds are listed, and the Flash tab has articles on return |
+| Re-open the sheet after adding | **There is no route to it.** The pack lives only on the two empty states, and neither is reachable once feeds exist — by design (§4.1: no Settings item, no menu). To reach it again you must remove every feed first. The idempotency it would test is covered by `starter_pack_service_test.dart` |
+| Delete every category, then Categories empty state → **Add starter pack** | Everything is recreated. Note this is a *fresh* seed, not a re-add: deleting a category cascades its feeds, so nothing is left to skip |
+| Delete the pack's feeds individually, leaving the categories in place, then Flash empty state → **Add starter pack** | This is the real re-add test. The five categories are **reused** — still five, not ten — and the feeds come back inside them |
+| Before adding, rename a category to `world news` (lower case, with spaces around it), then add the pack | The existing category is reused — **your** spelling is kept — and the World News feeds land inside it. No second folder |
+| Move one pack feed into a category of your own, then add the pack again | The feed **stays where you put it**, under the name you gave it. It is skipped, not moved and not renamed |
+| Add the pack, then check Categories | Pack categories are appended **after** any categories you already had; within a reused category, pack feeds come **after** your existing ones |
+| Repeat the first run in German, Spanish, French and Italian | Category names, both buttons, the sheet title and the banner are all localised, with no missing-key placeholder. Folder names are created in that language and **stay** in it after switching the device back to English |
+| Feed favicons, a minute after seeding | Icons fill in progressively. A feed that never resolves one keeps its monogram — not a blank space, and never a blocked first run |
+
+### Publisher and publication date
+
+| Step | Expected |
+|------|----------|
+| Long-press a card → ✦ Summary | Under the dimmed article title, one line: **publisher · absolute date and time**, localised |
+| Open an article in the reading pane (tablet / wide layout) | The top bar shows the title, and under it the same **publisher · date** line, ellipsised to one line |
+| An article whose feed title is missing | The line shows the date alone, with no stray `·` separator |
+| Switch the device to German and repeat both | Date order and the 12/24-hour clock follow the locale — not "Mar 14" with an AM/PM stamp |
+
+### Contact and support
+
+| Step | Expected |
+|------|----------|
+| Settings → **ABOUT** | **Contact & support** and **Email us** appear **above** Privacy policy. Contact & support shows `flashrssapp@gmail.com` as its subtitle |
+| Tap **Contact & support** | The system browser opens `https://flashrssapp.github.io/support.html`. This URL must be **identical** to the contact URL in the Play Console News and Magazines declaration |
+| Tap **Email us** | A mail app opens, composing to `flashrssapp@gmail.com`. If nothing opens, the manifest `<queries>` entry for `SENDTO`/`mailto` is missing |
+| Airplane mode, then tap each | No crash. The URL or the address is shown in the banner, so both stay reachable by hand |
+| Repeat in all four other locales | Both labels are localised, with no missing-key placeholder |

@@ -26,6 +26,20 @@ import '../services/settings_notifier.dart';
 /// fails a test rather than shipping — see settings_privacy_link_test.dart.
 const String kPrivacyPolicyUrl = 'https://flashrssapp.github.io/privacy.html';
 
+/// The hosted support page.
+///
+/// **This must stay identical to the contact URL declared in the Play Console
+/// News and Magazines section.** That declaration is checked against what the
+/// app actually shows, and the two drifting apart is a rejection — the same
+/// class of problem that took the app down on 11 Sep 2026. It is also why the
+/// page is reachable from inside the app rather than only from the listing.
+const String kSupportUrl = 'https://flashrssapp.github.io/support.html';
+
+/// The support address, shown as the subtitle under Contact & support and
+/// launched by the Email us row. A const for the same reason as the two URLs
+/// above: pinned by a test rather than retyped.
+const String kContactEmail = 'flashrssapp@gmail.com';
+
 /// The full settings screen.
 ///
 /// No longer a bottom-nav destination: it is pushed from "More settings" at
@@ -232,6 +246,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // ── About ──
           _sectionHeader(l10n.about),
+          // Above the privacy policy, not below it: Play requires contact
+          // details a user can actually reach, and burying them under a legal
+          // link is how they stop being reachable in practice.
+          ListTile(
+            leading: const Icon(Icons.support_agent_outlined),
+            title: Text(l10n.contactSupport),
+            subtitle: const Text(kContactEmail),
+            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: _openSupportPage,
+          ),
+          ListTile(
+            leading: const Icon(Icons.mail_outline_rounded),
+            title: Text(l10n.emailUs),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: _sendSupportEmail,
+          ),
           ListTile(
             leading: const Icon(Icons.privacy_tip_outlined),
             title: Text(l10n.privacyPolicy),
@@ -268,6 +301,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // No browser, or the launch was refused. Showing the URL at least lets
       // the user reach the policy by hand rather than hitting a dead tile.
       if (mounted) _bannerKey.currentState?.show(kPrivacyPolicyUrl);
+    }
+  }
+
+  /// Opens the support page in the browser, for the same reasons as the
+  /// policy above: a real URL in a real browser, not the Clean-mode reader.
+  Future<void> _openSupportPage() async {
+    try {
+      final ok = await launchUrl(Uri.parse(kSupportUrl),
+          mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        _bannerKey.currentState?.show(kSupportUrl);
+      }
+    } catch (_) {
+      if (mounted) _bannerKey.currentState?.show(kSupportUrl);
+    }
+  }
+
+  /// Hands the address to whatever mail app is installed.
+  ///
+  /// On failure the banner shows the address itself rather than an error: a
+  /// device with no mail client configured is common, and the useful thing to
+  /// do about it is to let the user read the address and write it down.
+  Future<void> _sendSupportEmail() async {
+    final uri = Uri(scheme: 'mailto', path: kContactEmail);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        _bannerKey.currentState?.show(kContactEmail);
+      }
+    } catch (_) {
+      if (mounted) _bannerKey.currentState?.show(kContactEmail);
     }
   }
 

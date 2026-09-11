@@ -13,6 +13,7 @@ import '../services/loading_controller.dart';
 import '../services/summary_cache.dart';
 import '../services/summary_formatter.dart';
 import '../services/summary_source.dart';
+import '../utils/date_utils.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
@@ -202,6 +203,17 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
     );
   }
 
+  /// "Publisher · 12 Mar 2026 3:09 PM", with either half dropped when it
+  /// is missing.
+  String _attribution(BuildContext context) {
+    final publisher = widget.article.feedTitle?.trim() ?? '';
+    final date = formatPublishedDate(
+      widget.article.publishedAt,
+      Localizations.localeOf(context).toLanguageTag(),
+    );
+    return [publisher, date].where((part) => part.isNotEmpty).join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -257,6 +269,29 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                 color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
               ),
             ),
+
+            // Publisher and publication date.
+            //
+            // Both are Play policy requirements for a news app: the source of
+            // every article must be named, and its publication date shown. A
+            // summary sheet is the one place a reader can be furthest from
+            // either — the AI text is not the publisher's words, and nothing
+            // else on this sheet says whose article is being summarised.
+            //
+            // feedTitle is nullable because it arrives from a join that not
+            // every query performs, so each half is omitted independently
+            // rather than rendering a stray separator.
+            if (_attribution(context).isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                _attribution(context),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Content area. The summary scrolls only when it exceeds the

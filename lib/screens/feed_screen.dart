@@ -35,7 +35,9 @@ import '../utils/diag_log.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
+import '../services/starter_pack_service.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/starter_pack_picker.dart';
 import '../widgets/filter_bubble.dart';
 import '../widgets/keyword_alerts_panel.dart';
 import '../widgets/mark_all_read_confirm.dart';
@@ -1702,11 +1704,33 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
 
+  /// Offers the starter pack without leaving the Flash tab.
+  ///
+  /// The queued change has to be consumed by hand here. Everywhere else a feed
+  /// is added, it happens on another tab and `didUpdateWidget` picks the
+  /// change up on the way back — but this screen is already visible, so no
+  /// visibility transition is coming and the needsFetch that
+  /// `FeedRepository.insert` queued would sit there until the user wandered
+  /// off and returned.
+  Future<void> _showStarterPackSheet() async {
+    final result = await showModalBottomSheet<StarterPackResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const StarterPackSheet(),
+    );
+    if (!mounted || result == null || result.feedsAdded == 0) return;
+    await _consumeFeedsChange();
+  }
+
   Widget _buildContent() {
     final l10n = AppLocalizations.of(context)!;
 
     if (!_hasFeeds && !_booting) {
-      return EmptyState(onAddFeed: widget.onNavigateToFeeds);
+      return EmptyState(
+        onAddFeed: widget.onNavigateToFeeds,
+        onAddStarterPack: _showStarterPackSheet,
+      );
     }
 
     // Boot is now just the local DB read, which is quick — a skeleton covers

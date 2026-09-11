@@ -11,6 +11,7 @@ import 'services/alerts_changed_notifier.dart';
 import 'repositories/alert_match_repository.dart';
 import 'services/article_detail_controller.dart';
 import 'services/section_actions_controller.dart';
+import 'services/feeds_changed_notifier.dart';
 import 'services/settings_notifier.dart';
 import 'widgets/spinning_refresh_icon.dart';
 import 'widgets/article_detail_pane.dart';
@@ -732,8 +733,37 @@ class _AppShellState extends State<_AppShell> {
     if (mounted && !complete) setState(() => _onboardingComplete = false);
   }
 
-  void _finishOnboarding() {
+  /// Onboarding is over. Where the user lands depends on whether they took
+  /// the starter pack.
+  ///
+  /// With it, they stay on Flash — it is about to fill with articles, and
+  /// sending them to Categories to admire a list of folders would put the
+  /// original "where is the news?" problem back one screen along. Without it,
+  /// Categories is still the only screen with anything to do on it, so the
+  /// old behaviour is kept exactly.
+  ///
+  /// Note the with-pack branch sets no index at all, and that is not an
+  /// omission: `_currentIndex` is already 0 on a first run and
+  /// `SectionActionsController` already starts on `kSectionFlash`, so
+  /// selecting Flash again would be a no-op — one that
+  /// section_index_single_writer_test.dart counts, and would fail on.
+  void _finishOnboarding({required bool withStarterPack}) {
     setState(() => _onboardingComplete = true);
+
+    if (withStarterPack) {
+      // Drop the queued change rather than letting it fetch.
+      //
+      // Seeding inserted feeds, and FeedRepository.insert pings
+      // FeedsChangedNotifier from inside — so a needsFetch is now queued. But
+      // the branch above is what puts the IndexedStack into the tree for the
+      // first time, so FeedScreen mounts fresh, and its initState runs _boot,
+      // which ends in _backgroundRefresh. That is the fetch. Leaving the
+      // queued change in place would buy a second, identical one the next
+      // time the user came back to this tab.
+      FeedsChangedNotifier.instance.reset();
+      return;
+    }
+
     _setCurrentIndex(1); // straight to Feeds, to add the first feed
   }
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:dart_rss/dart_rss.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import '../models/alert_match.dart';
 import '../models/article.dart';
@@ -174,6 +175,13 @@ class RssService {
   }
 
   // ── Parsing ────────────────────────────────────────────────────────────────
+
+  /// [_parse] for `starter_pack_live_test.dart`, which has to run the real
+  /// parser over a real feed body to prove a starter feed yields articles.
+  /// The smallest possible seam: no behaviour of its own, so the thing under
+  /// test stays the production path rather than a copy of it.
+  @visibleForTesting
+  List<Article> parseForTesting(String body, Feed feed) => _parse(body, feed);
 
   List<Article> _parse(String body, Feed feed) {
     try {

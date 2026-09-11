@@ -12,12 +12,14 @@ import '../services/favicon_service.dart';
 import '../services/feedly_service.dart';
 import '../services/loading_controller.dart';
 import '../services/rss_service.dart';
+import '../services/starter_pack_service.dart';
 import '../repositories/article_repository.dart';
 import '../repositories/keyword_alert_repository.dart';
 import '../repositories/keyword_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../widgets/feed_card.dart';
 import '../widgets/quick_settings_action.dart';
+import '../widgets/starter_pack_picker.dart';
 import '../l10n/app_localizations.dart';
 
 class FeedsScreen extends StatefulWidget {
@@ -334,9 +336,44 @@ class _FeedsScreenState extends State<FeedsScreen> {
                         .onSurface
                         .withValues(alpha: 0.5),
                   )),
+          const SizedBox(height: 24),
+          // The FAB above already covers "add one feed". This covers the case
+          // the Play reviewer hit: someone with nothing, who does not yet have
+          // a feed URL in mind.
+          OutlinedButton.icon(
+            onPressed: _showStarterPackSheet,
+            icon: const Icon(Icons.auto_awesome_rounded),
+            label: Text(l10n.addStarterPackButton),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(200, 52),
+            ),
+          ),
         ],
       ),
     );
+  }
+
+  /// Seeds the starter pack from the empty state.
+  ///
+  /// No `_consumeFeedsChange` equivalent here, unlike the Flash tab: this
+  /// screen does not own the article list. The needsFetch that
+  /// `FeedRepository.insert` queued is left queued on purpose, and the Flash
+  /// tab consumes it on the visibility transition when the user goes back —
+  /// exactly as it already does after adding a feed by URL.
+  Future<void> _showStarterPackSheet() async {
+    final result = await showModalBottomSheet<StarterPackResult>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (_) => const StarterPackSheet(),
+    );
+    if (!mounted || result == null) return;
+    await _load();
+    if (!mounted) return;
+    _bannerKey.currentState
+        ?.show(AppLocalizations.of(context)!.starterPackAddedBanner(
+      result.feedsAdded,
+    ));
   }
 
   // ── Add feed ──

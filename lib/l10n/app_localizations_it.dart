@@ -714,4 +714,67 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get privacyPolicy => 'Informativa sulla privacy';
+
+  @override
+  String get onboardingStarterTitle => 'Inizia con qualche feed';
+
+  @override
+  String get onboardingStarterSubtitle =>
+      'Testate note, ordinate per categoria. Puoi rimuoverle in qualsiasi momento.';
+
+  @override
+  String get startReadingButton => 'Inizia a leggere';
+
+  @override
+  String get skipAddOwnFeedsButton => 'Salta, aggiungo i miei';
+
+  @override
+  String get addStarterPackButton => 'Aggiungi il pacchetto iniziale';
+
+  @override
+  String get starterPackSheetTitle => 'Pacchetto iniziale';
+
+  @override
+  String addStarterFeedsButton(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Aggiungi $count feed',
+      one: 'Aggiungi 1 feed',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String starterPackAddedBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count feed aggiunti',
+      one: '1 feed aggiunto',
+      zero: 'Nessun nuovo feed aggiunto',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get starterCategoryWorldNews => 'Notizie dal mondo';
+
+  @override
+  String get starterCategoryTech => 'Tecnologia';
+
+  @override
+  String get starterCategoryFitnessHealth => 'Fitness / Salute';
+
+  @override
+  String get starterCategoryTravel => 'Viaggi';
+
+  @override
+  String get starterCategorySports => 'Sport';
+
+  @override
+  String get contactSupport => 'Contatti e assistenza';
+
+  @override
+  String get emailUs => 'Scrivici';
 }

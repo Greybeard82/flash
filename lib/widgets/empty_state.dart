@@ -5,7 +5,17 @@ import 'flash_bolt.dart';
 class EmptyState extends StatelessWidget {
   final VoidCallback onAddFeed;
 
-  const EmptyState({super.key, required this.onAddFeed});
+  /// Opens the starter-pack sheet. The second button here is the whole
+  /// remedy for how the app got pulled from Google Play: the reviewer reached
+  /// this screen, and the only thing on it sent them to an empty form. Now
+  /// one tap fills it.
+  final VoidCallback onAddStarterPack;
+
+  const EmptyState({
+    super.key,
+    required this.onAddFeed,
+    required this.onAddStarterPack,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +53,15 @@ class EmptyState extends StatelessWidget {
               icon: const Icon(Icons.add),
               label: Text(l10n.addAFeedButton),
               style: FilledButton.styleFrom(
+                minimumSize: const Size(200, 52),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: onAddStarterPack,
+              icon: const Icon(Icons.auto_awesome_rounded),
+              label: Text(l10n.addStarterPackButton),
+              style: OutlinedButton.styleFrom(
                 minimumSize: const Size(200, 52),
               ),
             ),

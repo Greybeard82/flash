@@ -714,4 +714,67 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get privacyPolicy => 'Política de privacidad';
+
+  @override
+  String get onboardingStarterTitle => 'Empieza con algunas fuentes';
+
+  @override
+  String get onboardingStarterSubtitle =>
+      'Medios conocidos, ordenados por categorías. Puedes eliminar cualquiera más adelante.';
+
+  @override
+  String get startReadingButton => 'Empezar a leer';
+
+  @override
+  String get skipAddOwnFeedsButton => 'Omitir, añadiré las mías';
+
+  @override
+  String get addStarterPackButton => 'Añadir pack inicial';
+
+  @override
+  String get starterPackSheetTitle => 'Pack inicial';
+
+  @override
+  String addStarterFeedsButton(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Añadir $count fuentes',
+      one: 'Añadir 1 fuente',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String starterPackAddedBanner(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fuentes añadidas',
+      one: '1 fuente añadida',
+      zero: 'No se añadió ninguna fuente nueva',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get starterCategoryWorldNews => 'Noticias del mundo';
+
+  @override
+  String get starterCategoryTech => 'Tecnología';
+
+  @override
+  String get starterCategoryFitnessHealth => 'Fitness / Salud';
+
+  @override
+  String get starterCategoryTravel => 'Viajes';
+
+  @override
+  String get starterCategorySports => 'Deportes';
+
+  @override
+  String get contactSupport => 'Contacto y soporte';
+
+  @override
+  String get emailUs => 'Escríbenos';
 }

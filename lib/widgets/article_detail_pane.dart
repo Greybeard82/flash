@@ -12,6 +12,7 @@ import '../models/content_block.dart';
 import '../repositories/settings_repository.dart';
 import '../services/ad_blocklist.dart';
 import '../services/clean_reader.dart';
+import '../utils/date_utils.dart';
 import 'clean_article_view.dart';
 import 'notification_banner.dart';
 import 'spinning_refresh_icon.dart';
@@ -233,6 +234,18 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
       children: [
         _PaneTopBar(
           title: widget.article.title,
+          // Play policy: a news app must name the source of every article and
+          // show its publication date. The reading pane is where an article is
+          // read in full, so it is the last place either should be missing.
+          // Resolved here rather than inside the bar so that stays a
+          // StatelessWidget with no context-dependent work of its own.
+          attribution: [
+            widget.article.feedTitle?.trim() ?? '',
+            formatPublishedDate(
+              widget.article.publishedAt,
+              Localizations.localeOf(context).toLanguageTag(),
+            ),
+          ].where((part) => part.isNotEmpty).join(' · '),
           onClose: widget.onClose,
           onOpenInBrowser: _openInBrowser,
           openInBrowserTooltip: l10n.openInBrowser,
@@ -394,12 +407,18 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
 
 class _PaneTopBar extends StatelessWidget {
   final String title;
+
+  /// "Publisher · date", already joined and already localised. Empty when
+  /// the article carries neither, in which case no second line is drawn.
+  final String attribution;
+
   final VoidCallback? onClose;
   final VoidCallback onOpenInBrowser;
   final String openInBrowserTooltip;
 
   const _PaneTopBar({
     required this.title,
+    required this.attribution,
     required this.onClose,
     required this.onOpenInBrowser,
     required this.openInBrowserTooltip,
@@ -425,11 +444,27 @@ class _PaneTopBar extends StatelessWidget {
               else
                 const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (attribution.isNotEmpty)
+                      Text(
+                        attribution,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurface
+                              .withValues(alpha: 0.6),
+                        ),
+                      ),
+                  ],
                 ),
               ),
               IconButton(
