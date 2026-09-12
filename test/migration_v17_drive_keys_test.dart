@@ -62,6 +62,10 @@ Future<void> _reshapeToV16(Database db) async {
     'drive_backup_enabled': 'true',
     'drive_last_backup_at': '1750000000000',
     'google_account_email': 'someone@example.com',
+    // Seeded here rather than inherited from `defaultSettings`: v18 stopped
+    // seeding it, but a real v16 device still carries the row, and that row is
+    // the point of the second test below.
+    'feedly_api_key': 'null',
   };
   for (final e in values.entries) {
     await db.insert(
@@ -122,7 +126,11 @@ void main() {
     // to reach and the least likely to be missed by hand.
     expect(await _settingsKeys(db), contains('feedly_api_key'));
 
-    await AppDatabase.instance.migrateForTesting(fromVersion: 16);
+    // Stops at 17 deliberately. v18 deletes this key itself, so running the
+    // whole chain would leave the key absent either way and this test would
+    // pass against a v17 step that had swept it.
+    await AppDatabase.instance
+        .migrateForTesting(fromVersion: 16, toVersion: 17);
 
     expect(await _settingsKeys(db), contains('feedly_api_key'));
   });

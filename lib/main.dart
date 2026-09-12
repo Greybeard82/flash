@@ -27,7 +27,8 @@ void main() async {
   // gateway will talk to Gemini — which is what lets the API key stay
   // server-side instead of shipping in the APK. See app_check_config.dart for
   // why the provider is a --dart-define and deliberately not kDebugMode, and
-  // §32 of MANUAL_QA.md for the debug-token step sideloaded builds need.
+  // "Cloud Summaries via Firebase AI Logic + App Check" in MANUAL_QA.md
+  // for the debug-token step sideloaded builds need.
   await FirebaseAppCheck.instance
       .activate(providerAndroid: appCheckAndroidProvider);
 

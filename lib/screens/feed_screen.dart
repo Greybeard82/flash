@@ -239,15 +239,16 @@ class _FeedScreenState extends State<FeedScreen>
 
   /// Filter-bubble values, applied to what the feed *shows*.
   ///
-  /// These are the same two settings the Settings screen edits, but that
-  /// screen frames them as storage rules — `article_limit` caps what a fetch
-  /// accepts, `cleanup_age_days` drives the purge of old read articles. Both
-  /// are invisible from the feed: the fetch cap changes nothing already
-  /// stored, and cleanup only ever removes articles you have already read,
-  /// on a cold start. Moving either slider therefore appeared to do nothing.
+  /// `article_limit` and `cleanup_age_days` are storage rules — the first
+  /// caps what a fetch accepts, the second drives the purge of old read
+  /// articles. Both are invisible from the feed: the fetch cap changes
+  /// nothing already stored, and cleanup only ever removes articles you have
+  /// already read, on a cold start.
   ///
-  /// The Filter bubble means what it says, so the same values now also filter
-  /// the visible list, immediately.
+  /// So the same values also filter the visible list, immediately, which is
+  /// what makes the window the list shows and the window it retains agree.
+  /// Neither has a control any more (PRD, "Settings reference": fixed values
+  /// with no UI); they are applied here as constants.
   int _displayLimit = kFetchArticleLimit;
   int _displayAgeDays = 7;
 
@@ -657,7 +658,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// An article was read/unread from Bookmarks or Search. Only the counts
   /// need re-querying — the visible article list is deliberately left alone,
   /// matching the existing rule that an article read outside the current tab
-  /// is simply absent from it rather than dimmed in place (PRD §4.3).
+  /// is simply absent from it rather than dimmed in place (PRD, "Read
+  /// state and article lifecycle").
   void _onExternalReadStateChanged() {
     if (!mounted || _booting) return;
     unawaited(_refreshCountsFromDb());
@@ -820,7 +822,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// newest-first ordering, new articles are inserted *above* the viewport,
   /// so the same offset now points at different content and everything above
   /// it — including everything just fetched — reads as "already scrolled
-  /// past". This replaces the scroll-restoration half of PRD §4.3 for
+  /// past". This replaces the scroll-restoration half of PRD, "The Flash
+  /// feed", for
   /// refresh paths only; returning from the browser and switching tabs both
   /// still restore position.
   /// Records the article at the viewport top, so the position can be found

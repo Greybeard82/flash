@@ -122,12 +122,6 @@ abstract class AppLocalizations {
   /// **'Refresh'**
   String get refresh;
 
-  /// No description provided for @noArticlesYet.
-  ///
-  /// In en, this message translates to:
-  /// **'No articles yet.\nPull down to refresh.'**
-  String get noArticlesYet;
-
   /// No description provided for @noNewArticles.
   ///
   /// In en, this message translates to:
@@ -224,12 +218,6 @@ abstract class AppLocalizations {
   /// **'Failed to add feed: {error}'**
   String failedToAddFeed(String error);
 
-  /// No description provided for @defaultFolderName.
-  ///
-  /// In en, this message translates to:
-  /// **'My News'**
-  String get defaultFolderName;
-
   /// No description provided for @categoryName.
   ///
   /// In en, this message translates to:
@@ -284,18 +272,6 @@ abstract class AppLocalizations {
   /// **'Remove'**
   String get remove;
 
-  /// No description provided for @renameFolder.
-  ///
-  /// In en, this message translates to:
-  /// **'Rename \"{name}\"'**
-  String renameFolder(String name);
-
-  /// No description provided for @deleteFolder.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete \"{name}\"'**
-  String deleteFolder(String name);
-
   /// No description provided for @edit.
   ///
   /// In en, this message translates to:
@@ -338,18 +314,6 @@ abstract class AppLocalizations {
   /// **'Automatically mark articles as read as you scroll past them'**
   String get markReadOnScrollSubtitle;
 
-  /// No description provided for @backgroundRefreshInterval.
-  ///
-  /// In en, this message translates to:
-  /// **'Background refresh interval'**
-  String get backgroundRefreshInterval;
-
-  /// No description provided for @every15Minutes.
-  ///
-  /// In en, this message translates to:
-  /// **'Every 15 minutes'**
-  String get every15Minutes;
-
   /// No description provided for @every30Minutes.
   ///
   /// In en, this message translates to:
@@ -379,18 +343,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Never'**
   String get manualOnly;
-
-  /// No description provided for @maxArticlesPerFeed.
-  ///
-  /// In en, this message translates to:
-  /// **'Max articles per feed'**
-  String get maxArticlesPerFeed;
-
-  /// No description provided for @filters.
-  ///
-  /// In en, this message translates to:
-  /// **'Filters'**
-  String get filters;
 
   /// No description provided for @keywordBlocklist.
   ///
@@ -518,12 +470,6 @@ abstract class AppLocalizations {
   /// **'Articles matching a blocked keyword\nwill be hidden from your feed.'**
   String get keywordBlocklistEmpty;
 
-  /// No description provided for @blockKeyword.
-  ///
-  /// In en, this message translates to:
-  /// **'Block keyword'**
-  String get blockKeyword;
-
   /// No description provided for @keywordOrPhrase.
   ///
   /// In en, this message translates to:
@@ -553,18 +499,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add'**
   String get add;
-
-  /// No description provided for @matchingWholeWord.
-  ///
-  /// In en, this message translates to:
-  /// **'Matching whole word only'**
-  String get matchingWholeWord;
-
-  /// No description provided for @matchingAnywhere.
-  ///
-  /// In en, this message translates to:
-  /// **'Matching anywhere in text'**
-  String get matchingAnywhere;
 
   /// No description provided for @allTab.
   ///
@@ -596,12 +530,6 @@ abstract class AppLocalizations {
   /// **'Share'**
   String get share;
 
-  /// No description provided for @markRead.
-  ///
-  /// In en, this message translates to:
-  /// **'Mark as read'**
-  String get markRead;
-
   /// No description provided for @nothingHereYet.
   ///
   /// In en, this message translates to:
@@ -625,24 +553,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fast, local-first RSS with AI-powered filtering.'**
   String get onboardingTagline;
-
-  /// No description provided for @onboardingBullet1.
-  ///
-  /// In en, this message translates to:
-  /// **'Follow any RSS feed — news, blogs, podcasts.'**
-  String get onboardingBullet1;
-
-  /// No description provided for @onboardingBullet2.
-  ///
-  /// In en, this message translates to:
-  /// **'AI summaries, on-device.'**
-  String get onboardingBullet2;
-
-  /// No description provided for @onboardingBullet3.
-  ///
-  /// In en, this message translates to:
-  /// **'No accounts. Your data stays on your phone.'**
-  String get onboardingBullet3;
 
   /// No description provided for @localBackup.
   ///
@@ -673,12 +583,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not a valid Flash backup file'**
   String get invalidBackupFile;
-
-  /// No description provided for @pickACategory.
-  ///
-  /// In en, this message translates to:
-  /// **'Pick a category'**
-  String get pickACategory;
 
   /// No description provided for @markAllReadWarningTitle.
   ///
@@ -770,12 +674,6 @@ abstract class AppLocalizations {
   /// **'Summary copied'**
   String get summaryCopied;
 
-  /// No description provided for @unreadOnly.
-  ///
-  /// In en, this message translates to:
-  /// **'Unread'**
-  String get unreadOnly;
-
   /// No description provided for @searchArticles.
   ///
   /// In en, this message translates to:
@@ -818,12 +716,6 @@ abstract class AppLocalizations {
   /// **'Bookmark'**
   String get bookmark;
 
-  /// No description provided for @unbookmark.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove bookmark'**
-  String get unbookmark;
-
   /// No description provided for @keywordAlerts.
   ///
   /// In en, this message translates to:
@@ -848,29 +740,11 @@ abstract class AppLocalizations {
   /// **'Add keywords you want to be notified about\nwhen they appear in your feeds.'**
   String get keywordAlertsEmpty;
 
-  /// No description provided for @addAlertKeyword.
-  ///
-  /// In en, this message translates to:
-  /// **'Add alert keyword'**
-  String get addAlertKeyword;
-
-  /// No description provided for @addAlertKeywordSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'You\'ll get a notification when this word appears in a new article. Case-sensitive.'**
-  String get addAlertKeywordSubtitle;
-
   /// No description provided for @alertKeywordHint.
   ///
   /// In en, this message translates to:
   /// **'e.g. Flutter, climate change…'**
   String get alertKeywordHint;
-
-  /// No description provided for @markUnread.
-  ///
-  /// In en, this message translates to:
-  /// **'Mark as unread'**
-  String get markUnread;
 
   /// No description provided for @timeJustNow.
   ///
@@ -962,23 +836,11 @@ abstract class AppLocalizations {
   /// **'Quick settings'**
   String get quickSettingsTitle;
 
-  /// No description provided for @articleAgeFilter.
-  ///
-  /// In en, this message translates to:
-  /// **'Article age'**
-  String get articleAgeFilter;
-
   /// No description provided for @articlesCount.
   ///
   /// In en, this message translates to:
   /// **'{n, plural, one{1 article} other{{n} articles}}'**
   String articlesCount(int n);
-
-  /// No description provided for @daysCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{n} days'**
-  String daysCount(int n);
 
   /// No description provided for @filterBubbleFootnote.
   ///
@@ -1421,7 +1283,7 @@ abstract class AppLocalizations {
   /// Banner after a successful OPML import. feeds/folders are what was added, skipped is what was already subscribed.
   ///
   /// In en, this message translates to:
-  /// **'Imported {feeds} feeds into {folders} folders, {skipped} skipped'**
+  /// **'Feeds added: {feeds} · Folders created: {folders} · Skipped: {skipped}'**
   String opmlImportedBanner(int feeds, int folders, int skipped);
 
   /// Banner shown when the chosen file is not a usable OPML document. Nothing was changed.

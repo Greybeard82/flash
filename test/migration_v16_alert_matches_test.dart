@@ -87,11 +87,32 @@ Future<void> _shapeAsV15() async {
 /// Same pragma dance as migration_v13_rebuild_test.dart's `_migrate`: onOpen
 /// re-enables foreign key enforcement, which migrateForTesting would otherwise
 /// run under — and the v16 articles rebuild, like v13's, drops a table that
-/// article_summaries cascades from. Without this the test exercises a
-/// configuration production never uses.
-Future<void> _migrate({required int from}) async {
+/// article_summaries cascaded from on devices old enough to have one.
+/// Without this the test exercises a configuration production never uses.
+/// `article_summaries` as it stood before v18 dropped it.
+///
+/// Declared here rather than in `SchemaStatements` because the table is no
+/// longer part of the schema: nothing creates it, and the only reason it
+/// still matters is that the v13 and v16 rebuilds had to avoid cascading it
+/// away on devices that still carry one. A historical migration needs a
+/// historical fixture.
+const String _createArticleSummaries = '''
+  CREATE TABLE article_summaries (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id   INTEGER NOT NULL UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
+    summary      TEXT    NOT NULL,
+    model        TEXT    NOT NULL,
+    generated_at INTEGER NOT NULL
+  )
+''';
+const String _articleSummaries = 'article_summaries';
+
+
+/// [to] stops the chain early — see migration_v13_rebuild_test.dart.
+Future<void> _migrate({required int from, int? to}) async {
   await _db.execute('PRAGMA foreign_keys = OFF');
-  await AppDatabase.instance.migrateForTesting(fromVersion: from);
+  await AppDatabase.instance
+      .migrateForTesting(fromVersion: from, toVersion: to ?? 18);
   await _db.execute('PRAGMA foreign_keys = ON');
 }
 
@@ -257,7 +278,8 @@ void main() {
       // The column was never cleared when an alert was deleted, so a v15
       // device still carries 'zelda' stamps long after the user removed the
       // keyword. Reviving them would create alert_matches rows that nothing
-      // can ever delete: §3.4 allows exactly three deletions — the user bins
+      // can ever delete: the PRD's "Keyword alerts and the Alerts tab"
+      // allows exactly three deletions — the user bins
       // it, its keyword is deleted, or its keyword is edited — and the last
       // two cannot fire for a keyword that no longer exists. The Alerts tab
       // would carry a chip absent from Manage keywords forever.
@@ -500,18 +522,19 @@ void main() {
       // article_summaries.article_id REFERENCES articles(id) ON DELETE
       // CASCADE. DROP TABLE with enforcement on would take every summary with
       // it — silently, and with no way back.
+      await _db.execute(_createArticleSummaries);
       final id =
           await _insertArticle('c-sum', 'Zelda news', matchedAlertKeyword: 'zelda');
-      await _db.insert(TableNames.articleSummaries, {
+      await _db.insert(_articleSummaries, {
         'article_id': id,
         'summary': 'a summary',
         'model': 'gemini-nano',
         'generated_at': _now,
       });
 
-      await _migrate(from: 15);
+      await _migrate(from: 15, to: 16);
 
-      final summaries = await _db.query(TableNames.articleSummaries);
+      final summaries = await _db.query(_articleSummaries);
       expect(summaries.length, 1,
           reason: 'the summary must survive its article being rebuilt');
       expect(summaries.single['article_id'], id);
@@ -568,16 +591,17 @@ void main() {
     });
 
     test('foreign_key_check returns nothing after the rebuild', () async {
+      await _db.execute(_createArticleSummaries);
       final id =
           await _insertArticle('c-fk', 'Zelda news', matchedAlertKeyword: 'zelda');
-      await _db.insert(TableNames.articleSummaries, {
+      await _db.insert(_articleSummaries, {
         'article_id': id,
         'summary': 's',
         'model': 'm',
         'generated_at': _now,
       });
 
-      await _migrate(from: 15);
+      await _migrate(from: 15, to: 16);
 
       expect(await _db.rawQuery('PRAGMA foreign_key_check'), isEmpty,
           reason: 'a database with dangling references is worse than one '

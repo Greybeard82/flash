@@ -337,21 +337,6 @@ void main() {
     expect(entries.single.keywords, ['zelda']);
   });
 
-  test('clearAllTombstones leaves alert_matches untouched', () async {
-    final id = await _seedPair('e1', 'zelda');
-    await _articles.markAsRead(id);
-    await _articles.retireAllRead();
-
-    final cleared = await _articles.clearAllTombstones();
-
-    expect(cleared, 1);
-    expect(await _articles.tombstoneCount(), 0);
-    expect(await _alertRowCount(), 1,
-        reason: 'the one route back from retirement touches the tombstone '
-            'table only — it must not take alerts with it, in either '
-            'direction');
-    expect((await _alerts.getEntries()).single.guid, 'e1');
-  });
 
   test('pruneTombstones leaves alert_matches untouched', () async {
     await _seedPair('f1', 'zelda');

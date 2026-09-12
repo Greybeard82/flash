@@ -41,7 +41,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 17,
+      version: 18,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -49,11 +49,13 @@ class AppDatabase {
       // onOpen once any migration has finished.
       //
       // This is not a preference, it is the only place the pragma can be set.
-      // The v13 migration rebuilds `articles`, and `article_summaries` holds
+      // The v13 migration rebuilds `articles`, and on a device old enough to
+      // need it `article_summaries` still exists, holding
       // `article_id REFERENCES articles(id) ON DELETE CASCADE` — so dropping
       // the old table with enforcement on would cascade every summary row
       // away, and the later RENAME would repoint that clause at a table that
-      // is about to disappear. `PRAGMA foreign_keys` is a silent no-op inside
+      // is about to disappear. v18 drops that table for good, but v13 runs
+      // long before v18 does on the device that needs both. `PRAGMA foreign_keys` is a silent no-op inside
       // a transaction, and sqflite runs onCreate/onUpgrade inside one, so
       // issuing it there would appear to work and do nothing.
       onConfigure: (db) async {
@@ -91,7 +93,6 @@ class AppDatabase {
     await db.execute(SchemaStatements.createArticlesFeedReadPublishedIndex);
     await db.execute(SchemaStatements.createKeywordBlocklist);
     await db.execute(SchemaStatements.createKeywordAlerts);
-    await db.execute(SchemaStatements.createArticleSummaries);
     await db.execute(SchemaStatements.createSettings);
     await db.execute(SchemaStatements.createDeletedArticles);
     await db.execute(SchemaStatements.createDeletedArticlesGuidIndex);
@@ -491,6 +492,39 @@ class AppDatabase {
         "('drive_backup_enabled', 'drive_last_backup_at', 'google_account_email')",
       );
     }
+
+    // `newVersion` is always 18 in production, so in practice this reads as
+    // `oldVersion < 18`. It is consulted because this is the first step that
+    // *removes* something older steps are tested against — the table below
+    // is the fixture for the v13 and v16 rebuild tests, and the settings key
+    // is the fixture for the v17 no-wildcard test. Without the second
+    // clause, `migrateForTesting(toVersion: 13)` would still run this and
+    // delete the thing the older step is supposed to be protecting.
+    if (oldVersion < 18 && newVersion >= 18) {
+      // `article_summaries` never held a row in production. Summaries are
+      // generated on demand and cached in memory for the session, by design —
+      // re-reading a stale summary of an article the publisher has since
+      // edited is worse than spending a second regenerating it. The table was
+      // built by every `_onCreate` from v1 and written to by nothing.
+      //
+      // Dropping it is also what lets `articles` be rebuilt in future without
+      // the foreign-key dance in `onConfigure` above.
+      await db.execute('DROP TABLE IF EXISTS article_summaries');
+
+      // Three more keys with no reader left in `AppSettings.fromMap`:
+      // `feedly_api_key` is a leftover from when Feedly search was thought to
+      // need one (it doesn't — the endpoint used is public), and the two
+      // auto-mark-read keys belong to a setting that was replaced by
+      // mark-read-on-scroll.
+      //
+      // Named individually, like the v17 sweep above, for the same reason: a
+      // wildcard is one typo away from taking something else with it.
+      await db.execute(
+        "DELETE FROM settings WHERE key IN "
+        "('feedly_api_key', 'auto_mark_read_at_bottom', "
+        "'auto_mark_read_at_bottom_seconds')",
+      );
+    }
   }
 
   Future<bool> _tableExists(Database db, String name) async {
@@ -635,9 +669,18 @@ class AppDatabase {
   /// to exercise in a test — and untested migrations are how the stale
   /// `schema_version` row survived five schema bumps unnoticed.
   @visibleForTesting
-  Future<void> migrateForTesting({required int fromVersion}) async {
+  /// Runs the migration chain, for tests.
+  ///
+  /// [toVersion] defaults to the current schema version. A migration test
+  /// that asserts on something a *later* migration removes has to stop at the
+  /// version it is actually testing — v18 drops `article_summaries`, so the
+  /// v13 and v16 rebuild tests would otherwise find their fixture gone.
+  Future<void> migrateForTesting({
+    required int fromVersion,
+    int toVersion = 18,
+  }) async {
     final db = await database;
-    await _onUpgrade(db, fromVersion, 17);
+    await _onUpgrade(db, fromVersion, toVersion);
   }
 
   Future<void> close() async {

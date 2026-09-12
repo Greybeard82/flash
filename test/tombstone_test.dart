@@ -79,14 +79,6 @@ Future<int> _tombstoneCount() async {
   return r.first['c'] as int;
 }
 
-Future<int> _idOf(int feedId, String guid) async {
-  final db = await AppDatabase.instance.database;
-  final r = await db.query(TableNames.articles,
-      columns: ['id'], where: 'feed_id = ? AND guid = ?',
-      whereArgs: [feedId, guid]);
-  return r.first['id'] as int;
-}
-
 void main() {
   setUp(_setUp);
   tearDown(() async => AppDatabase.instance.close());
@@ -184,61 +176,6 @@ void main() {
             'fetch window has moved on, so a feed re-offering the guid means '
             'it genuinely republished — and keeping tombstones forever would '
             'grow without bound');
-  });
-
-  test('clearing every tombstone lets a retired guid insert again', () async {
-    // The recovery action in Settings. Retirement is irreversible by design,
-    // so this is the only route back for a user who scrolled faster than they
-    // meant to.
-    final db = await AppDatabase.instance.database;
-    await db.insert(TableNames.deletedArticles,
-        {'feed_id': _feedA, 'guid': 'g1', 'deleted_at': _now});
-    await db.insert(TableNames.deletedArticles,
-        {'feed_id': _feedA, 'guid': 'g2', 'deleted_at': _now});
-    expect(await _repo.tombstoneCount(), 2);
-
-    final cleared = await _repo.clearAllTombstones();
-
-    expect(cleared, 2);
-    expect(await _repo.tombstoneCount(), 0);
-
-    // The feeds still carry them, so the next fetch brings them back.
-    await _repo.insertArticles(_feedA, [_article('g1'), _article('g2')]);
-    expect((await _rows(_feedA)).length, 2,
-        reason: 'this is the whole point of the recovery action');
-  });
-
-  test('clearing tombstones touches nothing but the tombstone table',
-      () async {
-    final db = await AppDatabase.instance.database;
-
-    // A library around the tombstones: a keyword, a saved article, a
-    // surviving unread article, one tombstone, plus the folders and feeds
-    // from setUp. The tombstoned guid needs no article row of its own —
-    // clearAllTombstones only ever touches deleted_articles.
-    await db.insert(TableNames.keywordBlocklist,
-        {'keyword': 'sponsored', 'whole_word': 0, 'created_at': _now});
-    await _repo.insertArticles(_feedA, [_article('keep'), _article('saved')]);
-    await _repo.setSaved(await _idOf(_feedA, 'saved'), saved: true);
-    await db.insert(TableNames.deletedArticles,
-        {'feed_id': _feedA, 'guid': 'doomed', 'deleted_at': _now});
-
-    final foldersBefore = await db.query(TableNames.folders);
-    final feedsBefore = await db.query(TableNames.feeds);
-    final keywordsBefore = await db.query(TableNames.keywordBlocklist);
-    final articlesBefore = await db.query(TableNames.articles);
-    expect(await _repo.tombstoneCount(), 1);
-
-    await _repo.clearAllTombstones();
-
-    expect(await db.query(TableNames.folders), foldersBefore);
-    expect(await db.query(TableNames.feeds), feedsBefore);
-    expect(await db.query(TableNames.keywordBlocklist), keywordsBefore);
-    expect(await db.query(TableNames.articles), articlesBefore,
-        reason: 'recovery clears tombstones only — surviving articles and '
-            'bookmarks are not touched, and nothing is resurrected until the '
-            'next fetch actually re-inserts it');
-    expect(await _repo.tombstoneCount(), 0);
   });
 
   test('deleting a feed cascades its tombstones away', () async {

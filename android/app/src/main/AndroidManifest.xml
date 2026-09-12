@@ -31,6 +31,20 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
+            <!--
+              Android 16 (API 36) ignores an app's orientation lock on large
+              screens and lets the system decide. This opts back out, which is
+              what keeps the landscape lock in MainActivity working on a
+              tablet running 16.
+
+              It is a deliberate stay of execution, not a fix: the opt-out is
+              ignored once the app targets API 37. Portrait tablet layouts
+              have to exist before that move: see the PRD, "Decided, not
+              built".
+            -->
+            <property
+                android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+                android:value="true" />
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"

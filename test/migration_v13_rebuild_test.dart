@@ -54,9 +54,32 @@ Future<void> _setUp() async {
 /// runs against an already-open database, where onOpen has re-enabled
 /// enforcement, so the pragma is mirrored here. Without it this exercises a
 /// configuration production never uses.
-Future<void> _migrate({required int from}) async {
+/// `article_summaries` as it stood before v18 dropped it.
+///
+/// Declared here rather than in `SchemaStatements` because the table is no
+/// longer part of the schema: nothing creates it, and the only reason it
+/// still matters is that the v13 and v16 rebuilds had to avoid cascading it
+/// away on devices that still carry one. A historical migration needs a
+/// historical fixture.
+const String _createArticleSummaries = '''
+  CREATE TABLE article_summaries (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id   INTEGER NOT NULL UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
+    summary      TEXT    NOT NULL,
+    model        TEXT    NOT NULL,
+    generated_at INTEGER NOT NULL
+  )
+''';
+const String _articleSummaries = 'article_summaries';
+
+
+/// [to] stops the chain early. Only the `article_summaries` test needs it:
+/// v18 drops that table, so migrating all the way would delete the fixture
+/// before the assertion could look at it.
+Future<void> _migrate({required int from, int? to}) async {
   await _db.execute('PRAGMA foreign_keys = OFF');
-  await AppDatabase.instance.migrateForTesting(fromVersion: from);
+  await AppDatabase.instance
+      .migrateForTesting(fromVersion: from, toVersion: to ?? 18);
   await _db.execute('PRAGMA foreign_keys = ON');
 }
 
@@ -202,17 +225,18 @@ void main() {
       // CASCADE. DROP TABLE with enforcement on would take every summary with
       // it — silently, and with no way back.
       await _addReadAt();
+      await _db.execute(_createArticleSummaries);
       final id = await _insertArticle('a');
-      await _db.insert(TableNames.articleSummaries, {
+      await _db.insert(_articleSummaries, {
         'article_id': id,
         'summary': 'a summary',
         'model': 'gemini-nano',
         'generated_at': _now,
       });
 
-      await _migrate(from: 12);
+      await _migrate(from: 12, to: 13);
 
-      final summaries = await _db.query(TableNames.articleSummaries);
+      final summaries = await _db.query(_articleSummaries);
       expect(summaries.length, 1,
           reason: 'the summary must survive its article being rebuilt');
       expect(summaries.single['article_id'], id);
@@ -272,15 +296,16 @@ void main() {
   group('integrity', () {
     test('foreign_key_check returns nothing after the rebuild', () async {
       await _addReadAt();
+      await _db.execute(_createArticleSummaries);
       final id = await _insertArticle('a');
-      await _db.insert(TableNames.articleSummaries, {
+      await _db.insert(_articleSummaries, {
         'article_id': id,
         'summary': 's',
         'model': 'm',
         'generated_at': _now,
       });
 
-      await _migrate(from: 12);
+      await _migrate(from: 12, to: 13);
 
       expect(await _db.rawQuery('PRAGMA foreign_key_check'), isEmpty);
     });

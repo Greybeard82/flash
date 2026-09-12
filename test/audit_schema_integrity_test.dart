@@ -27,7 +27,7 @@ import 'package:flash/repositories/settings_repository.dart';
 /// every migration test in this suite quietly stops one version short of the
 /// step it was written to exercise and still reports green — the new
 /// `if (oldVersion < n)` block simply never runs.
-const int kExpectedSchemaVersion = 17;
+const int kExpectedSchemaVersion = 18;
 
 Future<void> _setUp() async {
   sqfliteFfiInit();
@@ -141,7 +141,6 @@ void main() {
       'articles',
       'keyword_blocklist',
       'keyword_alerts',
-      'article_summaries',
       'settings',
     ]) {
       expect(tables, contains(expected),

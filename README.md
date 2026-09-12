@@ -1,17 +1,16 @@
-# flash
+# Flash
 
-A new Flutter project.
+An Android RSS and Atom reader: account-free and local-first, with keyword
+blocking to cut the noise, keyword alerts for the things you don't want to
+miss, and AI article summaries that run on-device where the phone supports it.
 
-## Getting Started
+Flutter and Dart, SQLite on the device, Android only.
 
-This project is a starting point for a Flutter application.
+| Where to look | For |
+|---|---|
+| [`PRD-Flash.md`](PRD-Flash.md) | What the app does, what it deliberately doesn't, and what's decided but unbuilt. The single source of truth — if it and the code disagree, one of them is a bug. |
+| [`MANUAL_QA.md`](MANUAL_QA.md) | On-device checks that automated tests can't cover. |
+| [`CLAUDE.md`](CLAUDE.md) | Rules for coding agents, including the absolute ban on changing settings on a physical device. |
 
-A few resources to get you started if this is your first Flutter project:
-
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Build with `flutter build appbundle --release`. Release signing reads
+`android/key.properties`, which is not committed.

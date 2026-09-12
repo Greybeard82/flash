@@ -18,10 +18,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get refresh => 'Actualiser';
 
   @override
-  String get noArticlesYet =>
-      'Aucun article pour l\'instant.\nTirez vers le bas pour actualiser.';
-
-  @override
   String get noNewArticles => 'Aucun nouvel article.\nVous êtes à jour.';
 
   @override
@@ -72,9 +68,6 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get defaultFolderName => 'Mes Actualités';
-
-  @override
   String get categoryName => 'Nom de la catégorie';
 
   @override
@@ -100,16 +93,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get remove => 'Retirer';
-
-  @override
-  String renameFolder(String name) {
-    return 'Renommer \"$name\"';
-  }
-
-  @override
-  String deleteFolder(String name) {
-    return 'Supprimer \"$name\"';
-  }
 
   @override
   String get edit => 'Modifier';
@@ -140,12 +123,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Marque automatiquement les articles comme lus lors du défilement';
 
   @override
-  String get backgroundRefreshInterval => 'Intervalle d\'actualisation';
-
-  @override
-  String get every15Minutes => 'Toutes les 15 minutes';
-
-  @override
   String get every30Minutes => 'Toutes les 30 minutes';
 
   @override
@@ -159,12 +136,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get manualOnly => 'Jamais';
-
-  @override
-  String get maxArticlesPerFeed => 'Max articles par flux';
-
-  @override
-  String get filters => 'Filtres';
 
   @override
   String get keywordBlocklist => 'Liste de mots bloqués';
@@ -235,9 +206,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Les articles contenant un mot bloqué\nseront masqués de votre flux.';
 
   @override
-  String get blockKeyword => 'Bloquer un mot';
-
-  @override
   String get keywordOrPhrase => 'Mot ou phrase';
 
   @override
@@ -252,12 +220,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get add => 'Ajouter';
-
-  @override
-  String get matchingWholeWord => 'Correspondance mot entier uniquement';
-
-  @override
-  String get matchingAnywhere => 'Correspondance n\'importe où dans le texte';
 
   @override
   String get allTab => 'Tout';
@@ -279,9 +241,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get share => 'Partager';
 
   @override
-  String get markRead => 'Marquer comme lu';
-
-  @override
   String get nothingHereYet => 'Rien ici pour l\'instant.';
 
   @override
@@ -292,17 +251,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get onboardingTagline => 'RSS rapide et local avec filtrage par IA.';
-
-  @override
-  String get onboardingBullet1 =>
-      'Suivez n\'importe quel flux RSS — actualités, blogs, podcasts.';
-
-  @override
-  String get onboardingBullet2 => 'Résumés IA, sur l\'appareil.';
-
-  @override
-  String get onboardingBullet3 =>
-      'Sans compte. Vos données restent sur votre téléphone.';
 
   @override
   String get localBackup => 'Fichier de sauvegarde local';
@@ -320,9 +268,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get invalidBackupFile =>
       'Ce fichier n\'est pas une sauvegarde Flash valide';
-
-  @override
-  String get pickACategory => 'Choisir une catégorie';
 
   @override
   String get markAllReadWarningTitle => 'Tout marquer comme lu ?';
@@ -376,9 +321,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get summaryCopied => 'Résumé copié';
 
   @override
-  String get unreadOnly => 'Non lus';
-
-  @override
   String get searchArticles => 'Rechercher des articles…';
 
   @override
@@ -403,9 +345,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get bookmark => 'Enregistrer';
 
   @override
-  String get unbookmark => 'Retirer des enregistrés';
-
-  @override
   String get keywordAlerts => 'Alertes par mot-clé';
 
   @override
@@ -420,17 +359,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Ajoutez des mots pour être notifié\nlorsqu\'ils apparaissent dans vos flux.';
 
   @override
-  String get addAlertKeyword => 'Ajouter une alerte';
-
-  @override
-  String get addAlertKeywordSubtitle =>
-      'Vous serez notifié quand ce mot apparaît dans un nouvel article. Sensible à la casse.';
-
-  @override
   String get alertKeywordHint => 'ex. Flutter, réchauffement climatique…';
-
-  @override
-  String get markUnread => 'Marquer comme non lu';
 
   @override
   String get timeJustNow => 'à l\'instant';
@@ -493,9 +422,6 @@ class AppLocalizationsFr extends AppLocalizations {
   String get quickSettingsTitle => 'Réglages rapides';
 
   @override
-  String get articleAgeFilter => 'Âge des articles';
-
-  @override
   String articlesCount(int n) {
     String _temp0 = intl.Intl.pluralLogic(
       n,
@@ -504,11 +430,6 @@ class AppLocalizationsFr extends AppLocalizations {
       one: '1 article',
     );
     return '$_temp0';
-  }
-
-  @override
-  String daysCount(int n) {
-    return '$n jours';
   }
 
   @override
@@ -796,7 +717,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String opmlImportedBanner(int feeds, int folders, int skipped) {
-    return '$feeds flux importés dans $folders catégories, $skipped ignorés';
+    return 'Flux ajoutés : $feeds · Catégories créées : $folders · Ignorés : $skipped';
   }
 
   @override

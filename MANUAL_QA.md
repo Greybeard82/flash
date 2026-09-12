@@ -4,28 +4,18 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 1. Dynamic Colour Theming (Android 12+)
-
-| Step | Expected |
-|------|----------|
-| Open Settings → Wallpaper & Style and change your wallpaper | System generates a new Material You colour scheme |
-| Relaunch Flash | App accent colours (FAB, tabs, selected state, chip backgrounds) update to match the new wallpaper palette |
-| Set a neutral (grey/white) wallpaper | App falls back to a safe neutral palette; no garish colours |
-
----
-
-## 2. Edge-to-Edge Layout & Window Insets
+## 1. Edge-to-Edge Layout & Window Insets
 
 | Step | Expected |
 |------|----------|
 | Open Flash on a device with gesture navigation | Article list scrolls fully behind the bottom nav bar with proper padding; no content clipped behind the system bar |
 | Open Flash on a device with three-button navigation | Same — nav bar background does not cover content |
-| Rotate to landscape | Layout adjusts; no overflow; FABs remain reachable |
+| Turn the device sideways | **Nothing happens.** Phones are portrait-locked and tablets are landscape-locked, both at the Activity level |
 | Check status bar area | App content does not overlap the status bar icons |
 
 ---
 
-## 3. Predictive Back Gesture (Android 14+)
+## 2. Predictive Back Gesture (Android 14+)
 
 | Step | Expected |
 |------|----------|
@@ -36,18 +26,18 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 4. Haptic Feedback
+## 3. Haptic Feedback
 
 | Step | Expected |
 |------|----------|
-| Swipe an article left or right | Light haptic tap fires at gesture completion |
+| Swipe a card in **Bookmarks** left or right | Light haptic tap fires at gesture completion. The Flash feed has no swipe — horizontal movement there pages between categories |
 | Tap "Mark all as read" FAB | Medium haptic tap fires |
 | Long-press an article card | A brief haptic pulse fires as the radial menu opens |
-| Toggle any swipe gesture rapidly | Each gesture produces exactly one haptic event (no stacking) |
+| Repeat that Bookmarks swipe rapidly | Each gesture produces exactly one haptic event (no stacking) |
 
 ---
 
-## 5. Scroll Performance
+## 4. Scroll Performance
 
 | Step | Expected |
 |------|----------|
@@ -58,18 +48,18 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 6. Cold-Start Performance
+## 5. Cold-Start Performance
 
 | Step | Expected |
 |------|----------|
 | Force-stop Flash (recent apps → swipe away, or `adb shell am force-stop io.getflash.app`) | — |
-| Tap the Flash icon and start a stopwatch | Lightning bolt animation visible within 1.5 seconds of tap |
+| Tap the Flash icon and start a stopwatch | The cached article list is on screen in **under 1 second** |
 | Wait for animation to complete | Feed list populated with fresh articles |
-| Repeat 3× to get a representative average | All runs < 1.5 s to first meaningful paint (cached list visible) |
+| Repeat 3× to get a representative average | Every run is under 1 second to the cached list — the PRD's non-functional target |
 
 ---
 
-## 7. Background Refresh Speed (20 feeds, Wi-Fi)
+## 6. Background Refresh Speed (20 feeds, Wi-Fi)
 
 | Step | Expected |
 |------|----------|
@@ -79,57 +69,27 @@ Items that cannot be reliably verified in an automated test suite. Run on a phys
 
 ---
 
-## 8. Real Gemini Nano Summary
+## 7. Real Gemini Nano Summary
 
 | Step | Expected |
 |------|----------|
 | Ensure device supports Gemini Nano (Pixel 8 Pro / 9 Pro, Android 14+) | — |
-| Long-press an article → tap ✦ Summary | Bottom sheet slides up with loading skeleton |
-| Wait for on-device inference | Summary appears as 4 concise bullet points, no API key required |
+| Tap the ✦ Summary button on a card | The sheet opens showing "Reading the article…", then "Writing the summary…" |
+| Wait for on-device inference | The text appears **only when complete**, within the selected length's caps (Standard: 320 words, 6 bullets). No API key involved |
 | Trigger from an article with a paywall / redirect | "Couldn't retrieve" error state shown gracefully |
 
 ---
 
-## 9. Folder Tabs Position (Thumb-Zone Hard Requirement)
-
-| Step | Expected |
-|------|----------|
-| Create two or more folders | Tab bar appears |
-| Observe tab bar position | Tabs are **at the bottom** of the content area, directly above the navigation bar — NOT at the top |
-| Tap each tab | Article list switches; scroll resets to top for a tab not previously visited |
-| Revisit a tab after scrolling it partway | Scroll position is restored to where you left it |
-
----
-
-## 10. Minimum Tap Target Size
+## 8. Minimum Tap Target Size
 
 | Step | Expected |
 |------|----------|
 | Enable Settings → Developer options → Show tap highlights | — |
-| Tap every interactive element (nav bar items, FABs, folder tabs, swipe actions, settings rows) | Highlight covers ≥ 48×48 dp in all cases; no tiny hit areas |
+| Tap every interactive element (nav bar items, floating buttons, category pills, the Bookmarks swipe, settings rows, Swap sides) | Highlight covers ≥ 48×48 dp in all cases; no tiny hit areas |
 
 ---
 
-## 11. Swipe Mark-as-Read (Dims In-Place)
-
-The height check below cannot be automated. `flutter_test` renders with a font
-whose glyphs all share identical metrics, so a font-weight change produces no
-measurable size difference in a widget test — a height-equality assertion there
-passed just as happily before the fix as after it. A device is the only place
-this regression is visible.
-
-| Step | Expected |
-|------|----------|
-| Swipe an article to the LEFT | Article dims in-place (reduced opacity); stays in list; no removal animation |
-| Swipe an article to the RIGHT | Same result — article dims in-place |
-| Pick an article whose title wraps to three lines, and watch it closely as it dims | **The card's height does not change.** Nothing below it moves. Read state is carried by colour and opacity only; the title weight is constant at `w600` |
-| Immediately after the swipe, check the list length | **Nothing has been removed.** A swipe marks read; it never retires. The row dims where it is |
-| Scroll away and back, with **Show read** on | Dimmed article is still present at its original position |
-| Same, with **Show read** off | The article is gone once it passes the retirement frontier, or at the next refresh — see §18 |
-
----
-
-## 12. Onboarding (First-Launch Only)
+## 9. Onboarding (First-Launch Only)
 
 | Step | Expected |
 |------|----------|
@@ -139,7 +99,7 @@ this regression is visible.
 
 ---
 
-## 13. Cross-Tab Unread Counts (Live)
+## 10. Cross-Tab Unread Counts (Live)
 
 | Step | Expected |
 |------|----------|
@@ -151,18 +111,18 @@ this regression is visible.
 
 ---
 
-## 14. Folder Tab Size
+## 11. Category Pill Size
 
 | Step | Expected |
 |------|----------|
-| Open the folder tab bar with 2+ folders | Tabs are visibly taller than before (60dp bar vs the old 48dp) |
-| Tap a tab with a light, imprecise thumb tap near its edge | Registers reliably — no need to aim precisely |
-| Tap a tab | A visible ripple plays from the tap point |
-| Switch tabs repeatedly | Selected tab auto-scrolls into view within the horizontal tab strip |
+| Open the feed with 2+ categories | The pill row is visibly taller than a bare 48dp strip |
+| Tap a pill with a light, imprecise thumb tap near its edge | Registers reliably — no need to aim precisely |
+| Tap a pill | A visible ripple plays from the tap point |
+| Switch categories repeatedly | The selected pill auto-scrolls into view within the row |
 
 ---
 
-## 15. Global Loading Indicator
+## 12. Global Loading Indicator
 
 | Step | Expected |
 |------|----------|
@@ -173,12 +133,12 @@ this regression is visible.
 
 ---
 
-## 16. Resume Refresh
+## 13. Resume Refresh
 
 | Step | Expected |
 |------|----------|
 | Open an article in the external browser, then return to Flash within ~10 seconds | No network fetch runs; scroll position is untouched |
-| Background the app for at least 2 minutes, then return | A network fetch runs automatically; new articles appear at the top |
+| Background the app for at least 30 seconds — with the last fetch more than 5 minutes ago — then return | A network fetch runs automatically; new articles appear at the top |
 | After that fetch, check where the list sits | **The list has reset to offset 0.** Preserving the old offset would point it at different content, since new articles insert *above* the viewport |
 | Wait ten seconds, then look at the articles that just arrived | **They are still unread.** This is the point of the exercise: the jump to the top must not be mistaken for the user scrolling past them. Anything newly fetched showing up dimmed is a `MarkReadGate` regression |
 | With **Show read** on, look for articles read earlier | Still present, dimmed. Nothing is purged by a refresh — a refresh never deletes |
@@ -187,25 +147,29 @@ this regression is visible.
 
 ---
 
-## 17. AI Summary Reads the Full Article
+## 14. AI Summary Reads the Full Article
 
 | Step | Expected |
 |------|----------|
 | Pick an article whose RSS description is a one- or two-sentence teaser | — |
 | Long-press → ✦ Summary | Sheet shows "Reading the article…" first, then "Writing the summary…" once generation starts |
 | Wait for the summary | The summary contains information NOT present in the teaser (i.e. it summarised the full article, not the RSS blurb) |
-| Trigger a summary on an article that is a single-topic piece (no distinct sub-points) | Summary renders as flowing prose with no bullet points |
-| Trigger a summary on an article covering several distinct points | Summary renders as an opening sentence followed by short bullets |
+| Set **Summary length** to Short in Quick Settings and summarise a long article | At most 130 words and 4 bullets. The reader picks the length; the model does not decide it |
+| Set it to Detailed and summarise the same article | Visibly longer, up to 450 words and 9 bullets |
 | Trigger a summary on an article whose extraction fails (e.g. a URL that 404s) | Summary still generates from the RSS description, with a small "Based on the article preview only." note under the disclaimer |
 
 ---
 
-## 18. Retirement and the Show Read Toggle
+## 15. Retirement and the Show Read Toggle
 
 Read is not a state an article rests in — it is a step on the way out. An
 article is **retired** when the user is finished with it: the row is deleted
 and a tombstone written so a re-fetch cannot bring it back. **Show read**
-decides only *when*.
+decides only *when* it leaves the list.
+
+Retirement runs at boundaries, never while you scroll: cold start, resume, a
+refresh, a tab switch, and Mark all read. That is the whole reason the list
+can be trusted not to move under you.
 
 **Retirement is permanent. There is no undo.** Do this on a device whose
 library you are willing to lose.
@@ -213,19 +177,19 @@ library you are willing to lose.
 | Step | Expected |
 |------|----------|
 | Open the Filter bubble (funnel button) and turn **Show read off**. Apply | The list re-queries and resets to the top |
-| Scroll down slowly past six or seven articles, then stop | Articles behind you are removed once they are two cards above the viewport. **The list does not move under you** — see §24 |
-| Scroll back up to the top | The retired articles are gone. The ones still on screen are the ones you had not passed |
-| Now turn **Show read on** and Apply | Nothing you retired comes back. Retirement is not hiding |
-| With Show read **on**, scroll past several articles | They dim in place and stay. Nothing is removed while you scroll |
+| Scroll down slowly past six or seven articles, then stop | **Nothing is removed while you scroll.** They mark read and dim where they are; the list does not move |
+| Without leaving the tab, scroll back up | Every article you passed is still there, dimmed |
+| Now switch to another category tab and back | *Now* they are gone — the tab switch is a retirement boundary, and Show read off leaves them out of the rebuilt list |
+| Turn **Show read on** and Apply | Nothing that was retired comes back. Retirement is deletion, not hiding |
+| With Show read **on**, scroll past several articles | They dim in place and stay, through as many scrolls as you like |
 | Pull to refresh | *Now* the dimmed ones disappear — retirement was deferred to the refresh, not skipped |
-| Bookmark an article, mark it read, with Show read **off** | It stays in the feed. Saved articles are exempt from retirement under either setting |
-| Refresh again with that bookmark still saved | Still there, still in Bookmarks |
+| Bookmark an article, mark it read, with Show read **off**, then refresh | It stays. Saved articles are exempt from retirement under either setting |
 | Un-bookmark it, then refresh | Now it retires like anything else |
 | Force-close and relaunch | Retired articles are still gone; nothing is restored by a restart |
 
 ---
 
-## 19. Day Dividers
+## 16. Day Dividers
 
 | Step | Expected |
 |------|----------|
@@ -238,7 +202,7 @@ library you are willing to lose.
 
 ---
 
-## 20. Refresh Is Conditional
+## 17. Refresh Is Conditional
 
 A refresh either leaves the list completely alone or rebuilds it and jumps to
 the top. Which one depends on whether anything *visible* actually arrived —
@@ -266,7 +230,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 21. Feed Add / Remove Reaches the Article List
+## 18. Feed Add / Remove Reaches the Article List
 
 > ⚠️ **Not yet exercised on device.** The `needsFetch` branch below has been
 > verified only by unit test and by its `structureOnly` sibling (a category
@@ -282,7 +246,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 22. Categories Collapsed by Default
+## 19. Categories Collapsed by Default
 
 | Step | Expected |
 |------|----------|
@@ -294,18 +258,7 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 
 ---
 
-## 23. Filter Bubble — Article Age
-
-| Step | Expected |
-|------|----------|
-| Open the Filter bubble and move **Article age** down | The label tracks the slider; nothing changes in the list yet |
-| Press Apply | The list re-queries immediately and articles older than the window are gone |
-| Move it back up and Apply | They return, provided they are still in the database |
-| Set a value below 5 days | The visible list is correct. Note that `runCleanup` clamps to 5–20, so rows linger in the database a few days longer than the label implies — storage lags, the list does not |
-
----
-
-## 24. Tombstones — Retired Articles Stay Gone
+## 20. Tombstones — Retired Articles Stay Gone
 
 > **The single most important manual check in this sheet.** Dedup used to work
 > because a read article kept its row, and therefore its guid, to collide with.
@@ -316,42 +269,46 @@ hidden by the age filter, the per-feed cap or a blocklist match.
 | Step | Expected |
 |------|----------|
 | Show read **off**. Note the titles of five or six articles at the top | — |
-| Scroll past all of them and let the list settle | They are retired and gone |
-| Pull to refresh | **None of those titles return.** If any comes back unread, the `NOT EXISTS` guard in `insertArticles` is broken and nothing else in this area can be trusted |
+| Scroll past all of them, then pull to refresh | They are retired and gone |
+| Pull to refresh again | **None of those titles return.** If any comes back unread, the `NOT EXISTS` guard in `insertArticles` is broken and nothing else in this area can be trusted |
 | Force-close, relaunch, refresh again | Still gone |
 | Leave the app for eight days, then refresh | They *may* return — tombstones prune past `kTombstoneDayLimit`, and by then a feed still offering the guid has genuinely republished. This is intended, not a leak |
 
 ---
 
-## 25. The List Never Moves
+## 21. The List Never Moves
 
 The invariant the whole retirement design is built around: the article list
-must never move by a single pixel while you are looking at it.
+must never move by a single pixel while you are looking at it. The mechanism
+is simple — rows are only ever removed while the list is being rebuilt, and a
+rebuild only happens at a boundary you caused.
 
 | Step | Expected |
 |------|----------|
-| Show read **off**. Scroll down slowly, in small drags, pausing after each | Rows are removed behind you at each pause. **Nothing on screen shifts** — no jump, no flicker, no settle |
-| Pick a headline in the middle of the screen and keep your eye on it through a pause | It does not move a pixel when rows above it are removed |
-| Now fling hard and let it come to rest | Same — the removal happens at rest, and the correction lands in the same frame |
-| Fling down, then immediately drag back up before it settles | Nothing is removed from what you scrolled back to. The frontier is recomputed at rest, not reused from mid-scroll |
-| Scroll to the very top and overscroll-bounce repeatedly | **No rows are eaten.** A bounce is not a scroll past the frontier |
-| Bookmark an article, then scroll past it | Nothing above it is removed either — a saved article blocks the whole block, so the list stays put rather than resequencing around a survivor |
+| Show read **off**. Scroll down slowly, in small drags, pausing after each | **Nothing is ever removed mid-scroll.** No jump, no flicker, no settle |
+| Pick a headline in the middle of the screen and keep your eye on it through several pauses | It does not move a pixel |
+| Fling hard and let it come to rest | Same — nothing is removed at rest either |
+| Scroll to the very top and overscroll-bounce repeatedly | No rows are eaten; a bounce changes nothing |
+| Now pull to refresh with nothing new to fetch | The read articles go, and the list does **not** jump — see "Refresh Is Conditional" |
+| Refresh again when something genuinely new has arrived | The list reloads and jumps to offset 0 deliberately, as a programmatic scroll |
+| Immediately check the articles now at the top | **Still unread.** A programmatic scroll closes the mark-read gate first; anything newly fetched arriving dimmed is a `MarkReadGate` regression |
+| Bookmark an article, mark it read, then refresh | It stays put and nothing around it resequences — a saved article is exempt, and the rest of the list closes up without moving what is on screen |
 
 ---
 
-## 26. Retiring Across a Day Boundary
+## 22. Retiring Across a Day Boundary
 
 | Step | Expected |
 |------|----------|
 | Find a list with at least two day groups (**TODAY** and **YESTERDAY**) | — |
-| Show read **off**. Scroll so the frontier lands in the *middle* of the first group | The header stays. The surviving articles still have a date above them |
-| Keep scrolling until the whole first group is retired | **TODAY** goes with its last article; **YESTERDAY** becomes the top header |
-| Watch the moment the header is removed | Nothing jumps — the header's height is inside the correction |
+| Show read **off**. Scroll so that only *some* of the first group is read, then refresh | The header stays. The surviving articles still have a date above them |
+| Mark the rest of that group read and refresh again | **TODAY** goes with its last article; **YESTERDAY** becomes the top header |
+| Watch the list as that refresh lands | Nothing jumps — the header leaves as part of the rebuild, not under your thumb |
 | Scroll to the top | The list opens on a header, never on a bare article |
 
 ---
 
-## 27. Reaching the Bottom Zeroes the Badge
+## 23. Reaching the Bottom Zeroes the Badge
 
 | Step | Expected |
 |------|----------|
@@ -365,7 +322,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 28. "Don't Show Again" on Mark All as Read
+## 24. "Don't Show Again" on Mark All as Read
 
 | Step | Expected |
 |------|----------|
@@ -380,26 +337,7 @@ must never move by a single pixel while you are looking at it.
 
 ---
 
-## 29. Recovering Recently Removed Articles
-
-Retirement is irreversible by design, so this is the only way back for a user
-who scrolled faster than they meant to. It cannot recover anything the feeds
-have stopped offering.
-
-| Step | Expected |
-|------|----------|
-| Show read **off**. Note six article titles, then scroll past them | They are retired and gone |
-| Pull to refresh | They stay gone — tombstones are doing their job |
-| Settings → **Recover recently removed articles** | A confirmation explaining that removed articles may reappear, and that older ones cannot be recovered |
-| Tap **Cancel** | Nothing changes; the articles are still gone |
-| Tap it again and confirm | A refresh runs |
-| Check the list | The articles the feeds still carry are back, as **unread** |
-| Check your bookmarks, categories, feeds and keyword blocklist | All completely unchanged — recovery clears tombstones and nothing else |
-| Scroll past an article older than seven days, then recover | It does **not** come back. Outside the fetch window there is nothing to re-insert |
-
----
-
-## 30. The Alerts tab
+## 25. The Alerts tab
 
 An alert match is now a row of its own in `alert_matches`, not a column on the
 article. That is the whole point: the article can be read, retired, cleaned up
@@ -410,7 +348,7 @@ The single most important invariant: `runCleanup`, `retireAllRead`, the
 tombstone system, the display-age filter and the per-feed article cap must all
 leave `alert_matches` completely untouched.
 
-### 30.1 The pill and the badges
+### 25.1 The pill and the badges
 
 | Step | Expected |
 |------|----------|
@@ -421,7 +359,7 @@ leave `alert_matches` completely untouched.
 | Find an article matching four keywords | Three chips plus `+1` |
 | Compare a read card with an unread one | Badge height is identical. Read state changes colour and opacity only — never layout |
 
-### 30.2 Notifications
+### 25.2 Notifications
 
 | Step | Expected |
 |------|----------|
@@ -432,7 +370,7 @@ leave `alert_matches` completely untouched.
 | Post an alert, then tap a *second* notification without restarting | Still opens the Alerts tab. Posting an alert used to silently de-register the tap handler |
 | Switch the phone to German and trigger an alert | The notification body is German, matching the rest of the app |
 
-### 30.3 Read state
+### 25.3 Read state
 
 | Step | Expected |
 |------|----------|
@@ -443,18 +381,18 @@ leave `alert_matches` completely untouched.
 | Open an alert-matched article from **Bookmarks**, return to Alerts | Dimmed there too |
 | Open one from **Search**, return to Alerts | Dimmed there too |
 
-### 30.4 Survival — the invariant
+### 25.4 Survival — the invariant
 
 | Step | Expected |
 |------|----------|
 | Mark a whole folder read so its articles retire | Every alert card from that folder is still on the Alerts tab, dimmed, count unchanged |
-| Set the display age filter to its minimum and cold-restart | Old alert entries are still present |
+| Cold-restart after the display window has aged articles out | Old alert entries are still present — the window applies to the feed, never to `alert_matches` |
 | Delete the feed an alert came from | The card stays, still naming that feed and showing its icon — the snapshot does not join back to `feeds` |
 | Delete **every** feed | The Alerts pill is still there and the tab still opens. The history must not become unreachable |
 | Long-press an Alerts card whose article has been retired and tap **Bookmark** | A banner: *That article is no longer in your feed*. No crash, the card stays |
 | Restore a backup, then refresh | Alert cards are **not** duplicated and no notification re-fires for articles already alerted |
 
-### 30.5 The radial menu
+### 25.5 The radial menu
 
 | Step | Expected |
 |------|----------|
@@ -463,7 +401,7 @@ leave `alert_matches` completely untouched.
 | Tap **Remove** | The card goes, a banner shows, counts update. The **article itself stays** in its category tab and no tombstone is written |
 | Long-press a card in the All tab | **Three** buttons, visually identical to before this change |
 
-### 30.6 Managing keywords
+### 25.6 Managing keywords
 
 | Step | Expected |
 |------|----------|
@@ -478,7 +416,7 @@ leave `alert_matches` completely untouched.
 
 ---
 
-## 31. Local Backup — Export and Import
+## 26. Local Backup — Export and Import
 
 Export used to write a temp file and open the **share sheet**, which cannot save
 to the device: `ACTION_SEND` targets apps that accept a file, and the phone's
@@ -500,7 +438,7 @@ is the user's choice and Downloads is one of them.
 
 ---
 
-## 32. Cloud Summaries via Firebase AI Logic + App Check
+## 27. Cloud Summaries via Firebase AI Logic + App Check
 
 Cloud summaries no longer carry an API key. Requests go to the Firebase AI
 Logic gateway, which holds the key server-side and verifies an **App Check**
@@ -590,7 +528,7 @@ explicit `debugToken`, so a UUID can be generated, registered, and passed in by
 
 ---
 
-## 33. Privacy Policy Link (Play requirement)
+## 28. Privacy Policy Link (Play requirement)
 
 Google Play requires the privacy policy to be reachable from **inside** the app,
 not only from the store listing.
@@ -604,7 +542,7 @@ not only from the store listing.
 
 ---
 
-## 34. Starter Pack and First Run (Play requirement)
+## 29. Starter Pack and First Run (Play requirement)
 
 Google Play made the app unavailable under the **News and Magazines** policy on
 11 Sep 2026. The reviewer's account: a fresh install, onboarding's only button
@@ -627,12 +565,12 @@ physical device, install over the top with `adb install -r <apk>` — never
 | Untick every category | **Start reading** goes disabled. **Skip** stays enabled |
 | Tick one category | The button label counts that category's feeds — "Add 3 feeds", or "Add 1 feed" for a single-feed category |
 | Fresh install → keep all → **Start reading** | Lands on the **Flash** tab, not Categories. Articles appear and all five category tabs have articles within ~15s, with **no further taps** |
-| `adb logcat` across the step above | **One** refresh cycle, not two. Two means the queued `needsFetch` was not cleared — see §4.14 |
+| `adb logcat` across the step above | **One** refresh cycle, not two. Two means the queued `needsFetch` was not cleared — see the PRD, "Cross-screen signals" |
 | Fresh install → **Skip, I'll add my own** | Lands on **Categories**, empty, exactly as before this pass. No feeds created |
 | From the skip path: Flash tab | Empty state shows **Add a feed** and, below it, **Add starter pack** |
 | Tap **Add starter pack** on the Flash tab | The sheet opens, seeds on confirm, and articles appear **without leaving the tab**. This path consumes the queued change by hand — if the list stays empty until you switch tabs and come back, that is the bug |
 | From the skip path: Categories empty state → **Add starter pack** | Banner reads "{n} feeds added", the categories and feeds are listed, and the Flash tab has articles on return |
-| Re-open the sheet after adding | **There is no route to it.** The pack lives only on the two empty states, and neither is reachable once feeds exist — by design (§4.1: no Settings item, no menu). To reach it again you must remove every feed first. The idempotency it would test is covered by `starter_pack_service_test.dart` |
+| Re-open the sheet after adding | **There is no route to it.** The pack lives only on the two empty states, and neither is reachable once feeds exist — by design (PRD, "Starter pack": no Settings item, no menu). To reach it again you must remove every feed first. The idempotency it would test is covered by `starter_pack_service_test.dart` |
 | Delete every category, then Categories empty state → **Add starter pack** | Everything is recreated. Note this is a *fresh* seed, not a re-add: deleting a category cascades its feeds, so nothing is left to skip |
 | Delete the pack's feeds individually, leaving the categories in place, then Flash empty state → **Add starter pack** | This is the real re-add test. The five categories are **reused** — still five, not ten — and the feeds come back inside them |
 | Before adding, rename a category to `world news` (lower case, with spaces around it), then add the pack | The existing category is reused — **your** spelling is kept — and the World News feeds land inside it. No second folder |
@@ -662,7 +600,7 @@ physical device, install over the top with `adb install -r <apk>` — never
 
 ---
 
-## 35. OPML Import and Export
+## 30. OPML Import and Export
 
 Settings → OPML, beside the local backup file buttons.
 
@@ -695,7 +633,29 @@ it — so a category with no feeds has nothing to bring it back.
 
 ---
 
-## 36. Swap sides (tablets)
+## 31. Orientation Is Locked
+
+Phones are portrait, tablets are landscape, and neither rotates. Both locks
+live in `MainActivity.applyOrientationLock()`, keyed off
+`smallestScreenWidthDp` — the device's shorter dimension, which does not change
+when the device turns.
+
+| Step | Expected |
+|------|----------|
+| On a **phone**, turn the device sideways with system auto-rotate **on** | The app stays portrait. Nothing reflows, no landscape layout appears |
+| On a **tablet**, stand it upright with auto-rotate on | The app stays landscape. It does **not** fall back to the rail tier |
+| On a tablet, turn it 180° so the other long edge is down | It follows — `USER_LANDSCAPE` allows both landscape directions |
+| On a tablet with the system **rotation lock** on | The app honours it rather than fighting it |
+| On a tablet running **Android 16**, repeat the upright check | Still landscape. Android 16 overrides orientation on large screens unless an app opts out, and the manifest's `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` is that opt-out. If the app turns, the property is missing or the OS has stopped honouring it |
+| Put a tablet into **split-screen** at a narrow width | The rail tier appears, as designed — the lock is about rotation, not about width |
+
+**Known expiry:** the Android 16 opt-out stops working once the app targets
+API 37. Portrait tablet layouts have to exist before that move — see the PRD,
+"Decided, not built".
+
+---
+
+## 32. Swap sides (tablets)
 
 Tablets only. Phones have no navigation bar to move, and TV never swaps.
 Run every row **twice**: once normal, once swapped.

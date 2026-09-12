@@ -30,8 +30,8 @@ import '../widgets/bubble_panel.dart';
 ///
 /// Written out together rather than discovered rule by rule, because these
 /// rules only make sense against each other, and the last time this codebase
-/// grew a multi-rule feature one clause at a time it shipped a regression per
-/// clause (PRD §10).
+/// grew a multi-rule feature one clause at a time it shipped a regression
+/// per clause.
 ///
 /// **What it shows.** `alert_matches`, and nothing else. Those rows carry
 /// their own snapshot of the article and its feed, so this list stays readable

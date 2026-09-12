@@ -1,7 +1,7 @@
 // FolderTabBar sizing tests.
 //
-// Written independently of the implementation. PRD §5.2 mandates a 48×48dp
-// minimum tap target; the shipped tab bar was a 48dp-tall strip whose tappable
+// Written independently of the implementation. Material's minimum tap
+// target is 48×48dp; the shipped tab bar was a 48dp-tall strip whose tappable
 // Column sat inside it with a 3dp indicator and 6dp gap eating the height, so
 // the real target was well under spec and awkward to hit one-handed.
 //

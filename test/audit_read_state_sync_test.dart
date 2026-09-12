@@ -6,7 +6,7 @@
 // count update, no launcher badge refresh. Because all four screens live in
 // a kept-alive IndexedStack and `_AppShell._navigateTo` doesn't reload
 // FeedScreen on a plain tab switch, every badge kept showing the pre-read
-// count for the rest of the session (PRD §"Badges update live from any tab").
+// count for the rest of the session (PRD, "The Flash feed": tab badges).
 //
 // The aliases are gone; both screens now call markAsRead/markAsUnread and
 // ping ReadStateNotifier, which FeedScreen listens to and answers by

@@ -4,7 +4,6 @@ class TableNames {
   static const String articles = 'articles';
   static const String keywordBlocklist = 'keyword_blocklist';
   static const String keywordAlerts = 'keyword_alerts';
-  static const String articleSummaries = 'article_summaries';
   static const String settings = 'settings';
   static const String deletedArticles = 'deleted_articles';
   static const String alertMatches = 'alert_matches';
@@ -245,16 +244,6 @@ class SchemaStatements {
     )
   ''';
 
-  static const String createArticleSummaries = '''
-    CREATE TABLE article_summaries (
-      id           INTEGER PRIMARY KEY AUTOINCREMENT,
-      article_id   INTEGER NOT NULL UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
-      summary      TEXT    NOT NULL,
-      model        TEXT    NOT NULL,
-      generated_at INTEGER NOT NULL
-    )
-  ''';
-
   /// Guids the user has retired, so a re-fetch cannot resurrect them.
   ///
   /// Article rows used to survive being read, which is what made
@@ -301,7 +290,6 @@ const List<Map<String, dynamic>> defaultSettings = [
   {'key': 'refresh_interval_minutes', 'value': '180'},
   {'key': 'article_limit', 'value': '100'},
   {'key': 'mark_read_on_scroll', 'value': 'true'},
-  {'key': 'feedly_api_key', 'value': 'null'},
   {'key': 'onboarding_complete', 'value': 'false'},
   // NB: no 'schema_version' row. PRAGMA user_version — set by the `version:`
   // passed to openDatabase in database.dart — is the single source of truth

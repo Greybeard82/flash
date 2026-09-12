@@ -54,18 +54,43 @@ listed here.
 This applies to the Samsung Galaxy M51, the Pixel 11 Pro, the Lenovo Tab M11,
 and any device connected in future. Emulators are the place for all of it.
 
-## Phones do not have a landscape mode
+## Nothing rotates. Phones are portrait, tablets are landscape.
 
-This is a product rule, not only a testing one. Rotating a phone does
-nothing: portrait is locked at the Activity level in `MainActivity.kt`,
-keyed off `Configuration.smallestScreenWidthDp < 600`. Tablets are left
-unlocked and rotate freely.
+This is a product rule, not only a testing one. Both locks live in
+`MainActivity.applyOrientationLock()`, keyed off
+`Configuration.smallestScreenWidthDp`:
 
-`smallestScreenWidthDp` is the device's shorter dimension and does not
-change with rotation, which is what makes the lock immune to the original
-problem — a rotated phone reporting a tablet-sized width to `MediaQuery`.
+- **under 600dp** — `SCREEN_ORIENTATION_PORTRAIT`. Rotating a phone does
+  nothing.
+- **600dp and up** — `SCREEN_ORIENTATION_USER_LANDSCAPE`. Both landscape
+  directions, honouring the system rotation lock. Rotating a tablet upright
+  does nothing either.
 
-Do not "fix" this in Dart. `kThreeColumnBreakpoint` (840) and `useRail`
+Tablets are landscape-only because the wide layouts are designed across: the
+three-column reading layout needs 840dp, and a tablet held upright falls back
+to the rail tier, which is a narrower, worse version of the same screens.
+Portrait tablet layouts are "decided, not built" in the PRD. **Do not ask
+David to rotate a tablet to portrait for testing, and do not treat a portrait
+tablet gap as a bug.**
+
+`smallestScreenWidthDp` is the device's shorter dimension and does not change
+with rotation, which is what makes the lock immune to the original problem —
+a rotated phone reporting a tablet-sized width to `MediaQuery`.
+
+The manifest's `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` is what keeps
+the tablet lock working on Android 16, which otherwise overrides orientation
+on large screens. It stops working at API 37; a portrait tablet layout has to
+exist before targeting it.
+
+Do not "fix" any of this in Dart. `kThreeColumnBreakpoint` (840) and `useRail`
 (600) are width-based and were always correct; they were simply being handed
 a width a phone should never have produced. The 600 threshold in
 `MainActivity.kt` deliberately mirrors `useRail`'s — keep them in step.
+
+
+After every pass, if it involves a modification of the app, do the following:
+- increment version number. If just bug fixes, in small increments, if new features, in big increments, but all in the decimal, ie: 0,xxxx
+
+- commit with a message summarizing what you did, push to GitHub
+- build and push a release apk to all available devices
+- 

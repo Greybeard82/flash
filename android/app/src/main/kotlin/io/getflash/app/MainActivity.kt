@@ -47,7 +47,7 @@ class MainActivity : FlutterActivity() {
         window.setBackgroundDrawable(ColorDrawable(color))
     }
 
-    /// Phones do not have a landscape mode. Tablets do.
+    /// Phones are portrait. Tablets are landscape. Neither rotates.
     ///
     /// Flash's responsive logic is width-based -- rail at 600dp, three
     /// columns at 840 -- and was always correct. The problem was the width it
@@ -63,6 +63,17 @@ class MainActivity : FlutterActivity() {
     /// same number `useRail` uses on the Dart side; they are meant to stay in
     /// step.
     ///
+    /// Tablets are landscape-locked rather than free, which is the newer
+    /// half of this rule. Flash's wide layouts are designed across: the
+    /// three-column reading layout needs 840dp, and a tablet held upright
+    /// falls back to the rail tier, which is a narrower, worse version of the
+    /// same screens. Until a portrait tablet layout exists (PRD "Decided, not
+    /// built"), rotating one is a downgrade, so the app declines to.
+    ///
+    /// USER_LANDSCAPE, not LANDSCAPE: it allows both landscape directions, so
+    /// a tablet on a stand works either way up, and it honours the system
+    /// rotation lock instead of fighting it.
+    ///
     /// Re-applied on configuration changes as well as at launch. The manifest
     /// keeps `smallestScreenSize` in `configChanges`, so this Activity is
     /// never recreated and `onCreate` sees only the configuration it launched
@@ -72,7 +83,7 @@ class MainActivity : FlutterActivity() {
         val wanted = if (resources.configuration.smallestScreenWidthDp < 600) {
             ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         } else {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE
         }
         if (requestedOrientation != wanted) requestedOrientation = wanted
     }

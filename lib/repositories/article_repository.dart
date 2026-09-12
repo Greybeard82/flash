@@ -220,9 +220,9 @@ class ArticleRepository {
   /// Total unread count across all folders.
   /// Unread articles the list would actually show, across every folder.
   ///
-  /// [windowDays] is the display window — `cleanup_age_days`, the same value
-  /// the Filter bubble's Article age slider sets and `_applyDisplayFilters`
-  /// applies. Without it the badge counted every unread row in the database,
+  /// [windowDays] is the display window — `cleanup_age_days`, the same
+  /// fixed value `_applyDisplayFilters` applies. Without it the badge counted
+  /// every unread row in the database,
   /// including ones aged out of the display window and therefore unreachable:
   /// 428 against a visible list of 5, permanently, and widening as the
   /// database aged.
@@ -368,29 +368,6 @@ class ArticleRepository {
         WHERE is_read = 1 AND is_saved = 0 $scope
       ''', args);
     });
-  }
-
-  /// Drops **every** tombstone, so anything the feeds still carry can be
-  /// re-inserted by the next fetch.
-  ///
-  /// This is the only route back from retirement, which is otherwise
-  /// irreversible by design. It cannot resurrect an article the feed has
-  /// stopped offering — nothing outside the fetch window comes back — and it
-  /// touches nothing but the tombstone table: feeds, folders, keywords,
-  /// bookmarks and surviving articles are all untouched.
-  ///
-  /// Returns the number of tombstones cleared.
-  Future<int> clearAllTombstones() async {
-    final db = await _db;
-    return db.delete(TableNames.deletedArticles);
-  }
-
-  /// How many tombstones are currently held.
-  Future<int> tombstoneCount() async {
-    final db = await _db;
-    final rows = await db
-        .rawQuery('SELECT COUNT(*) AS c FROM ${TableNames.deletedArticles}');
-    return (rows.first['c'] as int?) ?? 0;
   }
 
   /// Drops tombstones old enough that the feed has stopped offering the
