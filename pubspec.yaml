@@ -114,3 +114,30 @@ flutter:
       fonts:
         - asset: assets/fonts/PlayfairDisplay-VF.ttf
           weight: 700
+    # Quiet Ink. Variable fonts, one asset per family: three families of
+    # static weight sets would add several hundred KB to an APK that is
+    # about to go back through Play review.
+    #
+    # Literata (the headline serif) is NOT here on purpose. Its variable
+    # file is 933 KB raw / 501 KB deflated because it carries Cyrillic,
+    # Greek and Vietnamese, none of which Flash's five locales use. That
+    # breaches the 400 KB-per-family ceiling this pass was given, so the
+    # asset is held back pending a decision. The text theme still names
+    # 'Literata' for its serif roles, so dropping the file in here is the
+    # only step needed to switch it on.
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 500
