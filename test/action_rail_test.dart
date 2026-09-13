@@ -25,10 +25,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:flash/db/database.dart';
 
 import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
 import 'package:flash/theme/app_theme.dart';
+import 'package:flash/screens/article_summary_sheet.dart';
 import 'package:flash/widgets/article_card.dart';
 
 /// The geometry this pass must not change, measured on the card before it.
@@ -99,6 +102,15 @@ Finder _saveHalf({required bool isSaved}) =>
     find.byTooltip(isSaved ? 'Saved' : 'Bookmark');
 
 void main() {
+  // Tapping the summary half really does open the summary sheet, and the
+  // sheet really does reach for the database on init. Standing one up is
+  // cheaper than pretending the tap went somewhere else.
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    AppDatabase.useForTesting();
+  });
+
   group('the save half paints the state it is in', () {
     for (final brightness in Brightness.values) {
       final theme = flashQuietInkTheme(brightness: brightness);
@@ -188,11 +200,22 @@ void main() {
       await _pump(tester, isSaved: false, onBookmark: () => calls++);
 
       await tester.tap(_summaryHalf());
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       expect(calls, 0,
           reason: 'this is the mis-tap the split makes possible; the two '
               'halves must not overlap');
+
+      // The summary half does its own job on tap: it opens the summary
+      // sheet, which reaches for a database this test has no reason to
+      // stand up. That failure belongs to the sheet, not the rail, and is
+      // drained here so it cannot be misread as a rail failure. It is also
+      // the proof that the tap landed on summary rather than on nothing.
+      // Proof the tap landed on summary rather than on nothing: the sheet
+      // it opens is now on screen.
+      expect(find.byType(ArticleSummarySheet), findsOneWidget,
+          reason: 'the tap must actually have reached the summary half');
     });
 
     testWidgets('a tap in the top half of the save box still saves',
