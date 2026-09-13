@@ -29,7 +29,9 @@ import 'package:flash/theme/app_theme.dart';
 double _luminance(Color c) {
   double channel(double v) {
     final s = v / 255.0;
-    return s <= 0.03928 ? s / 12.92 : math.pow((s + 0.055) / 1.055, 2.4) as double;
+    return s <= 0.03928
+        ? s / 12.92
+        : math.pow((s + 0.055) / 1.055, 2.4) as double;
   }
 
   return 0.2126 * channel((c.r * 255).roundToDouble()) +
@@ -119,12 +121,90 @@ void main() {
       });
 
       test('the button is teal, which is the only interactive colour', () {
-        expect(_hueDistance(scheme.primaryContainer, scheme.primary),
-            lessThan(25),
+        expect(
+            _hueDistance(scheme.primaryContainer, scheme.primary), lessThan(25),
             reason: 'the tint and the teal it tints must be the same hue');
       });
     });
   }
+
+  // ── the save half, new in pass 3 ──────────────────────────────────────────
+  //
+  // The rail's lower half fills with `secondary` when an article is saved.
+  // That is design 2a as specified, and it puts a pressable orange on the
+  // card — which is worth reading alongside the two tests above, because both
+  // of them exist to enforce the opposite: "teal is the only interactive
+  // colour" and "orange is reserved for the unread dot". Those rules are
+  // written into app_theme.dart and this pass breaks both by decision, not by
+  // accident. The tests are left standing because they still guard the badge,
+  // which is what they were written for.
+  //
+  // **Light mode does not clear the bar.** `onSecondary` is `surface`, which
+  // is white, and white on #BE6530 is 4.12:1 — under the 4.5:1 the summary
+  // glyph is held to, and under the 5.17:1 the summary pair actually
+  // achieves. Dark (8.51:1) and Newspaper (7.64:1) are fine; only light
+  // fails, and it fails because `onSecondary` had no consumer before now.
+  // The theme comment says as much: "orange is the unread dot, which carries
+  // no label, so this is very nearly unused". This button is its first real
+  // consumer, and the value was never chosen for legibility on top of the
+  // orange.
+  //
+  // Rather than quietly lower the bar, the shortfall is pinned to its exact
+  // measured value. It fails if anyone makes it worse, and it also fails if
+  // anyone fixes it — at which point this block moves up into the passing
+  // group and the comment goes away. Awaiting a decision between two
+  // one-line fixes: a dark glyph instead of white (`_qiOnSurfaceLight` gives
+  // 4.51:1, `_qiSurfaceDark` 4.58:1), or a darker orange for this fill
+  // (#B05C2B gives 4.76:1 with white, but moves the unread colour too).
+  group('the save half', () {
+    test('dark mode clears the bar the summary glyph is held to', () {
+      final scheme =
+          flashQuietInkTheme(brightness: Brightness.dark).colorScheme;
+      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
+      expect(ratio, greaterThanOrEqualTo(4.5),
+          reason: 'dark paints a saved button at '
+              '${ratio.toStringAsFixed(2)}:1');
+    });
+
+    test('light mode is 4.12:1, which is BELOW the bar, by decision', () {
+      final scheme =
+          flashQuietInkTheme(brightness: Brightness.light).colorScheme;
+      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
+      expect(ratio, closeTo(4.12, 0.01),
+          reason: 'this is a known, reviewed shortfall, not a passing '
+              'result. If this assertion fails because the ratio went UP, '
+              'the fix landed: move this test into the group above and '
+              'delete the comment. If it went DOWN, something made a '
+              'marginal target worse.');
+      expect(ratio, lessThan(4.5),
+          reason: 'kept explicit so nobody reads the line above as a pass');
+    });
+
+    test('the unsaved glyph clears the bar on its teal tint', () {
+      // The resting state, which is what the rail shows most of the time.
+      for (final brightness in Brightness.values) {
+        final scheme = flashQuietInkTheme(brightness: brightness).colorScheme;
+        final ratio =
+            _contrast(scheme.onSurfaceVariant, scheme.primaryContainer);
+        expect(ratio, greaterThanOrEqualTo(4.5),
+            reason: '${brightness.name} paints an unsaved save glyph at '
+                '${ratio.toStringAsFixed(2)}:1');
+      }
+    });
+
+    test('saved and unsaved are told apart by more than the glyph', () {
+      // Orange-on-orange is the failure this was asked to catch: if the fill
+      // barely moves between states, the only signal left is the glyph shape.
+      for (final brightness in Brightness.values) {
+        final scheme = flashQuietInkTheme(brightness: brightness).colorScheme;
+        final ratio = _contrast(scheme.secondary, scheme.primaryContainer);
+        expect(ratio, greaterThanOrEqualTo(1.5),
+            reason: '${brightness.name}: the saved fill and the unsaved fill '
+                'are ${ratio.toStringAsFixed(2)}:1 apart — a saved article '
+                'has to be visible as saved while scanning the column');
+      }
+    });
+  });
 
   group('Newspaper mode contrasts too', () {
     // Hand-written constants, and now the only theme in the app with a red in
@@ -136,6 +216,17 @@ void main() {
           _contrast(scheme.onSecondaryContainer, scheme.secondaryContainer);
       expect(ratio, greaterThanOrEqualTo(minimum),
           reason: 'newspaper is ${ratio.toStringAsFixed(2)}:1');
+    });
+
+    test('a saved button contrasts, whatever colour it ends up', () {
+      // Newspaper resolves `secondary` to `_npRed`, its only spot colour and
+      // also its `primary`. The contrast is fine at 7.64:1. Whether a solid
+      // red block belongs on every saved card in a theme where red already
+      // means nav-selected, FAB and masthead is a design question, flagged
+      // and not decided here.
+      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
+      expect(ratio, greaterThanOrEqualTo(4.5),
+          reason: 'newspaper saved is ${ratio.toStringAsFixed(2)}:1');
     });
   });
 }
