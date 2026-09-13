@@ -16,7 +16,7 @@ class MainActivity : FlutterActivity() {
     private companion object {
         // Must match lib/theme/app_theme.dart: `darkBg`. Only the fallback for
         // a first-ever launch, before Dart has told us which theme is active.
-        const val DEFAULT_BG = "#0D1B2A"
+        const val DEFAULT_BG = "#0D1211"
 
         const val PREFS = "flash_window"
         const val KEY_BG = "window_background"
