@@ -416,9 +416,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
               l10n.alertsTabEmpty,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .extension<FlashColors>()!
-                        .onSurfaceMuted,
+                    color: Theme.of(context).flashColors.onSurfaceMuted,
                   ),
             ),
           ],

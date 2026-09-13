@@ -704,7 +704,9 @@ class _ActionRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ink = theme.flashColors;
     final saved = article.isSaved;
 
     void open() => showModalBottomSheet<void>(
@@ -744,8 +746,8 @@ class _ActionRail extends StatelessWidget {
             touchHeight: saveTouchHeight,
             align: Alignment.bottomCenter,
             radius: const BorderRadius.vertical(bottom: _corner),
-            fill: saved ? scheme.secondary : scheme.primaryContainer,
-            glyph: saved ? scheme.onSecondary : scheme.onSurfaceVariant,
+            fill: saved ? ink.savedFill : scheme.primaryContainer,
+            glyph: saved ? ink.onSavedFill : scheme.onSurfaceVariant,
             icon: saved
                 ? Icons.bookmark_rounded
                 : Icons.bookmark_border_rounded,

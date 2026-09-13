@@ -95,6 +95,19 @@ const Color _qiOnPrimaryContainerLight = Color(0xFF0E6A70);
 const Color _qiUnreadLight = Color(0xFFBE6530);
 const Color _qiPlaceholderLight = Color(0xFFF0F2F2);
 
+/// The glyph on the saved half of the action rail, in both brightnesses.
+///
+/// Near-black rather than `onSecondary`, which is white in light mode. White
+/// on the light unread orange is 4.12:1, under the 4.5:1 this app holds a
+/// lone glyph to — a glyph is the only thing identifying that button, so it
+/// gets the text bar rather than the graphical one.
+///
+/// For the record, and not as a softening: 4.12:1 does clear WCAG 1.4.11's
+/// 3:1 for graphical objects, because an icon is not text. The app's own bar
+/// is stricter, and it is the right one to hold here. This value is 4.58:1,
+/// which is slightly more headroom than `onSurface`'s 4.51:1.
+const Color _qiOnSavedFill = Color(0xFF0D1211);
+
 // Dark
 const Color _qiSurfaceDark = Color(0xFF0D1211);
 const Color _qiSurfaceContainerDark = Color(0xFF161D1C);
@@ -177,6 +190,20 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// Fill behind a thumbnail that is missing or still loading.
   final Color placeholder;
 
+  /// The action rail's save half once an article is saved, and the glyph on
+  /// top of it.
+  ///
+  /// A role rather than `secondary` under `onSecondary`, for two reasons that
+  /// pull the same way. `secondary` also paints the swipe-reveal background,
+  /// so tuning the saved fill through it would move an unrelated surface. And
+  /// Newspaper needs a different answer entirely: there, `secondary` is
+  /// `primary` is `_npRed`, already the nav selection, the FAB, the switch and
+  /// the masthead tint, so a red saved block buys none of the scannability
+  /// that justified orange in Quiet Ink and is simply the loudest thing on the
+  /// row.
+  final Color savedFill;
+  final Color onSavedFill;
+
   /// Which brightness this instance belongs to, so [category] can answer
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
@@ -185,6 +212,8 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.onSurfaceMuted,
     required this.onSurfaceRead,
     required this.placeholder,
+    required this.savedFill,
+    required this.onSavedFill,
     required this.brightness,
   });
 
@@ -197,12 +226,16 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? onSurfaceMuted,
     Color? onSurfaceRead,
     Color? placeholder,
+    Color? savedFill,
+    Color? onSavedFill,
     Brightness? brightness,
   }) {
     return FlashColors(
       onSurfaceMuted: onSurfaceMuted ?? this.onSurfaceMuted,
       onSurfaceRead: onSurfaceRead ?? this.onSurfaceRead,
       placeholder: placeholder ?? this.placeholder,
+      savedFill: savedFill ?? this.savedFill,
+      onSavedFill: onSavedFill ?? this.onSavedFill,
       brightness: brightness ?? this.brightness,
     );
   }
@@ -222,6 +255,8 @@ class FlashColors extends ThemeExtension<FlashColors> {
       onSurfaceMuted: Color.lerp(onSurfaceMuted, other.onSurfaceMuted, t)!,
       onSurfaceRead: Color.lerp(onSurfaceRead, other.onSurfaceRead, t)!,
       placeholder: Color.lerp(placeholder, other.placeholder, t)!,
+      savedFill: Color.lerp(savedFill, other.savedFill, t)!,
+      onSavedFill: Color.lerp(onSavedFill, other.onSavedFill, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
     );
   }
@@ -233,11 +268,14 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.onSurfaceMuted == onSurfaceMuted &&
           other.onSurfaceRead == onSurfaceRead &&
           other.placeholder == placeholder &&
+          other.savedFill == savedFill &&
+          other.onSavedFill == onSavedFill &&
           other.brightness == brightness;
 
   @override
   int get hashCode =>
-      Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, brightness);
+      Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, savedFill,
+          onSavedFill, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -257,6 +295,8 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     onSurfaceMuted: mix(0.5),
     onSurfaceRead: mix(0.55),
     placeholder: mix(0.92),
+    savedFill: scheme.secondary,
+    onSavedFill: scheme.onSecondary,
     brightness: scheme.brightness,
   );
 }
@@ -275,6 +315,8 @@ const FlashColors _flashColorsLight = FlashColors(
   onSurfaceMuted: _qiOnSurfaceMutedLight,
   onSurfaceRead: _qiOnSurfaceReadLight,
   placeholder: _qiPlaceholderLight,
+  savedFill: _qiUnreadLight,
+  onSavedFill: _qiOnSavedFill,
   brightness: Brightness.light,
 );
 
@@ -282,6 +324,8 @@ const FlashColors _flashColorsDark = FlashColors(
   onSurfaceMuted: _qiOnSurfaceMutedDark,
   onSurfaceRead: _qiOnSurfaceReadDark,
   placeholder: _qiPlaceholderDark,
+  savedFill: _qiUnreadDark,
+  onSavedFill: _qiOnSavedFill,
   brightness: Brightness.dark,
 );
 
@@ -515,9 +559,22 @@ const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
 /// not Quiet Ink's: a teal-tinted grey on a warm paper background would read as
 /// a rendering fault. Nothing else about this theme changes.
 final FlashColors _flashColorsNewspaper = FlashColors(
-  onSurfaceMuted: Color.lerp(_npInk, _npPaper, 0.45)!,
-  onSurfaceRead: Color.lerp(_npInk, _npPaper, 0.5)!,
+  // 0.62 and 0.55, not 0.45 and 0.50. The original pair inverted the
+  // hierarchy: muted landed at #7D7C7A and read at #888785, so a read title
+  // came out *lighter* than the timestamp beneath it. Quiet Ink runs the other
+  // way — a read title is quieter than an unread one but still outranks a
+  // timestamp — and read at 0.55 also matches both _fallbackFlashColors and
+  // the alpha it replaced.
+  onSurfaceMuted: Color.lerp(_npInk, _npPaper, 0.62)!,
+  onSurfaceRead: Color.lerp(_npInk, _npPaper, 0.55)!,
   placeholder: _npSurface2,
+  // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
+  // the nav selection, the FAB, the switch and the masthead tint — so a red
+  // saved block is the loudest thing on the row while buying none of the
+  // scannability that justified orange in Quiet Ink, where orange appears
+  // nowhere else.
+  savedFill: _npInk,
+  onSavedFill: _npPaper,
   brightness: Brightness.light,
 );
 

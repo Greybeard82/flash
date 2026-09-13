@@ -17,6 +17,8 @@
 // falls back instead of throwing, and Newspaper registers its own ink so it
 // gets newsprint greys rather than a generic fallback.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -71,8 +73,11 @@ void main() {
       expect(ink, isNotNull,
           reason: 'Newspaper mode is a setting a user can turn on; a widget '
               'that reads the extension must not crash there');
-      expect(ink!.onSurfaceMuted,
-          isNot(flashQuietInkTheme(brightness: Brightness.light).extension<FlashColors>()!.onSurfaceMuted));
+      expect(
+          ink!.onSurfaceMuted,
+          isNot(flashQuietInkTheme(brightness: Brightness.light)
+              .extension<FlashColors>()!
+              .onSurfaceMuted));
     });
 
     test('a stock ThemeData falls back rather than throwing', () {
@@ -128,5 +133,138 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  });
+
+  group('the ink hierarchy never inverts', () {
+    // What "read is quieter than unread, but still louder than a timestamp"
+    // means numerically, and why it is not "read is darker than muted".
+    //
+    // Darkness is the wrong measure because it flips with the theme. In Quiet
+    // Ink light the read title is #79817F against muted's #8A9391 — darker. In
+    // Quiet Ink dark it is #87908F against #767F7E — *lighter*. Both are
+    // correct: what actually holds in both is that the read title stands
+    // further from the page than the timestamp does. So the invariant is
+    // contrast against `surface`, and asserting darkness would have passed in
+    // light and failed in dark for a theme that was right all along.
+    //
+    // This exists because Newspaper got it backwards. Its two levels were
+    // lerped at 0.45 and 0.50, which put muted at #7D7C7A and read at #888785
+    // — a read title lighter than the timestamp under it, in the one theme
+    // nobody looks at twice. Nothing caught it, because nothing compared them.
+
+    double luminance(Color c) {
+      double channel(double v) {
+        final s = v / 255.0;
+        return s <= 0.03928
+            ? s / 12.92
+            : math.pow((s + 0.055) / 1.055, 2.4) as double;
+      }
+
+      return 0.2126 * channel((c.r * 255).roundToDouble()) +
+          0.7152 * channel((c.g * 255).roundToDouble()) +
+          0.0722 * channel((c.b * 255).roundToDouble());
+    }
+
+    double contrast(Color a, Color b) {
+      final la = luminance(a);
+      final lb = luminance(b);
+      return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+    }
+
+    for (final (name, theme) in [
+      ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
+      ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
+      ('Newspaper', flashNewspaperTheme()),
+    ]) {
+      test('$name: a read title outranks a timestamp', () {
+        final ink = theme.flashColors;
+        final surface = theme.colorScheme.surface;
+
+        final read = contrast(ink.onSurfaceRead, surface);
+        final muted = contrast(ink.onSurfaceMuted, surface);
+
+        expect(read, greaterThan(muted),
+            reason: '$name puts the read title at '
+                '${read.toStringAsFixed(2)}:1 against the page and the '
+                'timestamp at ${muted.toStringAsFixed(2)}:1. A read article '
+                'is still an article; its title cannot recede behind its own '
+                'metadata.');
+      });
+    }
+
+    test('the fallback DOES invert, and that is not fixed here', () {
+      // Flagged rather than corrected, because it was not in scope and the
+      // brief cites this pair as the reference the Newspaper fix was matched
+      // to. `_fallbackFlashColors` blends muted at 0.5 and read at 0.55
+      // toward the surface, and further toward the surface means *less*
+      // contrast — so read comes out quieter than muted, exactly the fault
+      // just corrected in Newspaper.
+      //
+      // No user sees it: the fallback is only reached by a theme carrying no
+      // FlashColors, which in practice means a stock ThemeData in a widget
+      // test. Production themes all register their own.
+      //
+      // The fix is one character, muted 0.5 -> 0.62, mirroring Newspaper.
+      // This test fails when someone makes it, which is the point: at that
+      // moment this block moves up into the loop above and the comment goes.
+      for (final base in [ThemeData(), ThemeData.dark()]) {
+        final ink = base.flashColors;
+        final surface = base.colorScheme.surface;
+        expect(contrast(ink.onSurfaceRead, surface),
+            lessThan(contrast(ink.onSurfaceMuted, surface)),
+            reason: 'a known inversion, awaiting a decision — not a pass');
+      }
+    });
+  });
+
+  group('the saved rail takes a role, not the accent', () {
+    test('Newspaper does not fill it red', () {
+      // _npRed is already the nav selection, the FAB, the switch and the
+      // masthead tint. A red block on every saved card competes with all of
+      // them and distinguishes nothing.
+      final theme = flashNewspaperTheme();
+      final ink = theme.flashColors;
+      expect(ink.savedFill, isNot(theme.colorScheme.secondary));
+      expect(ink.savedFill, isNot(theme.colorScheme.primary));
+    });
+
+    test('Quiet Ink fills it with the unread orange', () {
+      // Here the accent IS right: orange appears nowhere else in a resting
+      // feed, so a saved card is scannable down the column.
+      for (final b in Brightness.values) {
+        final theme = flashQuietInkTheme(brightness: b);
+        expect(theme.flashColors.savedFill, theme.colorScheme.secondary);
+      }
+    });
+
+    test('every theme keeps a legible glyph on the saved fill', () {
+      double luminance(Color c) {
+        double channel(double v) {
+          final s = v / 255.0;
+          return s <= 0.03928
+              ? s / 12.92
+              : math.pow((s + 0.055) / 1.055, 2.4) as double;
+        }
+
+        return 0.2126 * channel((c.r * 255).roundToDouble()) +
+            0.7152 * channel((c.g * 255).roundToDouble()) +
+            0.0722 * channel((c.b * 255).roundToDouble());
+      }
+
+      for (final (name, theme) in [
+        ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
+        ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
+        ('Newspaper', flashNewspaperTheme()),
+      ]) {
+        final ink = theme.flashColors;
+        final la = luminance(ink.savedFill);
+        final lb = luminance(ink.onSavedFill);
+        final ratio = (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+        expect(ratio, greaterThanOrEqualTo(4.5),
+            reason: '$name paints the saved glyph at '
+                '${ratio.toStringAsFixed(2)}:1 — this is the pair that was '
+                '4.12:1 before the glyph moved off onSecondary');
+      }
+    });
   });
 }

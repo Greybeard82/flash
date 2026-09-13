@@ -115,6 +115,7 @@ void main() {
     for (final brightness in Brightness.values) {
       final theme = flashQuietInkTheme(brightness: brightness);
       final scheme = theme.colorScheme;
+      final ink = theme.flashColors;
       final name = brightness.name;
 
       testWidgets('$name: not saved is the teal tint with a neutral glyph',
@@ -138,14 +139,26 @@ void main() {
       testWidgets('$name: saved fills with the accent', (tester) async {
         await _pump(tester, isSaved: true, theme: theme);
 
-        expect(_fillOf(tester, _saveHalf(isSaved: true)), scheme.secondary,
+        expect(_fillOf(tester, _saveHalf(isSaved: true)), ink.savedFill,
             reason: '$name: a saved article is scannable down the column');
+        // In Quiet Ink the saved fill IS the unread orange; the role exists
+        // so Newspaper can answer differently without moving `secondary`,
+        // which also paints the swipe reveal.
+        expect(ink.savedFill, scheme.secondary);
 
         final icon = tester.widget<Icon>(find.descendant(
           of: _saveHalf(isSaved: true),
           matching: find.byIcon(Icons.bookmark_rounded),
         ));
-        expect(icon.color, scheme.onSecondary);
+        // Not `onSecondary`, which is white in light mode and gave 4.12:1
+        // on the orange — under the 4.5:1 a lone glyph is held to.
+        expect(icon.color, ink.onSavedFill);
+        if (brightness == Brightness.light) {
+          // Dark mode's onSecondary is already this value, so the regression
+          // this guards against can only happen in light.
+          expect(icon.color, isNot(scheme.onSecondary),
+              reason: 'light must not go back to the white glyph and 4.12:1');
+        }
       });
 
       testWidgets('$name: the summary half is untouched by save state',

@@ -187,4 +187,63 @@ void main() {
             'read-state conditionals with no role to convert to. Changing '
             'this number means changing that decision.');
   });
+
+  test('nothing reads FlashColors through a null check', () {
+    // The other way to fake ink: not alpha over onSurface, but
+    // `theme.extension<FlashColors>()!` — which throws rather than degrades.
+    //
+    // There is no allowlist here and there should never be one. The bang form
+    // has no legitimate use now that `theme.flashColors` exists: it is the
+    // same lookup with a crash attached. It already cost this branch once,
+    // when pass 1 shipped it into article_card.dart and Newspaper mode —
+    // which registers no extensions — died on the feed the moment a user
+    // turned it on. The accessor falls back; the bang does not.
+    //
+    // Comment lines are stripped before matching, because the accessor's own
+    // doc comment names the form it replaces, and prose explaining why not to
+    // write something must not read as writing it.
+    final offenders = <String>[];
+
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+
+      final code = entity
+          .readAsLinesSync()
+          .where((l) => !l.trimLeft().startsWith('//'))
+          .join('\n');
+
+      if (code.contains('extension<FlashColors>()!')) {
+        offenders.add(entity.path.replaceAll(r'\', '/'));
+      }
+    }
+
+    expect(offenders, isEmpty,
+        reason: 'These read the ink roles through a null check:\n'
+            '  ${offenders.join('\n  ')}\n\n'
+            'Use theme.flashColors instead. It resolves the extension when '
+            'the theme carries one and falls back to a blended grey when it '
+            'does not, which is what keeps Newspaper mode and every stock '
+            'ThemeData in a widget test from throwing.');
+  });
+
+  test('the comment-stripping does not hide real code', () {
+    // Guarding the guard. If the strip were too eager — dropping any line
+    // containing "//" rather than only lines starting with it — a trailing
+    // comment would take the code before it out of scope, and the no-allowlist
+    // rule above would quietly have a hole in it.
+    String strip(String src) =>
+        src.split('\n').where((l) => !l.trimLeft().startsWith('//')).join('\n');
+
+    const prose = '/// Use this rather than `theme.extension<FlashColors>()!`.';
+    expect(strip(prose).contains('extension<FlashColors>()!'), isFalse,
+        reason: 'a doc comment naming the form must not trip the guard');
+
+    const real = 'final c = theme.extension<FlashColors>()!.onSurfaceMuted;';
+    expect(strip(real).contains('extension<FlashColors>()!'), isTrue);
+
+    const trailing =
+        'final c = theme.extension<FlashColors>()!.onSurfaceMuted; // why';
+    expect(strip(trailing).contains('extension<FlashColors>()!'), isTrue,
+        reason: 'code with a trailing comment is still code');
+  });
 }
