@@ -37,14 +37,6 @@ const List<double> _kIdentityMatrix = <double>[
 
 /// The AI-summary button's two colours, fixed rather than theme-derived.
 ///
-/// Top-level so `summary_button_contrast_test.dart` asserts on the same two
-/// values the button actually paints, instead of a copy that could drift.
-/// See the note on colour in [_SummaryButton] for why both are fixed: a
-/// fixed light fill cannot be paired with a theme role that resolves light
-/// in dark mode.
-const Color kSummaryButtonFill = Color(0xFFB0EBFF);
-const Color kSummaryButtonIcon = Color(0xFF0A2540);
-
 /// How long a card takes to grey out once it's marked read.
 const Duration kReadDimDuration = Duration(milliseconds: 180);
 
@@ -603,18 +595,24 @@ class _ThumbnailWidget extends StatelessWidget {
 /// The splash stays on the painted 28dp rather than filling the touch box:
 /// an ink ripple spreading into empty card margin reads as a misdrawn button.
 ///
-/// **Colour.** Two fixed hex values, deliberately outside the theme. This
-/// used to be `secondary` under `onSecondary`, which meant the button pulled
-/// whichever accent the active palette generated — and in this position, on
-/// every card, that read as garish rather than as an accent.
+/// **Colour.** The teal tint, `primaryContainer` under `onPrimaryContainer`.
 ///
-/// Because [_fill] is a fixed *light* colour, the icon has to be fixed too.
-/// A theme role like `onSecondary` or `onSurface` resolves toward light in
-/// dark mode — correct against a dark surface, and light-on-light here. So
-/// the pair is set together and checked together: #0A2540 on #B0EBFF is
-/// 11.97:1, well past the 4.5:1 this app holds text-like content to, and
-/// pinned in `summary_button_contrast_test.dart` so a later edit to either
-/// value cannot quietly break the other.
+/// This was two fixed hexes for a while, and the reason is worth keeping
+/// because it no longer applies. The button used to take `secondary` under
+/// `onSecondary`, which meant it pulled whichever accent the active palette
+/// had generated — in this position, on every card, that read as garish. The
+/// fix was to leave the theme entirely: a pale cyan fill with a navy glyph,
+/// fixed together because a fixed *light* fill cannot be paired with a role
+/// that resolves light in dark mode.
+///
+/// Quiet Ink removes the premise. There is one interactive colour and the
+/// container roles are authored rather than derived, so `primaryContainer`
+/// is both predictable and already the tint every other chip-shaped thing in
+/// the app uses — and unlike the fixed pair, it resolves correctly in dark
+/// mode instead of staying stubbornly light.
+///
+/// Pinned in `summary_button_contrast_test.dart` against the roles it
+/// actually paints, so a later edit to either cannot quietly break the pair.
 class _SummaryButton extends StatelessWidget {
   final Article article;
 
@@ -627,8 +625,17 @@ class _SummaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // No Theme.of here any more: both colours are fixed, which is the point.
     final l10n = AppLocalizations.of(context)!;
+    // The teal tint, from the theme, in both brightnesses.
+    //
+    // These used to be two fixed hexes — a pale cyan fill with a navy glyph —
+    // because the old generated palettes put an unpredictable accent in this
+    // position and some of them read as garish. Quiet Ink has one interactive
+    // colour and a container role that is authored rather than derived, so
+    // the reason for pinning them is gone: primaryContainer is already the
+    // tint every other chip-shaped thing uses, and it resolves correctly in
+    // dark mode instead of staying stubbornly light.
+    final scheme = Theme.of(context).colorScheme;
 
     void open() => showModalBottomSheet<void>(
           context: context,
@@ -667,18 +674,18 @@ class _SummaryButton extends StatelessWidget {
             // is the single node that remains.
             child: ExcludeSemantics(
               child: Material(
-                color: kSummaryButtonFill,
+                color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(8),
                 clipBehavior: Clip.antiAlias,
                 child: InkWell(
                   onTap: open,
-                  child: const SizedBox(
+                  child: SizedBox(
                     width: _visibleWidth,
                     height: _height,
                     child: Icon(
                       Icons.auto_awesome_rounded,
                       size: 18,
-                      color: kSummaryButtonIcon,
+                      color: scheme.onPrimaryContainer,
                     ),
                   ),
                 ),

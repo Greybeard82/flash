@@ -68,12 +68,10 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
   final _settingsRepo = SettingsRepository();
   ThemeMode _themeMode = ThemeMode.system;
   bool _newspaper = false;
-  String _palette = kDefaultPalette;
 
   // Notifiers passed down so SettingsScreen can trigger instant rebuilds.
   final themeModeNotifier = ValueNotifier<String>('system');
   final newspaperModeNotifier = ValueNotifier<bool>(false);
-  final paletteNotifier = ValueNotifier<String>(kDefaultPalette);
 
   @override
   void initState() {
@@ -94,7 +92,6 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     }
     themeModeNotifier.addListener(_onThemeChanged);
     newspaperModeNotifier.addListener(_onNewspaperChanged);
-    paletteNotifier.addListener(_onPaletteChanged);
     // Theme and Newspaper mode are set from the Quick Settings bubble on the
     // feed — the only place they live now — which writes them straight to the
     // DB. Without this the change would only appear on the next launch. Same
@@ -110,8 +107,6 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     themeModeNotifier.dispose();
     newspaperModeNotifier.removeListener(_onNewspaperChanged);
     newspaperModeNotifier.dispose();
-    paletteNotifier.removeListener(_onPaletteChanged);
-    paletteNotifier.dispose();
     super.dispose();
   }
 
@@ -121,14 +116,12 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
     // on every build via ThemeMode.system, so nothing here is cached stale.
     final theme = await _settingsRepo.get('theme') ?? 'system';
     final newspaper = (await _settingsRepo.get('newspaper_mode')) == 'true';
-    final palette = await _settingsRepo.get('color_palette') ?? kDefaultPalette;
     // Keep the notifiers' cached value in sync with what's actually loaded
     // — see the matching comment in initState for why this matters.
     themeModeNotifier.value = theme;
     newspaperModeNotifier.value = newspaper;
-    paletteNotifier.value = palette;
     _applyTheme(theme);
-    if (mounted) setState(() { _newspaper = newspaper; _palette = palette; });
+    if (mounted) setState(() => _newspaper = newspaper);
   }
 
   /// A setting was written somewhere other than the Settings screen — today,
@@ -146,9 +139,6 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
   void _onThemeChanged() => _applyTheme(themeModeNotifier.value);
   void _onNewspaperChanged() {
     if (mounted) setState(() => _newspaper = newspaperModeNotifier.value);
-  }
-  void _onPaletteChanged() {
-    if (mounted) setState(() => _palette = paletteNotifier.value);
   }
 
   void _applyTheme(String value) {
@@ -217,14 +207,14 @@ class _FlashAppState extends State<FlashApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    // Newspaper mode always renders as paper (light), ignoring the theme and
-    // palette choice entirely.
+    // Newspaper mode always renders as paper (light), ignoring the theme
+    // choice entirely.
     final theme = _newspaper
         ? flashNewspaperTheme()
-        : flashPaletteTheme(palette: _palette, brightness: Brightness.light);
+        : flashQuietInkTheme(brightness: Brightness.light);
     final darkTheme = _newspaper
         ? flashNewspaperTheme()
-        : flashPaletteTheme(palette: _palette, brightness: Brightness.dark);
+        : flashQuietInkTheme(brightness: Brightness.dark);
     final themeMode  = _newspaper ? ThemeMode.light : _themeMode;
 
     _syncNativeWindowBackground(theme, darkTheme, themeMode);
@@ -290,9 +280,13 @@ class _SectionsColumn extends StatelessWidget {
 
     Widget entry(int index, Widget icon, String label) {
       final selected = index == currentIndex;
+      // Teal, not the accent: Quiet Ink spends orange on the unread dot
+      // and nothing else. The unselected half is a named role rather than
+      // 60% ink, which over a tinted surfaceContainer is a different
+      // colour than the one the spec asks for.
       final colour = selected
-          ? theme.colorScheme.secondary
-          : theme.colorScheme.onSurface.withValues(alpha: 0.6);
+          ? theme.colorScheme.primary
+          : theme.colorScheme.onSurfaceVariant;
       return InkWell(
         onTap: () => onSelected(index),
         child: Padding(
@@ -388,7 +382,7 @@ class SectionActionsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colour = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final colour = theme.colorScheme.onSurfaceVariant;
 
     return AnimatedBuilder(
       animation: SectionActionsController.instance,
@@ -480,7 +474,7 @@ class _SwapSidesButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    final colour = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+    final colour = theme.colorScheme.onSurfaceVariant;
 
     Widget button = Tooltip(
       message: l10n.swapSides,
@@ -856,7 +850,7 @@ class _ResizableDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final line = theme.dividerColor;
-    final grip = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+    final grip = theme.extension<FlashColors>()!.onSurfaceMuted;
 
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,

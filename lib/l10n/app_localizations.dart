@@ -416,42 +416,6 @@ abstract class AppLocalizations {
   /// **'Dark'**
   String get themeDark;
 
-  /// No description provided for @colorPalette.
-  ///
-  /// In en, this message translates to:
-  /// **'Color palette'**
-  String get colorPalette;
-
-  /// No description provided for @paletteGreen.
-  ///
-  /// In en, this message translates to:
-  /// **'Green & Gold'**
-  String get paletteGreen;
-
-  /// No description provided for @paletteBlue.
-  ///
-  /// In en, this message translates to:
-  /// **'Blue & Terracotta'**
-  String get paletteBlue;
-
-  /// No description provided for @paletteOrange.
-  ///
-  /// In en, this message translates to:
-  /// **'Orange & Forest'**
-  String get paletteOrange;
-
-  /// No description provided for @paletteRed.
-  ///
-  /// In en, this message translates to:
-  /// **'Red & Indigo'**
-  String get paletteRed;
-
-  /// No description provided for @paletteTealOrange.
-  ///
-  /// In en, this message translates to:
-  /// **'Teal & Orange'**
-  String get paletteTealOrange;
-
   /// No description provided for @addKeyword.
   ///
   /// In en, this message translates to:
