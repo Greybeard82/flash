@@ -130,11 +130,11 @@ const Color _qiOnErrorContainerDark = Color(0xFFFFDAD6);
 
 /// Type families. Declared in pubspec.yaml under `fonts:`.
 ///
-/// [kSerifFamily] is deliberately named here while its asset is NOT yet
-/// vendored — Literata's variable file is 933 KB because Google ships it with
-/// Cyrillic, Greek and Vietnamese, which breached the size ceiling this pass
-/// was given. Until that is resolved these roles fall back to the platform
-/// serif; adding the file to pubspec.yaml is the only step needed.
+/// Literata is vendored as a Latin subset: Google ships it carrying Cyrillic,
+/// Greek and Vietnamese, which no Flash locale uses and which alone put it
+/// past the per-family size ceiling. The subset keeps both variable axes and
+/// every accented glyph the five locales need. See pubspec.yaml for the
+/// command that regenerates it.
 const String kSerifFamily = 'Literata';
 const String kSansFamily = 'Instrument Sans';
 const String kMonoFamily = 'JetBrains Mono';

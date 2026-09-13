@@ -194,6 +194,67 @@ void main() {
     });
   });
 
+  group('the type system', () {
+    // The old theme declared no textTheme at all — every family and size came
+    // from Flutter's defaults, and only Newspaper mode had a type system. So
+    // this is the first one the ordinary themes have had, and the split is the
+    // whole of it: a serif for what you read, one grotesque for what you
+    // operate.
+    final text = light.textTheme;
+
+    test('Literata sets everything that is read', () {
+      for (final (name, style) in [
+        ('displayLarge', text.displayLarge),
+        ('displayMedium', text.displayMedium),
+        ('displaySmall', text.displaySmall),
+        ('headlineLarge', text.headlineLarge),
+        ('headlineMedium', text.headlineMedium),
+        ('headlineSmall', text.headlineSmall),
+        ('titleLarge', text.titleLarge),
+      ]) {
+        expect(style?.fontFamily, kSerifFamily, reason: '\$name');
+      }
+    });
+
+    test('Instrument Sans sets everything you operate', () {
+      for (final (name, style) in [
+        ('titleMedium', text.titleMedium),
+        ('titleSmall', text.titleSmall),
+        ('bodyLarge', text.bodyLarge),
+        ('bodyMedium', text.bodyMedium),
+        ('bodySmall', text.bodySmall),
+        ('labelLarge', text.labelLarge),
+        ('labelMedium', text.labelMedium),
+        ('labelSmall', text.labelSmall),
+      ]) {
+        expect(style?.fontFamily, kSansFamily, reason: '\$name');
+      }
+    });
+
+    test('numerals are monospaced with tabular figures', () {
+      // Declared, and not yet applied to a widget — the unread count belongs
+      // to the chip pass and the timestamp to the feed pass. Pinned now so
+      // the tabular figure feature cannot be dropped on the way there: it is
+      // what stops a count changing width, and shuffling its row, on refresh.
+      for (final style in [kNumeralChipStyle, kNumeralTimestampStyle]) {
+        expect(style.fontFamily, kMonoFamily);
+        expect(style.fontFeatures, contains(const FontFeature.tabularFigures()));
+      }
+      expect(kNumeralChipStyle.fontSize, 11);
+      expect(kNumeralTimestampStyle.fontSize, 12.5);
+    });
+
+    test('the dark theme uses the same families', () {
+      expect(dark.textTheme.titleLarge?.fontFamily, kSerifFamily);
+      expect(dark.textTheme.bodyMedium?.fontFamily, kSansFamily);
+    });
+
+    test('Newspaper keeps its own pair, untouched', () {
+      final paper = flashNewspaperTheme().textTheme;
+      expect(paper.headlineLarge?.fontFamily, 'Playfair Display');
+      expect(paper.bodyMedium?.fontFamily, 'PT Serif');
+    });
+  });
   group('Newspaper mode is untouched', () {
     // Newspaper is now the only place red appears in the app and the only
     // theme with elevation, and both of those are deliberate. This pass must
