@@ -240,6 +240,37 @@ class FlashColors extends ThemeExtension<FlashColors> {
       Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, brightness);
 }
 
+/// The ink roles for a theme that does not carry the extension.
+///
+/// Every theme this app builds registers one, so in production this is never
+/// reached. It exists because the alternative was a null check, and a widget
+/// that throws when it cannot find a colour is a far worse failure than one
+/// that paints a reasonable grey — a stock `ThemeData()`, which is what most
+/// widget tests pump, has no extensions at all.
+///
+/// The levels are blended from the scheme's own ink toward its own surface, at
+/// the same ratios the alpha values they replaced used, so a theme that never
+/// opted in still gets a sane three-level hierarchy rather than one flat grey.
+FlashColors _fallbackFlashColors(ColorScheme scheme) {
+  Color mix(double t) => Color.lerp(scheme.onSurface, scheme.surface, t)!;
+  return FlashColors(
+    onSurfaceMuted: mix(0.5),
+    onSurfaceRead: mix(0.55),
+    placeholder: mix(0.92),
+    brightness: scheme.brightness,
+  );
+}
+
+/// Reads the Flash ink roles off any [ThemeData].
+///
+/// Use this rather than `theme.extension<FlashColors>()!`. The null-check form
+/// crashed under two themes that really occur: `flashNewspaperTheme()` before
+/// it registered its own, and any stock `ThemeData`.
+extension FlashInk on ThemeData {
+  FlashColors get flashColors =>
+      extension<FlashColors>() ?? _fallbackFlashColors(colorScheme);
+}
+
 const FlashColors _flashColorsLight = FlashColors(
   onSurfaceMuted: _qiOnSurfaceMutedLight,
   onSurfaceRead: _qiOnSurfaceReadLight,
@@ -473,6 +504,23 @@ const Color _npRed      = Color(0xFFA0231A); // spot-colour accent
 const Color _npSurface2 = Color(0xFFE7E7E3); // nav / secondary surface
 const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
 
+/// Newspaper's own ink levels.
+///
+/// Registered so the widgets that read [FlashColors] work in Newspaper mode at
+/// all — before this they threw, because this theme carried no extensions and
+/// the call sites used a null check. Newspaper is a setting a user can turn
+/// on, so that was a crash on the feed, not a theoretical one.
+///
+/// The values are newsprint greys mixed from this palette's own ink and paper,
+/// not Quiet Ink's: a teal-tinted grey on a warm paper background would read as
+/// a rendering fault. Nothing else about this theme changes.
+final FlashColors _flashColorsNewspaper = FlashColors(
+  onSurfaceMuted: Color.lerp(_npInk, _npPaper, 0.45)!,
+  onSurfaceRead: Color.lerp(_npInk, _npPaper, 0.5)!,
+  placeholder: _npSurface2,
+  brightness: Brightness.light,
+);
+
 ThemeData flashNewspaperTheme() {
   const base = ColorScheme.light(
     primary: _npRed,
@@ -520,6 +568,7 @@ ThemeData flashNewspaperTheme() {
     colorScheme: base,
     scaffoldBackgroundColor: _npPaper,
     textTheme: baseText,
+    extensions: <ThemeExtension<dynamic>>[_flashColorsNewspaper],
     appBarTheme: AppBarTheme(
       backgroundColor: _npPaper,
       foregroundColor: _npInk,

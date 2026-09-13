@@ -7,6 +7,7 @@ import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
 import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
+import '../theme/app_theme.dart';
 
 /// One keyword row's identity and matching settings, independent of whether
 /// it backs a [KeywordBlock] or a [KeywordAlert] — the two models have the
@@ -246,7 +247,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
           child: Text(
             widget.subtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -291,7 +292,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                   Text(
                     widget.emptyTitle,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -299,7 +300,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                     widget.emptyBody,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                      color: theme.flashColors.onSurfaceMuted,
                     ),
                   ),
                 ],
@@ -381,7 +382,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                 Text(
                   l10n.articlesCount(articles.length),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: theme.flashColors.onSurfaceMuted,
                   ),
                 ),
                 IconButton(
@@ -393,7 +394,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                   duration: const Duration(milliseconds: 200),
                   child: Icon(Icons.expand_more_rounded,
                       size: 20,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                      color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -426,8 +427,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                             ? Text(
                                 articles[i].feedTitle!,
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.5),
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               )
                             : null,

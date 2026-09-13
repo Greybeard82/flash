@@ -139,7 +139,7 @@ class _FolderTab extends StatelessWidget {
     // no fill, muted label.
     final labelColor = isSelected
         ? scheme.onPrimary
-        : scheme.onSurface.withValues(alpha: 0.6);
+        : scheme.onSurfaceVariant;
 
     // Count inline, in the label's own colour and weight, as the mockup shows:
     // "World News (12)". The badge this replaced painted its own gold pill,

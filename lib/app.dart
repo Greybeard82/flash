@@ -850,7 +850,7 @@ class _ResizableDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final line = theme.dividerColor;
-    final grip = theme.extension<FlashColors>()!.onSurfaceMuted;
+    final grip = theme.flashColors.onSurfaceMuted;
 
     return MouseRegion(
       cursor: SystemMouseCursors.resizeLeftRight,

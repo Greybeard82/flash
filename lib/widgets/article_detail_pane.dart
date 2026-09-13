@@ -16,6 +16,7 @@ import '../utils/date_utils.dart';
 import 'clean_article_view.dart';
 import 'notification_banner.dart';
 import 'spinning_refresh_icon.dart';
+import '../theme/app_theme.dart';
 
 /// Overrides `Notification.requestPermission` before the page's own scripts
 /// run, so a site that asks for notification permission on load is answered
@@ -460,8 +461,7 @@ class _PaneTopBar extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.6),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                   ],
@@ -488,7 +488,7 @@ class ArticleDetailPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+    final muted = theme.flashColors.onSurfaceMuted;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),

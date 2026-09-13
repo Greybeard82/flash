@@ -200,7 +200,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
             child: Text(
               l10n.newspaperModeOverridesTheme,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -264,7 +264,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
                 ),
                 Icon(Icons.chevron_right_rounded,
                     size: 20,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.onSurfaceVariant),
               ],
             ),
           ),

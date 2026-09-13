@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
-import '../theme/app_theme.dart' show FlashColors;
+import '../theme/app_theme.dart';
 import '../utils/form_factor.dart';
 import '../screens/article_summary_sheet.dart';
 import 'radial_menu.dart';
@@ -236,7 +236,7 @@ class ArticleCard extends StatelessWidget {
                     // surface and alpha over a near-black one are different
                     // greys, and neither was the one the palette specifies.
                     color: isRead
-                        ? theme.extension<FlashColors>()!.onSurfaceRead
+                        ? theme.flashColors.onSurfaceRead
                         : theme.colorScheme.onSurface,
                     height: 1.35,
                   ),

@@ -22,6 +22,7 @@ import '../widgets/feed_card.dart';
 import '../widgets/quick_settings_action.dart';
 import '../widgets/starter_pack_picker.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart';
 
 class FeedsScreen extends StatefulWidget {
   const FeedsScreen({super.key});
@@ -359,8 +360,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                        .onSurfaceVariant,
                   )),
           const SizedBox(height: 24),
           // The FAB above already covers "add one feed". This covers the case
@@ -623,8 +623,7 @@ class _FolderSectionState extends State<_FolderSection>
                       index: widget.dragIndex,
                       child: Icon(Icons.drag_handle_rounded,
                           size: 20,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.35)),
+                          color: theme.flashColors.onSurfaceMuted),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.label_outline_rounded,
@@ -1125,8 +1124,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                        .onSurfaceVariant,
                   )),
           const SizedBox(height: 6),
           Wrap(

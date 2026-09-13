@@ -23,6 +23,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/quick_settings_action.dart';
 import '../widgets/scroll_fade.dart';
 import '../widgets/bubble_panel.dart';
+import '../theme/app_theme.dart';
 
 /// The Alerts tab: every article any alert keyword has ever caught.
 ///
@@ -415,7 +416,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
               l10n.alertsTabEmpty,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSurface.withValues(alpha: 0.5),
+                    color: Theme.of(context)
+                        .extension<FlashColors>()!
+                        .onSurfaceMuted,
                   ),
             ),
           ],
@@ -522,7 +525,7 @@ class _KeywordSectionHeader extends StatelessWidget {
               curve: Curves.easeInOut,
               child: Icon(Icons.expand_more_rounded,
                   size: 20,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                  color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),

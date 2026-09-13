@@ -120,7 +120,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Text(
                         l10n.noSearchResults(_lastQuery),
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -145,7 +145,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           subtitle: Text(
                             a.feedTitle ?? '',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           onTap: () => _open(a),
