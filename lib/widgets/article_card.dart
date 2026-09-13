@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
+import '../theme/app_theme.dart' show FlashColors;
 import '../utils/form_factor.dart';
 import '../screens/article_summary_sheet.dart';
 import 'radial_menu.dart';
@@ -214,17 +215,29 @@ class ArticleCard extends StatelessWidget {
                   curve: Curves.easeOut,
                   style: (theme.textTheme.bodyMedium ?? const TextStyle())
                       .copyWith(
-                    // Constant by design. This used to drop to w400 when
-                    // read. Lighter glyphs are narrower, so a title sitting
-                    // near a wrap boundary reflowed from three lines to two
-                    // the moment mark-read-on-scroll fired: the card lost a
-                    // line of height and every card below it slid up under
-                    // the user's eyes, mid-scroll, with no gesture to explain
-                    // it. Read state is now carried by colour and opacity
-                    // alone — neither can change layout.
+                    // Constant by design, and Quiet Ink does not change
+                    // that.
+                    //
+                    // This used to drop to w400 when read. Lighter glyphs are
+                    // narrower, so a title sitting near a wrap boundary
+                    // reflowed from three lines to two the moment
+                    // mark-read-on-scroll fired: the card lost a line of
+                    // height and every card below it slid up under the user's
+                    // eyes, mid-scroll, with no gesture to explain it.
+                    //
+                    // The Quiet Ink spec asks for w300 on read titles, which
+                    // is a *larger* step than the w400 that caused that bug,
+                    // against the app's central invariant that the list never
+                    // moves under the reader. So the weight stays put and the
+                    // lighter reading comes from the colour, which is what
+                    // the spec's other half asks for anyway.
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface
-                        .withValues(alpha: isRead ? 0.45 : 1.0),
+                    // A named role now, not ink at 45%. Alpha over a white
+                    // surface and alpha over a near-black one are different
+                    // greys, and neither was the one the palette specifies.
+                    color: isRead
+                        ? theme.extension<FlashColors>()!.onSurfaceRead
+                        : theme.colorScheme.onSurface,
                     height: 1.35,
                   ),
                   overflow: TextOverflow.ellipsis,
