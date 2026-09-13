@@ -2,6 +2,7 @@ import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
+import '../theme/category_colors.dart' show kCategoryHueCount;
 import '../models/keyword_block.dart';
 import '../services/feeds_changed_notifier.dart';
 
@@ -152,11 +153,18 @@ class BackupSerializer {
       await txn.delete(TableNames.keywordBlocklist);
 
       final nameToId = <String, int>{};
+      // Format version 1 carries no colour, and adding one would make every
+      // existing backup file unreadable by an older build for no gain. So
+      // restored categories are spread across the six hues by their order in
+      // the file, the same one-time assignment the v19 migration makes for an
+      // in-place upgrade.
+      var folderOrdinal = 0;
       for (final f in (data['folders'] as List)) {
         final folder = Folder(
           name: f['name'] as String,
           position: f['position'] as int? ?? 0,
           createdAt: now,
+          colorIndex: folderOrdinal++ % kCategoryHueCount,
         );
         final id = await txn.insert(TableNames.folders, folder.toMap());
         nameToId[folder.name] = id;

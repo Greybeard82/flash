@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/folder.dart';
+import '../theme/category_colors.dart' show nextCategoryColorIndex;
 import '../services/feeds_changed_notifier.dart';
 
 class FolderRepository {
@@ -14,6 +15,17 @@ class FolderRepository {
       orderBy: 'position ASC',
     );
     return rows.map(Folder.fromMap).toList();
+  }
+
+  /// The hue a new category should take: the lowest of the six nobody is
+  /// using, so the first six categories are six different colours rather than
+  /// a run of the same one.
+  ///
+  /// Read at creation time and then stored, never re-derived — a category's
+  /// colour must not change because a different one was deleted.
+  Future<int> nextColorIndex() async {
+    final existing = await getAll();
+    return nextCategoryColorIndex(existing.map((f) => f.colorIndex));
   }
 
   Future<Folder> insert(Folder folder) async {

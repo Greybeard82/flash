@@ -927,7 +927,12 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       final position = await widget.folderRepo.getNextPosition();
       final now = DateTime.now().millisecondsSinceEpoch;
       return widget.folderRepo.insert(
-        Folder(name: name, position: position, createdAt: now),
+        Folder(
+          name: name,
+          position: position,
+          createdAt: now,
+          colorIndex: await widget.folderRepo.nextColorIndex(),
+        ),
       );
     }, label: 'Adding category');
     if (!mounted) return;
