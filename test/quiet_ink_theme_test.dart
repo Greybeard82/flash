@@ -212,7 +212,7 @@ void main() {
         ('headlineSmall', text.headlineSmall),
         ('titleLarge', text.titleLarge),
       ]) {
-        expect(style?.fontFamily, kSerifFamily, reason: '\$name');
+        expect(style?.fontFamily, kSerifFamily, reason: name);
       }
     });
 
@@ -227,7 +227,7 @@ void main() {
         ('labelMedium', text.labelMedium),
         ('labelSmall', text.labelSmall),
       ]) {
-        expect(style?.fontFamily, kSansFamily, reason: '\$name');
+        expect(style?.fontFamily, kSansFamily, reason: name);
       }
     });
 
