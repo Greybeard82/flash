@@ -526,17 +526,29 @@ TextTheme _quietInkTextTheme(ColorScheme scheme) {
 /// scheme and text theme, so Newspaper keeps PT Serif and its own roles
 /// without a special case here.
 ///
-/// **What the theme can and cannot carry, because 1.7 asks for one thing it
-/// cannot.** `SegmentedButtonThemeData` has exactly two fields, `style` and
-/// `selectedIcon` — `showSelectedIcon` is a widget constructor argument with
-/// no theme override, so "showSelectedIcon: false" is not expressible here and
-/// is reported rather than guessed at. Everything else lands:
+/// **Two things in 1.7 are not set here, and neither is an oversight.**
 ///
-///   * **Height 40** needs nothing. `SegmentedButton` drops `minimumSize` when
-///     it builds each segment (`segmented_button.dart`, `segmentStyleFor`),
-///     so the segment falls back to `TextButton`'s own M3 minimum, which is
-///     already 40 tall. Setting it here would be ignored, which is worse than
-///     not setting it: it would read as pinned.
+///   * **`showSelectedIcon: false`** cannot live in a theme —
+///     `SegmentedButtonThemeData` has exactly two fields, `style` and
+///     `selectedIcon`, and the flag is a widget constructor argument. It does
+///     not need to: **all three shipping call sites already pass it**, in
+///     `filter_bubble.dart` and twice in `quick_settings_bubble.dart`. The
+///     only thing that could get it wrong is a fourth SegmentedButton added
+///     without the flag, which `segmented_button_theme_test.dart` guards by
+///     reading the call sites rather than by rendering one.
+///   * **Height 40** is reported rather than applied, because it costs 8dp of
+///     touch target. Measured, a segment paints at **48** — and that is the
+///     fill, not a tap halo around a 40dp body, because
+///     `_SegmentedButtonRenderObject` lays every segment out at a uniform
+///     tight height and Material's tap padding ends up inside the paint.
+///     Reaching 40 means `tapTargetSize: shrinkWrap` or a negative
+///     `visualDensity`, and both take the touch target down with the paint.
+///     The two places this app already goes under 48 — the 36dp folder chip,
+///     the 36dp rail halves — each carry a written justification and a test.
+///     1.7 does not mention touch targets at all.
+///
+/// Everything else lands:
+///
 ///   * **Radius 9 outer, 0 between** falls straight out of one `shape`. The
 ///     same `segmentStyleFor` forces every *segment* to a square
 ///     `RoundedRectangleBorder()`, and the resolved `shape` is used only for

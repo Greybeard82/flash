@@ -9,14 +9,22 @@
 // selected fill "differs from" the unselected one passes just as happily when
 // both are wrong.
 //
-// **What is deliberately absent.** 1.7 also asks for `showSelectedIcon: false`.
-// That is a `SegmentedButton` constructor argument and
-// `SegmentedButtonThemeData` has no override for it — the class carries two
-// fields, `style` and `selectedIcon`. It is reported rather than guessed at,
-// and the last test here pins the gap so it cannot be quietly forgotten: it
-// asserts the checkmark IS still shown, which is the current truth, and will
-// fail the day someone threads the flag through the three call sites, at which
-// point this block is the thing to read.
+// **Two of 1.7's lines are not in the theme, for two different reasons, and
+// the last group here is the one that nearly went wrong.**
+//
+// `showSelectedIcon: false` cannot be expressed in `SegmentedButtonThemeData`
+// at all — it has two fields, `style` and `selectedIcon`, and the flag is a
+// constructor argument. That reads like an unclosable item right up until you
+// open the call sites, where **all three already pass it**. The app was never
+// wrong; only the mechanism was missing. So the guard reads the call sites,
+// because a widget test can only prove things about the SegmentedButton it
+// built itself — and the risk is a fourth one, added elsewhere, inheriting a
+// default of `true`.
+//
+// "Height 40" is different: expressible, and not applied, because it costs
+// 8dp of touch target. See the height test.
+
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -195,19 +203,66 @@ void main() {
     expect(widths, hasLength(1));
   });
 
-  testWidgets('the selected checkmark is still shown — the 1.7 gap',
-      (tester) async {
-    // Pinning what is NOT done. `showSelectedIcon` has no theme override, so
-    // the selected segment still carries M3's check. Closing it means three
-    // widget edits at the three call sites, which 1.7's own "no widget
-    // changes" rules out — so it is reported, not guessed.
+  group('showSelectedIcon, which the theme cannot carry', () {
+    // **This was nearly written as a gap, and it is not one.**
     //
-    // This fails the day someone threads the flag, which is the correct
-    // moment to come back and delete it.
-    await tester
-        .pumpWidget(_host(flashQuietInkTheme(brightness: Brightness.light)));
-    expect(find.byIcon(Icons.check), findsOneWidget,
-        reason: 'if this is gone, showSelectedIcon: false landed at the call '
-            'sites — update the theme comment and delete this test');
+    // `showSelectedIcon` is a `SegmentedButton` constructor argument with no
+    // theme override, so 1.7's "showSelectedIcon: false" cannot be expressed
+    // in `segmentedButtonTheme` — which reads like an unclosable item until
+    // you look at the call sites. All three already pass it. The app has been
+    // correct all along; only the *mechanism* was missing.
+    //
+    // So the guard is on the call sites rather than on a rendered widget. A
+    // widget test can only prove things about the SegmentedButton it built
+    // itself, which is exactly the wrong subject: the risk is a fourth one
+    // added somewhere else without the flag, and the default is `true`.
+
+    final sources = Directory('lib')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.dart'))
+        .map((f) => (
+              path: f.path.replaceAll(r'\', '/'),
+              text: f.readAsStringSync(),
+            ))
+        .where((f) => f.text.contains('SegmentedButton<'))
+        .toList();
+
+    test('there are exactly three SegmentedButtons in the app', () {
+      // 1.7 says three. If that number moves, the two tests below are
+      // covering a set that has changed shape and this one says so first.
+      final count = sources.fold<int>(
+          0, (n, f) => n + RegExp(r'SegmentedButton<').allMatches(f.text).length);
+      expect(count, 3,
+          reason: 'found $count across '
+              '${sources.map((f) => f.path).join(', ')} — 1.7 describes three '
+              '(sort order, theme, summary length)');
+    });
+
+    test('every one of them passes showSelectedIcon: false', () {
+      for (final file in sources) {
+        final buttons = RegExp(r'SegmentedButton<').allMatches(file.text).length;
+        final flags =
+            RegExp(r'showSelectedIcon:\s*false').allMatches(file.text).length;
+        expect(flags, buttons,
+            reason: '${file.path} builds $buttons SegmentedButton(s) and '
+                'passes the flag $flags time(s). The default is TRUE, so a '
+                'missing flag puts a checkmark in the selected segment and '
+                'shifts its label — and the theme cannot fix it for you.');
+      }
+    });
+
+    testWidgets('and the default really is the checkmark, so this matters',
+        (tester) async {
+      // The tripwire under the two tests above. If Material ever changed the
+      // default to false, they would both be guarding nothing and should be
+      // deleted rather than left reading as protection.
+      await tester.pumpWidget(_host(
+        flashQuietInkTheme(brightness: Brightness.light),
+      ));
+      expect(find.byIcon(Icons.check), findsOneWidget,
+          reason: 'a SegmentedButton with no flag shows a check — which is '
+              'why the call sites have to pass one');
+    });
   });
 }

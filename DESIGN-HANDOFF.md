@@ -1258,12 +1258,21 @@ Serif.
 
 Two things did not land, and neither is a slip:
 
-1. **`showSelectedIcon: false` is not a theme property.**
-   `SegmentedButtonThemeData` has exactly two fields, `style` and
-   `selectedIcon`. The flag is a `SegmentedButton` constructor argument. Fixing
-   it means three widget edits at the three call sites, which 1.7's own "no
-   widget changes" rules out — so it is reported. A test pins that the
-   checkmark is still shown, so the gap fails loudly the day someone closes it.
+1. **`showSelectedIcon: false` is not a theme property, and did not need to
+   be.** `SegmentedButtonThemeData` has exactly two fields, `style` and
+   `selectedIcon`; the flag is a `SegmentedButton` constructor argument. That
+   reads like an unclosable item — until you open the call sites, where
+   **all three already pass it**: `filter_bubble.dart` once and
+   `quick_settings_bubble.dart` twice. The app was never wrong here; only the
+   mechanism was missing.
+
+   The guard is therefore on the **call sites**, not on a rendered widget. A
+   widget test can only prove things about the SegmentedButton it built
+   itself, and the risk is a fourth one added elsewhere inheriting a default
+   of `true`. `segmented_button_theme_test.dart` asserts the count is three
+   and that every one carries the flag, plus a tripwire confirming the
+   framework default really is the checkmark — so if Material ever flips
+   it, the guard is deleted rather than left reading as protection.
 
 2. **"Height 40" costs 8dp of touch target.** Measured: the segment paints at
    **48**, and that is the painted fill, not a tap halo around a 40dp body —
