@@ -340,6 +340,16 @@ on, and someone in Newspaper mode should not get newsprint on their wallpaper.
 - **Missing-thumbnail letter** to `onSurfaceMuted`.
 - **Bookmarks' separator** becomes the feed's full-bleed hairline. Panel
   dividers stay inset — they are not article lists.
+
+  > **Resolved, and it was not the no-op it looked like.** Both were already
+  > identical at `indent: 16, endIndent: 16`, so "becomes the feed's" changed
+  > nothing — but the feed's own hairline was specified full-bleed two batches
+  > earlier, and had drifted. **Bookmarks was matching a feed that was itself
+  > wrong.** Five dividers moved, not one: the feed's two, Bookmarks, search
+  > and Alerts, all of which separate article rows. The three panel dividers
+  > stay inset. `divider_scope_test.dart` guards both directions, because a
+  > later sweep making every divider full-bleed would satisfy the first half
+  > and break the second.
 - **Categories' header delete icon** to `onSurfaceVariant`, so deleting a
   category does not rank equal to renaming it.
 - **Four widget colours** (1.5).
@@ -597,6 +607,28 @@ that needs a real database, or outside the app entirely:
 
 ---
 
+## 6.8 Newspaper renders Quiet Ink's category hues — PARKED, awaiting values
+
+**Known, reproduced, and deliberately not fixed.** Design is speccing a
+monochrome treatment; this is recorded so it is not "fixed" into something
+else in the meantime.
+
+The mechanism: `_flashColorsNewspaper` declares `brightness: Brightness.light`,
+and `FlashColors.category(int)` forwards that straight to
+`categoryPalette(colorIndex, brightness)`. The hue table in
+`category_colors.dart` has only light and dark columns, so Newspaper gets the
+light column — Quiet Ink's six tinted chips, on newsprint.
+
+Visible wherever a category hue is painted, which since the chip rewrite means
+the folder chip bar on every screen with one.
+
+Not fixed because the fix is a value decision, not a code one: a monochrome
+Newspaper needs six values (or a rule that collapses all six to one), and
+inventing them to close a visual bug would be exactly the kind of guess the
+rest of this document exists to avoid.
+
+---
+
 ## 7. Corrections from the code (added by implementation)
 
 Findings from cross-checking every claim in this document against `lib/`. Each
@@ -690,11 +722,24 @@ What survives from 5.2 is **not** the arithmetic. It is the type system: the
 four unguarded `as ArticleRow` casts throw before any of this machinery runs.
 The prerequisite block above stands; the height-walk warning does not.
 
-One caveat worth keeping. Tier 3's `120.0` fallback is roughly a card, and the
-ad is 306 — so a never-measured ad row would be understated by ~186dp rather
-than the ~30 an unmeasured card costs. `extentsStable` already goes false in
-that case, which is the existing safety valve, but the error it is absorbing
-would be six times larger.
+**5.2 is closed. What replaces it is a two-line prerequisite:**
+
+1. **Give the ad row a key**, so tier 1 measures it like any card. It does not
+   need `306` written down anywhere, and a creative that comes back a different
+   size needs no re-tuning. The height machinery already does this correctly;
+   the ad just has to opt in.
+2. **Handle the four casts** — `feed_screen.dart` 872, 1117, 1685 and 1830 —
+   which throw before any of that machinery runs. This is the whole remaining
+   blocker, and it is a type problem rather than an arithmetic one.
+
+**The tier-3 caveat stays visible, because it is harmless today and will not
+be.** The `120.0` fallback is roughly a card, so an unmeasured card is
+understated by ~30dp. An unmeasured ad row would be understated by **~186dp**,
+six times the error. `extentsStable` already goes false in that case and is the
+existing safety valve — but a valve sized for a 30dp mistake is being asked to
+absorb a 186dp one. Worth deciding whether the ad gets its own fallback
+constant at the point it gets its key, rather than after the first report of
+articles being marked read that nobody saw.
 
 ### 7.4 1.6's site lists do not match the code
 

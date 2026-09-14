@@ -386,8 +386,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           Expanded(
             child: _loading
                 ? Center(
-                    child:
-                        SpinningRefreshIcon(size: 40, color: scheme.primary))
+                    child: SpinningRefreshIcon(size: 40, color: scheme.primary))
                 : _buildList(l10n, scheme),
           ),
         ],
@@ -448,7 +447,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (needsDivider)
-                const Divider(height: 1, indent: 16, endIndent: 16),
+                // Full-bleed: this is an article list.
+                const Divider(height: 1),
               ArticleCard(
                 article: article,
                 // Off, and not a style choice: the Dismissible keys on the
@@ -514,8 +514,7 @@ class _KeywordSectionHeader extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeInOut,
               child: Icon(Icons.expand_more_rounded,
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant),
+                  size: 20, color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),

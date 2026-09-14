@@ -1691,7 +1691,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (needsDivider)
-              const Divider(height: 1, indent: 16, endIndent: 16),
+              // Full-bleed: this is an article list.
+              const Divider(height: 1),
             ArticleCard(
               article: article,
               enableSwipeActions: false,
@@ -1843,7 +1844,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (needsDivider)
-                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      // Full-bleed: this is an article list.
+                      const Divider(height: 1),
                     ArticleCard(
                       article: article,
                       // Horizontal drags page between category tabs here.

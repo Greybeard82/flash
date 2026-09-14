@@ -176,7 +176,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _bannerKey.currentState?.show(l10n.restoreSuccess(count));
     } on FormatException {
       if (mounted) {
-        _bannerKey.currentState?.show(AppLocalizations.of(context)!.invalidBackupFile);
+        _bannerKey.currentState
+            ?.show(AppLocalizations.of(context)!.invalidBackupFile);
       }
     } catch (e) {
       if (mounted) {
@@ -208,85 +209,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
           NotificationBanner(key: _bannerKey),
           Expanded(
             child: ListView(
-        children: [
-          // ── Reading ──
-          _sectionHeader(l10n.reading),
-          // Label-only, matching the Icon badge precedent: the off state is
-          // "opens in Chrome instead", which is what anyone flicking this
-          // already expects from a viewer toggle.
-          SwitchListTile(
-            title: Text(l10n.builtInViewer),
-            value: s.useEmbeddedWebView,
-            onChanged: _setUseEmbeddedWebView,
-          ),
-          // Subtitled, unlike the toggle above: "clean reading view" does not
-          // on its own say that the offer only appears when a page can
-          // actually be extracted, and a switch that looks inert on some
-          // articles needs to say why up front.
-          SwitchListTile(
-            title: Text(l10n.cleanModeSettingTitle),
-            subtitle: Text(l10n.cleanModeSettingSubtitle),
-            value: s.cleanModeEnabled,
-            onChanged: _setCleanModeEnabled,
-          ),
+              children: [
+                // ── Reading ──
+                _sectionHeader(l10n.reading),
+                // Label-only, matching the Icon badge precedent: the off state is
+                // "opens in Chrome instead", which is what anyone flicking this
+                // already expects from a viewer toggle.
+                SwitchListTile(
+                  title: Text(l10n.builtInViewer),
+                  value: s.useEmbeddedWebView,
+                  onChanged: _setUseEmbeddedWebView,
+                ),
+                // Subtitled, unlike the toggle above: "clean reading view" does not
+                // on its own say that the offer only appears when a page can
+                // actually be extracted, and a switch that looks inert on some
+                // articles needs to say why up front.
+                SwitchListTile(
+                  title: Text(l10n.cleanModeSettingTitle),
+                  subtitle: Text(l10n.cleanModeSettingSubtitle),
+                  value: s.cleanModeEnabled,
+                  onChanged: _setCleanModeEnabled,
+                ),
 
-          // ── Refresh ──
-          // Reuses the existing `refresh` string, which already reads
-          // "Refresh" and is translated in all five locales for the FAB
-          // tooltip; a second key for the same word would be an orphan.
-          _sectionHeader(l10n.refresh),
-          RefreshIntervalField(
-            value: s.refreshIntervalMinutes,
-            onChanged: _setRefreshInterval,
-          ),
-          SwitchListTile(
-            title: Text(l10n.refreshOnWifiOnly),
-            subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
-            value: s.refreshOnWifiOnly,
-            onChanged: _setRefreshOnWifiOnly,
-          ),
+                // ── Refresh ──
+                // Reuses the existing `refresh` string, which already reads
+                // "Refresh" and is translated in all five locales for the FAB
+                // tooltip; a second key for the same word would be an orphan.
+                _sectionHeader(l10n.refresh),
+                RefreshIntervalField(
+                  value: s.refreshIntervalMinutes,
+                  onChanged: _setRefreshInterval,
+                ),
+                SwitchListTile(
+                  title: Text(l10n.refreshOnWifiOnly),
+                  subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
+                  value: s.refreshOnWifiOnly,
+                  onChanged: _setRefreshOnWifiOnly,
+                ),
 
-          // ── Local backup file ──
-          _sectionHeader(l10n.localBackup),
-          _buildLocalBackupSection(l10n),
+                // ── Local backup file ──
+                _sectionHeader(l10n.localBackup),
+                _buildLocalBackupSection(l10n),
 
-          // ── OPML ──
-          _sectionHeader(l10n.opml),
-          _buildOpmlSection(l10n),
+                // ── OPML ──
+                _sectionHeader(l10n.opml),
+                _buildOpmlSection(l10n),
 
-          // ── About ──
-          _sectionHeader(l10n.about),
-          // Above the privacy policy, not below it: Play requires contact
-          // details a user can actually reach, and burying them under a legal
-          // link is how they stop being reachable in practice.
-          ListTile(
-            leading: const Icon(Icons.support_agent_outlined),
-            title: Text(l10n.contactSupport),
-            subtitle: const Text(kContactEmail),
-            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _openSupportPage,
-          ),
-          ListTile(
-            leading: const Icon(Icons.mail_outline_rounded),
-            title: Text(l10n.emailUs),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _sendSupportEmail,
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: Text(l10n.privacyPolicy),
-            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _openPrivacyPolicy,
-          ),
+                // ── About ──
+                _sectionHeader(l10n.about),
+                // Above the privacy policy, not below it: Play requires contact
+                // details a user can actually reach, and burying them under a legal
+                // link is how they stop being reachable in practice.
+                ListTile(
+                  leading: const Icon(Icons.support_agent_outlined),
+                  title: Text(l10n.contactSupport),
+                  subtitle: const Text(kContactEmail),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _openSupportPage,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.mail_outline_rounded),
+                  title: Text(l10n.emailUs),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _sendSupportEmail,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: Text(l10n.privacyPolicy),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _openPrivacyPolicy,
+                ),
 
-          const SizedBox(height: 24),
-        ],
-      ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ],
       ),
@@ -435,9 +436,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             l10n.opmlSubtitle,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 10),

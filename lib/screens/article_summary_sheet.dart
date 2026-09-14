@@ -456,12 +456,12 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
           Row(
             children: [
               Icon(Icons.info_outline_rounded,
-                  size: 18,
-                  color: theme.flashColors.onSurfaceMuted),
+                  size: 18, color: theme.flashColors.onSurfaceMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(widget.message,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: secondary)),
+                    style:
+                        theme.textTheme.bodyMedium?.copyWith(color: secondary)),
               ),
             ],
           ),
@@ -589,8 +589,7 @@ class _SummaryText extends StatelessWidget {
                         ? l10n.aiSummaryDisclaimerCloud
                         : l10n.aiSummaryDisclaimer,
                     style: theme.textTheme.labelSmall?.copyWith(
-                        color:
-                            theme.flashColors.onSurfaceMuted,
+                        color: theme.flashColors.onSurfaceMuted,
                         fontStyle: FontStyle.italic)),
               ),
               IconButton(

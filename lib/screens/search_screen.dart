@@ -47,14 +47,20 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query == _lastQuery) return;
     _lastQuery = query;
     if (query.trim().isEmpty) {
-      setState(() { _results = []; _loading = false; });
+      setState(() {
+        _results = [];
+        _loading = false;
+      });
       return;
     }
     setState(() => _loading = true);
     final results = await LoadingController.instance
         .run(() => _repo.search(query), label: 'Searching');
     if (mounted && query == _lastQuery) {
-      setState(() { _results = results; _loading = false; });
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
     }
   }
 
@@ -64,8 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
       await _repo.markAsRead(article.id!);
       // Mirrored into the alert snapshot, which keeps its own is_read — see
       // the same call in bookmarks_screen.dart.
-      await _alertMatchRepo
-          .setRead(article.feedId, article.guid, isRead: true);
+      await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -129,7 +134,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   : ListView.separated(
                       itemCount: _results.length,
                       separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          // Full-bleed: this is an article list.
+                          const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final a = _results[i];
                         return ListTile(

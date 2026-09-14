@@ -167,7 +167,8 @@ class _FeedsScreenState extends State<FeedsScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState
+          ?.show(AppLocalizations.of(context)!.moveFeedFailed);
       await _load();
     }
   }
@@ -201,8 +202,8 @@ class _FeedsScreenState extends State<FeedsScreen> {
     _autoScrollTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!_scrollController.hasClients) return;
       final pos = _scrollController.position;
-      final next =
-          (pos.pixels + direction * 12).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      final next = (pos.pixels + direction * 12)
+          .clamp(pos.minScrollExtent, pos.maxScrollExtent);
       _scrollController.jumpTo(next);
     });
   }
@@ -236,11 +237,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
       floatingActionButton: hostedInSidebar
           ? null
           : FloatingActionButton.extended(
-            heroTag: 'add_feed',
-            onPressed: _showAddFeedSheet,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addFeed),
-          ),
+              heroTag: 'add_feed',
+              onPressed: _showAddFeedSheet,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addFeed),
+            ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),
@@ -248,13 +249,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
             child: _loading
                 ? Center(
                     child: SpinningRefreshIcon(
-                        size: 40,
-                        color: Theme.of(context).colorScheme.primary))
+                        size: 40, color: Theme.of(context).colorScheme.primary))
                 : _feedsByFolder.values.every((f) => f.isEmpty) &&
                         _folders.isEmpty
                     ? _emptyFeedsState()
-                    : RefreshIndicator(
-                        onRefresh: _load, child: _buildList()),
+                    : RefreshIndicator(onRefresh: _load, child: _buildList()),
           ),
         ],
       ),
@@ -306,7 +305,8 @@ class _FeedsScreenState extends State<FeedsScreen> {
           .run(() => _folderRepo.reorder(_folders), label: 'Reordering');
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState
+          ?.show(AppLocalizations.of(context)!.moveFeedFailed);
       await _load();
     }
   }
@@ -355,9 +355,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
           const SizedBox(height: 16),
           Text(l10n.noFeedsYet,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   )),
           const SizedBox(height: 24),
           // The FAB above already covers "add one feed". This covers the case
@@ -617,8 +615,7 @@ class _FolderSectionState extends State<_FolderSection>
                     ReorderableDragStartListener(
                       index: widget.dragIndex,
                       child: Icon(Icons.drag_handle_rounded,
-                          size: 20,
-                          color: theme.flashColors.onSurfaceMuted),
+                          size: 20, color: theme.flashColors.onSurfaceMuted),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.label_outline_rounded,
@@ -662,8 +659,8 @@ class _FolderSectionState extends State<_FolderSection>
                           .animate(_chevronController),
                       child: Icon(Icons.expand_more_rounded,
                           size: 18,
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.7)),
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.7)),
                     ),
                   ],
                 ),
@@ -983,7 +980,8 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       return;
     }
     setState(() => _adding = true);
-    await LoadingController.instance.run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
+    await LoadingController.instance
+        .run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
   }
 
   Future<void> _addByUrlBody(String url, AppLocalizations l10n) async {
@@ -1002,8 +1000,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
         return;
       }
 
-      final rssService =
-          RssService(widget.articleRepo, widget.feedRepo);
+      final rssService = RssService(widget.articleRepo, widget.feedRepo);
       final info = await rssService.validateFeedUrl(url);
       if (info == null) {
         if (!mounted) return;
@@ -1126,9 +1123,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           // Chips rather than a dropdown so the keyboard stays open.
           Text(l10n.addToCategory,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   )),
           const SizedBox(height: 6),
           Wrap(
@@ -1155,8 +1150,9 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               ActionChip(
                 avatar: const Icon(Icons.add, size: 18),
                 label: Text(l10n.newCategory),
-                onPressed:
-                    (_creatingCategory || _adding) ? null : _openCategoryCreator,
+                onPressed: (_creatingCategory || _adding)
+                    ? null
+                    : _openCategoryCreator,
               ),
             ],
           ),

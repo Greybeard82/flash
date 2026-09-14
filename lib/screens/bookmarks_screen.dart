@@ -79,8 +79,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       // The alert snapshot owns its own is_read, so every place that marks an
       // article read has to mirror it or the Alerts tab keeps showing the card
       // as unread forever. A no-op when this article matched no keyword.
-      await _alertMatchRepo
-          .setRead(article.feedId, article.guid, isRead: true);
+      await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -155,8 +154,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     // reason _markRead does it that way.
     setState(() {
       _articles = [
-        for (final a in _articles)
-          a.isRead ? a : a.copyWith(isRead: true),
+        for (final a in _articles) a.isRead ? a : a.copyWith(isRead: true),
       ];
     });
   }
@@ -177,7 +175,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       });
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -208,14 +205,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       floatingActionButton: hostedInSidebar
           ? null
           : _articles.any((a) => !a.isRead)
-          ? FloatingActionButton(
-              heroTag: 'bookmarks_mark_all_read',
-              onPressed: _markAllRead,
-              tooltip: l10n.markAllRead,
-              mini: true,
-              child: const Icon(Icons.done_all_rounded),
-            )
-          : null,
+              ? FloatingActionButton(
+                  heroTag: 'bookmarks_mark_all_read',
+                  onPressed: _markAllRead,
+                  tooltip: l10n.markAllRead,
+                  mini: true,
+                  child: const Icon(Icons.done_all_rounded),
+                )
+              : null,
       body: _loading
           ? Center(
               child: SpinningRefreshIcon(
@@ -242,7 +239,8 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                   child: ListView.separated(
                     itemCount: _articles.length,
                     separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        // Full-bleed: this is an article list.
+                        const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final article = _articles[i];
                       return ArticleCard(
