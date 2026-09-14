@@ -481,9 +481,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Nessun avviso ancora.\nGli articoli che contengono le tue parole chiave compariranno qui.';
 
   @override
-  String get alertsFilterAll => 'Tutti';
-
-  @override
   String get alertsManageKeywords => 'Gestisci parole chiave';
 
   @override

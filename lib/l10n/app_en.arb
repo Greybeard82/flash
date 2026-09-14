@@ -210,10 +210,6 @@
     "description": "Label of the pill that switches the feed list to the keyword-alert snapshots."
   },
   "alertsTabEmpty": "No alerts yet.\nArticles matching your alert keywords will appear here.",
-  "alertsFilterAll": "All",
-  "@alertsFilterAll": {
-    "description": "The keyword filter chip that clears the filter and shows every alert."
-  },
   "alertsManageKeywords": "Manage keywords",
   "alertsRemove": "Remove",
   "@alertsRemove": {

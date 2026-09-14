@@ -128,7 +128,12 @@ confirmation button.
 
 Three SegmentedButtons ship (sort order in the filter bubble; theme and summary
 length in Quick Settings), all stock M3 capsules at radius 20 — the only
-capsules left beside r9 chips and r9 nav pills.
+capsules left beside r9 chips and **r14** nav pills.
+
+> **Corrected from the code.** This said "r9 nav pills". The pill is r14
+> (`flash_bottom_nav.dart`, `pillRadius = 14`), which is the value the mock's
+> own markup gave and what ships. The chip half is right: `folder_tab_bar.dart`
+> is r9. Documentation error only — no code change.
 
 Height **40**, radius **9** outer / **0** between, 1dp `outlineVariant` border
 and divider, selected `primaryContainer` under `onPrimaryContainer` at 13/w600,
@@ -140,7 +145,20 @@ entry, three surfaces fixed, no widget changes.
 ## 2. ARB changes
 
 Three new keys, four changed values, two description-only fixes. **Every new or
-changed value needs de, es, fr, it or the parity test fails.**
+changed value needs de, es, fr, it** — but see the limitation below, because
+the test does not enforce the second half.
+
+> **KNOWN LIMITATION, not fixed before launch.** `arb_parity_test.dart`
+> enforces **key** parity, not **value** freshness. A key missing from a locale
+> fails (`:78-88`). But the only value-level check (`:90-102`) fails when the
+> English and translated strings are *identical* — so changing an English value
+> while leaving the four translations stale passes silently, and changing it
+> makes that collision **less** likely, never more.
+>
+> So for the four changed values in 2.2, no de/es/fr/it edit is required for
+> the suite to stay green. Re-translating them is still right; the test just is
+> not what will catch it. David writes all five languages himself and will
+> catch it there. Recorded rather than fixed.
 
 ### 2.1 New keys
 
@@ -273,10 +291,26 @@ summary notification carrying `alertNotificationSummary`. The per-notification
 ids stay minted from the sorted keyword set, so no two sets can collapse into
 each other — that is the fix this must not undo.
 
-**B8 · The unread notification is silent and ongoing**, in its own
-`IMPORTANCE_LOW` channel — never sharing a channel with keyword alerts. One is a
-number that changes constantly; the other is the thing the user asked to be
-interrupted for.
+**B8 · The unread notification is silent**, in its own `IMPORTANCE_LOW`
+channel — never sharing a channel with keyword alerts. One is a number that
+changes constantly; the other is the thing the user asked to be interrupted
+for.
+
+> **Not ongoing. `ongoing: false` stays, and this note exists so it is not
+> re-proposed.** B8 asked for "silent and ongoing"; the channel half was right
+> and the ongoing half reverses a considered decision that predates this
+> document. `unread_badge_service.dart` already says why, quoted in full so the
+> reasoning travels with the ruling:
+>
+> > ```
+> > // Not ongoing. An un-dismissible notification for a count the user
+> > // may not care about right now is worse than one they can swipe
+> > // away; it comes back on the next count change either way.
+> > ongoing: false,
+> > ```
+>
+> An unread count the user cannot dismiss is hostile, and it returns on the
+> next count change regardless, so the un-dismissible version buys nothing.
 
 **B9 · Widget count clamp and autosize.** Clamp to `999+` in the provider, and
 add `android:autoSizeTextType="uniform"` with min 18sp / max 28sp to the
@@ -568,6 +602,11 @@ that needs a real database, or outside the app entirely:
 Findings from cross-checking every claim in this document against `lib/`. Each
 is a place the document and the code disagree; none is blocking.
 
+**Rulings applied.** 7.1 stands, arbitrated below. 7.2's `outlineVariant` and
+7.4's badge colour are fixed in code. 7.5 is a documentation error, corrected
+in 1.7. 7.6 and the `ongoing` half of 7.8 are recorded as limitations in place.
+7.7's dead key is deleted.
+
 ### 7.1 Newspaper `illustration` is `#C3C2C0`, not `#C3C2BF`
 
 Printed as `#C3C2BF` in 1.1, 1.4 and 6.6, under the guarantee that authoring
@@ -585,8 +624,10 @@ On the blue channel, `lerp(_npInk, _npPaper, t)` gives:
 Two of the three are rounded; only this one is not. One value converted the
 other way from its neighbours, under a promise of no pixel change, reads as a
 transcription slip rather than an override — so **the code keeps `#C3C2C0`**
-and the document is the thing to correct. `design_section6_test.dart` pins it
-and fails loudly if Design rules the other way.
+and the document is the thing to correct. **Arbitrated.** The test now checks all three authored values against
+`Color.lerp` at 8-bit, not only the disputed one. **All three pass**, which
+settles it: Flutter's `lerp` rounds to the byte, so `9E` and `8F` are correct
+and `#C3C2BF` is the only value the document got wrong. One slip, not two.
 
 ### 7.2 Two alpha ink sites survived the "allowlist is empty" claim
 
@@ -655,6 +696,8 @@ stated enforcement mechanism just is not there.
 only one chip bar. `alertsFilterAll` has no call site in `lib/` — only the
 generated accessors — and `alerts_screen.dart` contains no `Chip` at all. Its
 description documents a filter control that was never built.
+
+**Deleted** from all five locales, and the generated accessors regenerated.
 
 ### 7.8 Three B-items already disagree with shipped code
 

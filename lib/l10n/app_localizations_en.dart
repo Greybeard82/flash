@@ -476,9 +476,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'No alerts yet.\nArticles matching your alert keywords will appear here.';
 
   @override
-  String get alertsFilterAll => 'All';
-
-  @override
   String get alertsManageKeywords => 'Manage keywords';
 
   @override

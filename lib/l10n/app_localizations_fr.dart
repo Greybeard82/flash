@@ -482,9 +482,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucune alerte pour le moment.\nLes articles correspondant à vos mots-clés apparaîtront ici.';
 
   @override
-  String get alertsFilterAll => 'Toutes';
-
-  @override
   String get alertsManageKeywords => 'Gérer les mots-clés';
 
   @override

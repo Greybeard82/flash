@@ -920,12 +920,6 @@ abstract class AppLocalizations {
   /// **'No alerts yet.\nArticles matching your alert keywords will appear here.'**
   String get alertsTabEmpty;
 
-  /// The keyword filter chip that clears the filter and shows every alert.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get alertsFilterAll;
-
   /// No description provided for @alertsManageKeywords.
   ///
   /// In en, this message translates to:

@@ -480,9 +480,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Aún no hay alertas.\nLos artículos que coincidan con tus palabras clave aparecerán aquí.';
 
   @override
-  String get alertsFilterAll => 'Todas';
-
-  @override
   String get alertsManageKeywords => 'Gestionar palabras clave';
 
   @override

@@ -92,13 +92,33 @@ void main() {
 
     final flash = flashNewspaperTheme().flashColors;
 
-    test('onSurfaceMuted is the old 0.62 mix, to the byte', () {
-      expect(_px(flash.onSurfaceMuted), _px(Color.lerp(ink, paper, 0.62)!));
-      expect(flash.onSurfaceMuted, const Color(0xFFA1A09E));
-    });
+    // All three authored values, checked the same way, so the test is the
+    // arbiter rather than an argument about one of them.
+    //
+    // If every row passes, Flutter's Color.lerp rounds to the byte and the
+    // document's 9E and 8F are right — leaving exactly one slip, the
+    // truncated BF. If a row fails, that value is the truncated form too and
+    // the document has more than one.
+    //
+    // Result at the time of writing: all three pass. Rounding is what Flutter
+    // does; #C3C2BF is the only value the document got wrong.
+    for (final (name, authored, t) in [
+      ('onSurfaceMuted', const Color(0xFFA1A09E), 0.62),
+      ('onSurfaceRead', const Color(0xFF92928F), 0.55),
+      ('illustration', const Color(0xFFC3C2C0), 0.78),
+    ]) {
+      test('$name is the ${t}x mix, to the byte', () {
+        final lerped = Color.lerp(ink, paper, t)!;
+        expect(_px(authored), _px(lerped),
+            reason: '$name: authored ${_px(authored)} against lerped '
+                '${_px(lerped)} — if these differ, the authored value is the '
+                'truncated form and the no-pixel-change guarantee is broken '
+                'for it too');
+      });
+    }
 
-    test('onSurfaceRead is the old 0.55 mix, to the byte', () {
-      expect(_px(flash.onSurfaceRead), _px(Color.lerp(ink, paper, 0.55)!));
+    test('the authored values are the ones actually in the theme', () {
+      expect(flash.onSurfaceMuted, const Color(0xFFA1A09E));
       expect(flash.onSurfaceRead, const Color(0xFF92928F));
     });
 

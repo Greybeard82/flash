@@ -481,9 +481,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Noch keine Treffer.\nArtikel, die deine Stichwörter enthalten, erscheinen hier.';
 
   @override
-  String get alertsFilterAll => 'Alle';
-
-  @override
   String get alertsManageKeywords => 'Stichwörter verwalten';
 
   @override

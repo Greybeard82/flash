@@ -157,7 +157,6 @@
   "selectCategoryFirst": "Choisissez une catégorie pour continuer.",
   "alertsTab": "Alertes",
   "alertsTabEmpty": "Aucune alerte pour le moment.\nLes articles correspondant à vos mots-clés apparaîtront ici.",
-  "alertsFilterAll": "Toutes",
   "alertsManageKeywords": "Gérer les mots-clés",
   "alertsRemove": "Retirer",
   "alertsRemovedBanner": "Retiré des alertes",

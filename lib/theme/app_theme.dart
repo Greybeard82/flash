@@ -548,6 +548,17 @@ ThemeData flashQuietInkTheme({required Brightness brightness}) {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
     ),
+    // A badge count is unread state, so it takes the unread colour.
+    //
+    // Material's default is `error`, which put a fault red on a count of the
+    // things a user asked to be told about — and contradicted the rule that
+    // orange means unread and red means broken. Both call sites in app.dart
+    // pass no colour, so both inherited the default; one theme entry fixes
+    // those and every future badge.
+    badgeTheme: BadgeThemeData(
+      backgroundColor: scheme.secondary,
+      textColor: scheme.onSecondary,
+    ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       // surfaceContainer, not surface. The bar used to take the same colour
       // as the scaffold behind it and simply disappeared — which reads as a
@@ -751,6 +762,13 @@ ThemeData flashNewspaperTheme() {
       scrolledUnderElevation: 1,
       surfaceTintColor: _npRed,
       titleTextStyle: baseText.titleLarge?.copyWith(color: _npInk),
+    ),
+    // Newspaper has no orange. Its unread accent is _npRed, which is also its
+    // primary — so here a red badge is on-palette rather than a fault colour
+    // leaking through, and it is the theme's own choice instead of Material's.
+    badgeTheme: const BadgeThemeData(
+      backgroundColor: _npRed,
+      textColor: Colors.white,
     ),
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: _npSurface2,
