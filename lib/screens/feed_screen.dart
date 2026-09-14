@@ -1541,14 +1541,13 @@ class _FeedScreenState extends State<FeedScreen>
           // greyed says "these are yours, there is just nothing to filter
           // yet".
           //
-          // The inert tone is the illustration role. Design gave that role's
-          // light value as #C3CAC9, which is the same hex the brief specifies
-          // for these icons — so they are treated as one role rather than two
-          // that happen to match, which is also the only way an inert icon
-          // gets a dark value at all. Flagged as an inference.
+          // The tone is the `inert` role, which currently carries the same
+          // values as `illustration` — see FlashColors.inert for why they are
+          // two roles sharing one number rather than one role meaning two
+          // things.
           Builder(builder: (context) {
             final live = _hasFeeds && !_booting;
-            final inert = Theme.of(context).flashColors.illustration;
+            final inert = Theme.of(context).flashColors.inert;
             return Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 key: _filterFabKey,

@@ -235,6 +235,23 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// which surface it happened to sit on.
   final Color illustration;
 
+  /// A control that is present but has nothing to act on — the feed's filter
+  /// and quick-settings icons before the first feed arrives.
+  ///
+  /// **Its values are borrowed from [illustration] and are not its own.**
+  /// Design specified #C3CAC9 for an inert control and #C3CAC9 for an
+  /// empty-state glyph, which is the same hex, and gave a dark value for the
+  /// glyph only. Merging them would have been the smaller diff and the worse
+  /// one: "nothing to act on" and "a picture standing in for missing content"
+  /// are different statements that happen to agree on one number in one
+  /// brightness, and a single role meaning both would make the next change to
+  /// either move the other.
+  ///
+  /// So the distinction lives in the code and only the values are shared. When
+  /// Design authors a dark value for an inert control, it lands here and
+  /// nothing else has to move.
+  final Color inert;
+
   /// Which brightness this instance belongs to, so [category] can answer
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
@@ -247,6 +264,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.onSavedFill,
     required this.navPill,
     required this.illustration,
+    required this.inert,
     required this.brightness,
   });
 
@@ -263,6 +281,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? onSavedFill,
     Color? navPill,
     Color? illustration,
+    Color? inert,
     Brightness? brightness,
   }) {
     return FlashColors(
@@ -273,6 +292,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       onSavedFill: onSavedFill ?? this.onSavedFill,
       navPill: navPill ?? this.navPill,
       illustration: illustration ?? this.illustration,
+      inert: inert ?? this.inert,
       brightness: brightness ?? this.brightness,
     );
   }
@@ -296,6 +316,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       onSavedFill: Color.lerp(onSavedFill, other.onSavedFill, t)!,
       navPill: Color.lerp(navPill, other.navPill, t)!,
       illustration: Color.lerp(illustration, other.illustration, t)!,
+      inert: Color.lerp(inert, other.inert, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
     );
   }
@@ -311,12 +332,13 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.onSavedFill == onSavedFill &&
           other.navPill == navPill &&
           other.illustration == illustration &&
+          other.inert == inert &&
           other.brightness == brightness;
 
   @override
   int get hashCode =>
       Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, savedFill,
-          onSavedFill, navPill, illustration, brightness);
+          onSavedFill, navPill, illustration, inert, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -345,6 +367,7 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     onSavedFill: scheme.onSecondary,
     navPill: scheme.primaryContainer,
     illustration: mix(0.78),
+    inert: mix(0.78),
     brightness: scheme.brightness,
   );
 }
@@ -367,6 +390,8 @@ const FlashColors _flashColorsLight = FlashColors(
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerLight,
   illustration: _qiIllustrationLight,
+  // Borrowed from illustration; see FlashColors.inert.
+  inert: _qiIllustrationLight,
   brightness: Brightness.light,
 );
 
@@ -378,6 +403,8 @@ const FlashColors _flashColorsDark = FlashColors(
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerDark,
   illustration: _qiIllustrationDark,
+  // Borrowed, and this is the one Design still owes an authored value for.
+  inert: _qiIllustrationDark,
   brightness: Brightness.dark,
 );
 
@@ -635,6 +662,7 @@ final FlashColors _flashColorsNewspaper = FlashColors(
   // Newsprint, not Quiet Ink's cool grey: mixed from this palette's own ink
   // and paper so an empty state reads as a faint print rather than a fault.
   illustration: Color.lerp(_npInk, _npPaper, 0.78)!,
+  inert: Color.lerp(_npInk, _npPaper, 0.78)!,
   brightness: Brightness.light,
 );
 
