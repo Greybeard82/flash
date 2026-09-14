@@ -249,4 +249,126 @@ void main() {
       }
     });
   });
+
+  group('every ink role used for text clears 4.5:1 on its own surface', () {
+    // The test that should have existed before Newspaper's ink levels were
+    // chosen, and the reason it exists now.
+    //
+    // `onSurfaceMuted` and `onSurfaceRead` were set to lerp 0.62 and 0.55 to
+    // correct an inverted hierarchy — muted was coming out darker than read —
+    // and the fix was checked against each other and never against paper. It
+    // took them to 2.31:1 and 2.76:1, where body text needs 4.5. They are
+    // 0.35 and 0.30 now, at 5.00:1 and 5.85:1.
+    //
+    // The instructive part is that the values were authored under a "changes
+    // no pixel" guarantee, which was true. A promise that nothing moved is
+    // also a promise that nothing was measured, and it is exactly the kind of
+    // reassurance that stops a second look. So the guard is a ratio against
+    // the theme's own surface, not a comparison between two roles.
+    //
+    // Only roles that carry **text** are here. `illustration`, `inert` and
+    // `placeholder` are decoration, a disabled state and a fill; none is read
+    // as words and WCAG's text minimum does not apply to them.
+
+    double contrast(Color a, Color b) {
+      final x = a.computeLuminance();
+      final y = b.computeLuminance();
+      return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
+    }
+
+    /// Roles that are known to sit under the bar, with the ratio each one
+    /// actually measures.
+    ///
+    /// Both are Design's authored Quiet Ink light values and both are
+    /// deliberate — a timestamp and a read headline are meant to recede. They
+    /// are pinned to their measured ratios rather than merely excluded, so a
+    /// drift in either direction fails: quieter is a regression, louder means
+    /// somebody changed a decision without saying so.
+    const known = <String, double>{
+      'Quiet Ink light onSurfaceMuted': 3.15,
+      'Quiet Ink light onSurfaceRead': 3.99,
+    };
+
+    for (final (themeName, theme) in [
+      ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
+      ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
+      ('Newspaper', flashNewspaperTheme()),
+    ]) {
+      final surface = theme.colorScheme.surface;
+      final ink = theme.flashColors;
+
+      final roles = <String, Color>{
+        'onSurface': theme.colorScheme.onSurface,
+        'onSurfaceVariant': theme.colorScheme.onSurfaceVariant,
+        'onSurfaceMuted': ink.onSurfaceMuted,
+        'onSurfaceRead': ink.onSurfaceRead,
+      };
+
+      roles.forEach((roleName, colour) {
+        final label = '$themeName $roleName';
+        final ratio = contrast(colour, surface);
+
+        if (known.containsKey(label)) {
+          test('$label is ${known[label]}:1 — a known, deliberate exception',
+              () {
+            expect(ratio, closeTo(known[label]!, 0.01),
+                reason: '$label measures ${ratio.toStringAsFixed(2)}:1 '
+                    'against an expected ${known[label]}. This role is '
+                    'deliberately under the text bar, so the value is pinned: '
+                    'if it dropped, that is a regression; if it rose, someone '
+                    'changed an authored decision without recording it.');
+            expect(ratio, lessThan(4.5),
+                reason: 'kept explicit so this block is not misread as a pass');
+          });
+        } else {
+          test('$label clears 4.5:1', () {
+            expect(ratio, greaterThanOrEqualTo(4.5),
+                reason: '$label reads ${ratio.toStringAsFixed(2)}:1 against '
+                    'its own surface. Body text needs 4.5. If this role is '
+                    'genuinely meant to recede, add it to `known` with its '
+                    'measured ratio and a reason — do not lower the bar.');
+          });
+        }
+      });
+    }
+
+    test('Newspaper is back above the bar on both ink levels', () {
+      // Named separately because it is the regression this group was written
+      // for, and because the numbers are worth being able to read directly.
+      final theme = flashNewspaperTheme();
+      final surface = theme.colorScheme.surface;
+
+      expect(contrast(theme.flashColors.onSurfaceMuted, surface),
+          closeTo(5.00, 0.02));
+      expect(contrast(theme.flashColors.onSurfaceRead, surface),
+          closeTo(5.85, 0.02));
+    });
+
+    test('the known-exception list is small, and only Quiet Ink light', () {
+      // A tripwire on drift. Two entries is a decision; five would mean the
+      // bar had quietly stopped being the bar.
+      expect(known, hasLength(2));
+      expect(known.keys.every((k) => k.startsWith('Quiet Ink light')), isTrue,
+          reason: 'a second theme appearing here means the exception has '
+              'spread rather than been decided');
+    });
+
+    test('decoration roles are deliberately not in this group', () {
+      // Stated as an assertion so the omission reads as a decision. These
+      // legitimately sit far below the text bar: an empty-state glyph, a
+      // disabled control and a thumbnail fill are not words.
+      for (final (name, theme) in [
+        ('light', flashQuietInkTheme(brightness: Brightness.light)),
+        ('dark', flashQuietInkTheme(brightness: Brightness.dark)),
+      ]) {
+        final ink = theme.flashColors;
+        final surface = theme.colorScheme.surface;
+        expect(contrast(ink.illustration, surface), lessThan(4.5),
+            reason: '$name: if an illustration ever cleared the text bar it '
+                'would no longer be receding, and this group would be the '
+                'wrong place to find that out');
+        expect(contrast(ink.inert, surface), lessThan(4.5));
+      }
+    });
+  });
 }

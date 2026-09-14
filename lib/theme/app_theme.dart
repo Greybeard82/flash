@@ -653,15 +653,28 @@ const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
 /// not Quiet Ink's: a teal-tinted grey on a warm paper background would read as
 /// a rendering fault. Nothing else about this theme changes.
 const FlashColors _flashColorsNewspaper = FlashColors(
-  // Authored, and byte-identical to the lerps they replace: 0.62 and 0.55
-  // from _npInk toward _npPaper.
+  // Newsprint ink, at 0.35 and 0.30 from _npInk toward _npPaper.
   //
-  // The ratios mattered because the original pair, 0.45 and 0.50, inverted the
-  // hierarchy — muted landed at #7D7C7A and read at #888785, so a read title
-  // came out *lighter* than the timestamp beneath it. That is fixed and the
-  // numbers below are the fixed values, written out.
-  onSurfaceMuted: Color(0xFFA1A09E),
-  onSurfaceRead: Color(0xFF92928F),
+  // **There is no "changes no pixel" guarantee on these two, and its removal
+  // is the point.** The previous pair, 0.62 and 0.55, was chosen to fix an
+  // inverted hierarchy and was never checked against paper: it took muted to
+  // 2.31:1 and read to 2.76:1, well under the 4.5:1 body text needs. The
+  // guarantee that authoring them moved no pixel was true and was also the
+  // reason nobody looked — a promise that nothing changed is a promise that
+  // nothing was examined.
+  //
+  // For scale: before Quiet Ink, Newspaper's muted ink was `onSurface` at 0.6
+  // alpha, which is lerp 0.40 and 4.27:1. So this is a restoration that lands
+  // slightly better than the thing it restores, not a new direction. The 0.62
+  // pair never shipped; it existed only on this branch.
+  //
+  //   onSurfaceMuted  #686765  5.00:1 on paper
+  //   onSurfaceRead   #5D5D5A  5.85:1 on paper
+  //
+  // Read keeps more contrast than muted, so the hierarchy the old pair was
+  // introduced to fix still holds.
+  onSurfaceMuted: Color(0xFF686765),
+  onSurfaceRead: Color(0xFF5D5D5A),
   placeholder: _npSurface2,
   // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
   // the nav selection, the FAB, the switch and the masthead tint — so a red
@@ -675,6 +688,9 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // Quiet Ink furniture wearing newsprint colours. Transparent here is how it
   // opts out, without FlashBottomNav needing to know it exists.
   navPill: Colors.transparent,
+  // Unchanged at lerp 0.78. Decoration rather than text, so the 4.5:1 bar
+  // that moved the two ink levels above does not apply to it.
+  //
   // #C3C2C0, not the #C3C2BF printed in DESIGN-HANDOFF.md 1.1 / 1.4 / 6.6.
   //
   // The document gives that hex under the guarantee that authoring these

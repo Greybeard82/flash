@@ -85,10 +85,41 @@ is why 3:1 is the applicable bar. See task 5.1.
 | `onSurfaceRead` | `#92928F` | `lerp(ink, paper, 0.55)` |
 | `illustration` | `#C3C2BF` | `lerp(ink, paper, 0.78)` |
 
-Exactly what the shipped lerps produce, so **this changes no pixel**. Approved
-as values so a future edit to `_npPaper` cannot silently move newsprint's ink
-hierarchy. Keep the lerp expressions if you prefer them readable; the point is
-that the hexes are now specified. Nothing else in Newspaper changes.
+> **SUPERSEDED for the two ink levels.** The table above is kept as the record
+> of what was decided and why it was wrong.
+>
+> `onSurfaceMuted` and `onSurfaceRead` are now **`#686765` (lerp 0.35, 5.00:1)**
+> and **`#5D5D5A` (lerp 0.30, 5.85:1)**. `illustration` is unchanged at 0.78 —
+> it is decoration, not text.
+>
+> The 0.62 / 0.55 pair was chosen to correct an inverted hierarchy, checked
+> against each other and never against paper. It put body text at **2.31:1 and
+> 2.76:1**, where 4.5 is the bar. For scale, the value it replaced — `onSurface`
+> at 0.6 alpha, before Quiet Ink — was lerp 0.40 and **4.27:1**, so the pair
+> was a regression against what already shipped, and the correction lands
+> slightly above it rather than merely back at it. The 0.62 pair never shipped;
+> it existed only on this branch.
+>
+> **The "changes no pixel" guarantee is deleted from the comment, and that is
+> the lesson rather than the footnote.** It was true. It was also the reason
+> nobody looked: a promise that nothing moved is a promise that nothing was
+> examined, and it is exactly the kind of reassurance that ends a review.
+> `flash_colors_resolution_test.dart` now asserts every ink role that carries
+> text clears 4.5:1 against its own theme's surface — a ratio against a
+> surface, not a comparison between two roles, because comparing the two roles
+> is what produced this. Mutation-tested: restoring the old pair fails with
+> 2.31 and 2.76 named.
+>
+> **It flags two Quiet Ink light roles as known exceptions**, not one:
+> `onSurfaceMuted` at **3.15:1** and `onSurfaceRead` at **3.99:1**. Both are
+> Design's authored values and both are deliberate — a timestamp and a read
+> headline are meant to recede. They are pinned to their measured ratios rather
+> than excluded, so drift in either direction fails.
+
+Approved as values so a future edit to `_npPaper` cannot silently move
+newsprint's ink hierarchy. Keep the lerp expressions if you prefer them
+readable; the point is that the hexes are now specified. Nothing else in
+Newspaper changes.
 
 ### 1.5 Android res — four widget colours
 
@@ -567,6 +598,10 @@ every remaining alpha ink site outside `_DimTransition` — which is imagery and
 stays.
 
 ### 6.6 Newspaper's derived values — authored, see 1.4.
+
+> **See the superseded block in 1.4.** The two ink levels moved again after
+> this was written, because authoring them at 0.62 / 0.55 preserved a contrast
+> regression rather than a correct value. They are 0.35 and 0.30 now.
 
 `onSurfaceMuted` `#A1A09E`, `onSurfaceRead` `#92928F`, `illustration`
 `#C3C2BF` — the values the 0.62 / 0.55 / 0.78 lerps already produce, so no

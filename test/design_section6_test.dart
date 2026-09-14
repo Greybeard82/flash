@@ -92,34 +92,30 @@ void main() {
 
     final flash = flashNewspaperTheme().flashColors;
 
-    // All three authored values, checked the same way, so the test is the
-    // arbiter rather than an argument about one of them.
-    //
-    // If every row passes, Flutter's Color.lerp rounds to the byte and the
-    // document's 9E and 8F are right — leaving exactly one slip, the
-    // truncated BF. If a row fails, that value is the truncated form too and
-    // the document has more than one.
-    //
-    // Result at the time of writing: all three pass. Rounding is what Flutter
-    // does; #C3C2BF is the only value the document got wrong.
-    for (final (name, authored, t) in [
-      ('onSurfaceMuted', const Color(0xFFA1A09E), 0.62),
-      ('onSurfaceRead', const Color(0xFF92928F), 0.55),
-      ('illustration', const Color(0xFFC3C2C0), 0.78),
-    ]) {
-      test('$name is the ${t}x mix, to the byte', () {
-        final lerped = Color.lerp(ink, paper, t)!;
-        expect(_px(authored), _px(lerped),
-            reason: '$name: authored ${_px(authored)} against lerped '
-                '${_px(lerped)} — if these differ, the authored value is the '
-                'truncated form and the no-pixel-change guarantee is broken '
-                'for it too');
-      });
-    }
+    // `illustration` alone is still the lerp it replaced. The two ink levels
+    // are not, and deliberately so: 0.62 and 0.55 read at 2.31:1 and 2.76:1
+    // on paper, so they were replaced with 0.35 and 0.30. See the ink-contrast
+    // group in flash_colors_resolution_test.dart, which is the test that
+    // should have caught them.
+    test('illustration is still the 0.78 mix', () {
+      final lerped = Color.lerp(ink, paper, 0.78)!;
+      expect(_px(flash.illustration), _px(lerped));
+    });
+
+    test('the ink levels are NOT the old mixes any more', () {
+      // Pinned in the negative so the old values cannot come back quietly on
+      // the strength of a no-pixel-change argument.
+      expect(
+          _px(flash.onSurfaceMuted), isNot(_px(Color.lerp(ink, paper, 0.62)!)));
+      expect(
+          _px(flash.onSurfaceRead), isNot(_px(Color.lerp(ink, paper, 0.55)!)));
+      expect(_px(flash.onSurfaceMuted), _px(Color.lerp(ink, paper, 0.35)!));
+      expect(_px(flash.onSurfaceRead), _px(Color.lerp(ink, paper, 0.30)!));
+    });
 
     test('the authored values are the ones actually in the theme', () {
-      expect(flash.onSurfaceMuted, const Color(0xFFA1A09E));
-      expect(flash.onSurfaceRead, const Color(0xFF92928F));
+      expect(flash.onSurfaceMuted, const Color(0xFF686765));
+      expect(flash.onSurfaceRead, const Color(0xFF5D5D5A));
     });
 
     test('illustration is the 0.78 mix, not the hex the document prints', () {
