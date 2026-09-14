@@ -15,6 +15,7 @@ import '../services/saved_state_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/share_service.dart';
 import '../utils/alert_grouping.dart';
+import '../widgets/fab_cluster.dart';
 import '../widgets/article_card.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/keyword_alerts_panel.dart';
@@ -361,33 +362,24 @@ class _AlertsScreenState extends State<AlertsScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: hostedInSidebar
           ? null
-          : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ScrollFade(
-                controller: _fabFade,
-                child: FloatingActionButton(
-                  key: _addKeywordKey,
+          : FabCluster(
+              controller: _fabFade,
+              actions: [
+                FabAction(
+                  buttonKey: _addKeywordKey,
                   heroTag: 'alerts_add_keyword',
                   onPressed: _openKeywordPanel,
                   tooltip: l10n.keywordAlerts,
-                  mini: true,
-                  child: const Icon(Icons.add),
+                  icon: const Icon(Icons.add),
                 ),
-              ),
-              const SizedBox(height: 8),
-              ScrollFade(
-                controller: _fabFade,
-                child: FloatingActionButton(
+                FabAction(
                   heroTag: 'alerts_mark_all_read',
                   onPressed: _markAllRead,
                   tooltip: l10n.markAllRead,
-                  mini: true,
-                  child: const Icon(Icons.done_all_rounded),
+                  icon: const Icon(Icons.done_all_rounded),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),

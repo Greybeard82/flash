@@ -32,6 +32,7 @@ import '../reading/new_content_check.dart';
 import '../reading/read_gate.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
+import '../widgets/fab_cluster.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
@@ -1553,56 +1554,37 @@ class _FeedScreenState extends State<FeedScreen>
       floatingActionButton: hostedInSidebar
           ? null
           : _hasFeeds && !_booting
-          ? Padding(
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'refresh',
-                      onPressed: _refreshing
-                          ? null
-                          : () => _refreshCurrentTab(),
-                      tooltip: l10n.refresh,
-                      mini: true,
-                      // The same circular arrow either way — it just turns
-                      // while the refresh is in flight. Swapping in the bolt
-                      // replaced the control under the user's finger with a
-                      // different glyph.
-                      child: _refreshing
-                          ? const SpinningRefreshIcon()
-                          : const Icon(Icons.refresh_rounded),
-                    ),
+          ? FabCluster(
+              controller: _fabFade,
+              actions: [
+                FabAction(
+                  heroTag: 'refresh',
+                  onPressed: _refreshing ? null : () => _refreshCurrentTab(),
+                  tooltip: l10n.refresh,
+                  // The same circular arrow either way — it just turns while
+                  // the refresh is in flight. Swapping in the bolt replaced
+                  // the control under the user's finger with a different
+                  // glyph.
+                  icon: _refreshing
+                      ? const SpinningRefreshIcon()
+                      : const Icon(Icons.refresh_rounded),
+                ),
+                FabAction(
+                  heroTag: 'search',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchScreen()),
                   ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'search',
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SearchScreen()),
-                      ),
-                      tooltip: l10n.searchArticles,
-                      mini: true,
-                      child: const Icon(Icons.search_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'mark_all_read',
-                      onPressed: _markAllRead,
-                      tooltip: l10n.markAllRead,
-                      mini: true,
-                      child: const Icon(Icons.done_all_rounded),
-                    ),
-                  ),
-                ],
-              ),
+                  tooltip: l10n.searchArticles,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                FabAction(
+                  heroTag: 'mark_all_read',
+                  onPressed: _markAllRead,
+                  tooltip: l10n.markAllRead,
+                  icon: const Icon(Icons.done_all_rounded),
+                ),
+              ],
             )
           : null,
       body: Stack(
