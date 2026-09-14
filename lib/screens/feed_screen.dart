@@ -50,6 +50,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import 'search_screen.dart';
+import '../theme/app_theme.dart';
 
 class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
@@ -1534,20 +1535,36 @@ class _FeedScreenState extends State<FeedScreen>
           // all four top-level screens and sits rightmost on every one (the
           // rule is written out on its button in alerts_screen.dart). This
           // screen was the only one with the two the other way round.
-          if (_hasFeeds && !_booting) ...[
-            IconButton(
-              key: _filterFabKey,
-              onPressed: _openFilterBubble,
-              tooltip: l10n.filterTooltip,
-              icon: const Icon(Icons.filter_alt_outlined),
-            ),
-            IconButton(
-              key: _quickSettingsFabKey,
-              onPressed: _openQuickSettingsBubble,
-              tooltip: l10n.quickSettingsTooltip,
-              icon: const Icon(Icons.tune_rounded),
-            ),
-          ],
+          // Present but inert when there is nothing to act on, rather than
+          // absent. An app bar that gains two controls the moment the first
+          // feed arrives reads as the bar itself changing shape; leaving them
+          // greyed says "these are yours, there is just nothing to filter
+          // yet".
+          //
+          // The inert tone is the illustration role. Design gave that role's
+          // light value as #C3CAC9, which is the same hex the brief specifies
+          // for these icons — so they are treated as one role rather than two
+          // that happen to match, which is also the only way an inert icon
+          // gets a dark value at all. Flagged as an inference.
+          Builder(builder: (context) {
+            final live = _hasFeeds && !_booting;
+            final inert = Theme.of(context).flashColors.illustration;
+            return Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                key: _filterFabKey,
+                onPressed: live ? _openFilterBubble : null,
+                tooltip: l10n.filterTooltip,
+                icon: Icon(Icons.filter_alt_outlined,
+                    color: live ? null : inert),
+              ),
+              IconButton(
+                key: _quickSettingsFabKey,
+                onPressed: live ? _openQuickSettingsBubble : null,
+                tooltip: l10n.quickSettingsTooltip,
+                icon: Icon(Icons.tune_rounded, color: live ? null : inert),
+              ),
+            ]);
+          }),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
@@ -1734,14 +1751,18 @@ class _FeedScreenState extends State<FeedScreen>
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.35),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.30),
+            // The glyph the mock asks for. Caught-up is the one empty state
+            // that is an achievement rather than an absence, and a bare line
+            // of text reads as the list having failed to load.
+            Icon(Icons.done_all_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 16),
             Text(
               l10n.noNewArticles,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
