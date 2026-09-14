@@ -311,7 +311,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get summary => 'Summary';
 
   @override
-  String get saved => 'Bookmarks';
+  String get saved => 'Saved';
 
   @override
   String get bookmarks => 'Bookmarks';
@@ -324,7 +324,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get bookmark => 'Bookmark';
 
   @override
-  String get bookmarkRemoved => 'Bookmark removed';
+  String get bookmarkRemoved => 'Removed from Bookmarks';
 
   @override
   String get keywordAlerts => 'Keyword alerts';

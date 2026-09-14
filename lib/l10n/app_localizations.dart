@@ -659,7 +659,7 @@ abstract class AppLocalizations {
   /// No description provided for @saved.
   ///
   /// In en, this message translates to:
-  /// **'Bookmarks'**
+  /// **'Saved'**
   String get saved;
 
   /// No description provided for @bookmarks.
@@ -680,10 +680,10 @@ abstract class AppLocalizations {
   /// **'Bookmark'**
   String get bookmark;
 
-  /// Banner shown after unsaving an article in Bookmarks, where the row then leaves the list. No undo: re-saving from the reader is one tap.
+  /// Banner shown after unsaving an article in Bookmarks, where the row then leaves the list. Names the place rather than the state, matching de/es/fr/it, which took that shape because none of them has a bookmark noun to build a state out of. No undo: re-saving from the reader is one tap.
   ///
   /// In en, this message translates to:
-  /// **'Bookmark removed'**
+  /// **'Removed from Bookmarks'**
   String get bookmarkRemoved;
 
   /// No description provided for @keywordAlerts.

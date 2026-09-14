@@ -204,6 +204,20 @@ with the existing `alertsRemovedBanner`. No undo — it would need the row's ind
 and saved timestamp held after deletion, and re-saving from the reader is one
 tap.
 
+> **SUPERSEDED for the English value.** The block above is kept as the
+> record of what was specified.
+>
+> English is **"Removed from Bookmarks"**, not "Bookmark removed". The
+> four other locales were written first and independently converged on
+> "Removed from &lt;place&gt;" — `Aus Gespeichert entfernt`,
+> `Eliminado de Guardados`, `Retiré des enregistrés`,
+> `Rimosso dai salvati` — because **none of them has a bookmark noun**
+> to build a state out of, only the verb *save* (see 7.10). English does
+> have the place noun, in its own nav label, so writing it as a state
+> would have made English the only locale describing a condition where
+> the other four describe a location. The row leaves the list; the
+> string says so. The four locale values are unchanged.
+
 **`alertNotificationSummary`**
 
 ```
@@ -241,6 +255,33 @@ so locales with different casing rules are unaffected.
   article *is* saved, where a place-noun reads slightly oddly against a state.
   If it grates, the fix is a separate tooltip key, not a retreat to "Saved" for
   the destination.
+
+> **SUPERSEDED. `saved` stays "Saved" in all five locales.** The row and
+> the reasoning above are kept as the record of what was decided and why
+> it was wrong.
+>
+> **The premise is false.** This row justifies the change by saying the
+> nav label already uses this key in five locales. It does not. The nav
+> label is `bookmarks` — `app.dart:354`, `:1329`, `:1566` and
+> `bookmarks_screen.dart:200` — a different key, which has read
+> "Bookmarks" in English all along. So the change achieves nothing for
+> the destination it was argued for.
+>
+> What it would have done instead is put a place-noun on two **state**
+> labels. `l10n.saved` has exactly two call sites and both describe one
+> article’s condition: the action rail’s tooltip
+> (`article_card.dart:871`), which this row flags, and the radial
+> menu’s **visible label** (`radial_menu.dart:244`), which it misses
+> entirely — a rendered label rather than a tooltip, and
+> unconditionally visible on long-press.
+>
+> And in the four other locales it would have been a grammar error. They
+> have no bookmark noun (7.10), so the only "same direction" edit
+> available is singular → plural — "Guardados" against a single
+> saved article — at two sites that each describe exactly one.
+>
+> The tooltip was confirmed reachable on device before the revert (7.11),
+> so the concern the row raises was real. It was the fix that was wrong.
 - **`markAllRead`** — matches `markAllReadConfirm`, whose value is unchanged.
   **Keep both keys** with identical text: different widgets read them, and the
   dialog's confirm button must not depend on the FAB's tooltip key. On the
@@ -858,7 +899,10 @@ second, which is a rendered label rather than a tooltip, is unconditionally
 visible on long-press, and will read "Bookmarks" beside a bookmark glyph as the
 name of the state the article is in.
 
-Applied in English as specified. The other four locales are unchanged, for 7.10.
+**Reverted.** `saved` is "Saved" in all five locales again, and the 2.2
+row is marked superseded rather than edited. The change was applied in
+English for one commit (21c8975) and taken back in the next; it never
+reached a release outside this branch.
 
 ### 7.10 Four locales have no bookmark noun, and never had one
 
@@ -895,8 +939,15 @@ body does open it, which is the control that makes the first result mean
 something. The rail's `Tooltip` is the inner long-press recognizer and takes the
 gesture arena from the card's `GestureDetector`.
 
-So the concern in 2.2 is live, not moot: "Bookmarks" will appear as a tooltip on
-a saved card. For the device list.
+So the concern 2.2 raises is real — confirmed on the M51, where the
+tooltip rendered "Bookmarks" against the orange saved bookmark. It is the
+fix that was wrong, not the worry: see the superseded block on 2.2. The
+tooltip reads "Saved" again.
+
+Worth keeping even though the string reverted, because it answers a
+question that will come back the next time anything is put on the rail:
+the rail's own long-press wins, and the card's radial menu does not fire
+from there.
 
 ### 7.12 `onSurfaceRead` does not qualify for WCAG's large-text bar
 
@@ -943,3 +994,61 @@ It is **not** the style in `unreadCountNotification`, whose French `one` branch
 hardcodes "1". Latent rather than live: `unread_badge_service.dart:149` clears
 at `safe == 0` and never posts, so the only way to reach it is to call
 `unreadBadgeText(0)` directly. Worth fixing when something else opens that file.
+
+---
+
+## 8. Pass 9 scope — recorded, not started
+
+Two items found during the pass 6 strings work that are **behaviour, not
+copy**, and were deliberately left alone.
+
+### 8.1 The notification stack has no summary at all
+
+`setAsGroupSummary` is never called. `kFlashNotificationGroupKey` is set on
+every child — `refresh_service.dart:182` and `unread_badge_service.dart:233`
+— but a group with no summary notification is only half the feature: Android
+will auto-bundle children on its own terms, with its own heading, instead of
+the one the app would write.
+
+This is **why `alertNotificationSummary` is unreachable**, and the distinction
+matters for whoever picks it up: the key is not waiting on a call site that was
+forgotten, it is waiting on a notification that was never built. The string is
+already written, in five locales, and is not the work.
+
+Note also `notification_group.dart`, which is worth reading first: keyword
+alerts and the unread count sit on channels of different importance, so Android
+puts them in different sections of the shade and **will not group them with each
+other whatever this key says**. A summary would cover the keyword alerts only.
+
+### 8.2 `unreadCountNotification` fr carries the plural trap, and a guard is
+holding it
+
+French routes **0 and 1 both through the ICU `one` branch**. The French
+`unreadCountNotification` hardcodes "1":
+
+```
+{count, plural, one{1 article non lu} other{{count} articles non lus}}
+```
+
+so it renders "1 article non lu" at a count of zero. The house style elsewhere
+— `alertNotificationCount`, `deleteAlertKeywordBody`, and the new
+`alertNotificationSummary` — uses `{count}` in the `one` branch for exactly
+this reason.
+
+**It cannot fire today, and the reason it cannot is load-bearing.**
+`unread_badge_service.dart:149` reads:
+
+```dart
+if (safe == 0) {
+  await _clear();
+  return;
+}
+```
+
+That early return exists to dismiss the badge, not to protect a translation,
+and it is the only thing standing between the French build and "1 article non
+lu" on an empty feed. The next person to simplify that branch — to post a
+"you are all caught up" line, say — will ship the bug without touching the
+ARB and with every test green, because no test renders `unreadBadgeText(0)`.
+
+Fix the string, then the guard is free to change. Not the other way round.
