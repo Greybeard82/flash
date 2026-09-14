@@ -1330,3 +1330,44 @@ translations of a sentence nobody has agreed to. `kAdPrivacyRowLabelEn` and
 `kAdPrivacyRowSubtitleEn` are marked for deletion in that pass.
 
 No UMP SDK, no ad code, no new strings. A test asserts all three absences.
+
+### 9.7 `savedFill` and `onSavedFill` are deleted
+
+Two roles with no call site in `lib/` — the same condition 7.7 found
+`alertsFilterAll` in — left behind when the action rail’s saved fill
+became a glyph.
+
+**Why deleted rather than kept warm for a future consumer.** A role with no call
+site is still lerped on every theme animation, compared in every `==` and
+hashed in every `hashCode`. That is the cheap part. The expensive part is
+that it reads as an available answer: the next person needing a saved treatment
+would find two roles sitting in `FlashColors` and reasonably assume the
+decision had been made. It had been, and it was reversed. Restoring the fill now
+means restoring these two deliberately, which is the right amount of friction.
+
+`_qiOnSavedFill` went with them. It was `#0D1211` and it existed only
+because `onSecondary` gave 4.12:1 on the orange, under the 4.5:1 this app
+holds a lone glyph to — an authored constant written to solve a contrast
+problem the fill had created.
+
+**The three tests that went, and what each asserted:**
+
+| test | asserted | replaced by |
+|---|---|---|
+| `flash_colors_resolution` · *Newspaper does not fill it red* | `savedFill` was `_npInk`, not `_npRed` | **inverted** — the glyph IS `_npRed`, see below |
+| `flash_colors_resolution` · *Quiet Ink fills it with the unread orange* | `savedFill == secondary` in both brightnesses | `batch4_ink_test.dart`, on the glyph |
+| `flash_colors_resolution` · *every theme keeps a legible glyph on the saved fill* | `onSavedFill` on `savedFill` ≥ 4.5:1 | `summary_button_contrast_test.dart`, glyph on tint, 3:1 |
+
+A fourth assertion went too, a line inside `batch4_ink_test.dart`’s "error
+is not the orange" reading `expect(scheme.error, isNot(flashColors.savedFill))`.
+It asked the same question as the line beside it, since `savedFill` resolved
+to `secondary` in both Quiet Ink brightnesses.
+
+**The first row is the one worth reading.** Its argument — `_npRed` is
+already the nav selection, the FAB, the switch and the masthead, so a red saved
+block competes with all of them — was correct about a BLOCK and was overturned
+for a GLYPH by measurement, not by this deletion: Newspaper’s
+`onSurfaceVariant` and its `_npInk` are the same `#1D1D1B`, so an
+ink saved glyph would be pixel-identical to an unsaved one. The claim that test
+made is now true in reverse, which is exactly the kind of thing that gets lost
+when a test is deleted without a note.

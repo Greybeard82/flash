@@ -199,56 +199,33 @@ void main() {
     }
   });
 
-  group('the saved rail takes a role, not the accent', () {
-    test('Newspaper does not fill it red', () {
-      // _npRed is already the nav selection, the FAB, the switch and the
-      // masthead tint. A red block on every saved card competes with all of
-      // them and distinguishes nothing.
-      final theme = flashNewspaperTheme();
-      final ink = theme.flashColors;
-      expect(ink.savedFill, isNot(theme.colorScheme.secondary));
-      expect(ink.savedFill, isNot(theme.colorScheme.primary));
-    });
+  // **A group of three tests stood here and went with the two roles it
+  // measured.** Recorded rather than silently dropped, because two of the
+  // three were making claims that are still true of something else, and
+  // one of them is now true in reverse:
+  //
+  //   1. `Newspaper does not fill it red` — `savedFill` was
+  //      `_npInk`, on the argument that `_npRed` is already the nav
+  //      selection, the FAB, the switch and the masthead, so a red block
+  //      on every saved card competes with all of them. **That argument
+  //      was overturned by measurement, not by this deletion.**
+  //      Newspaper's `onSurfaceVariant` and its `_npInk` are the same
+  //      `#1D1D1B`, so an ink saved GLYPH would be pixel-identical to an
+  //      unsaved one and colour would become actively misleading rather
+  //      than merely weak. Newspaper's saved glyph is `_npRed`, and the
+  //      claim this test made is now inverted.
+  //   2. `Quiet Ink fills it with the unread orange` — still true
+  //      of the glyph. `batch4_ink_test.dart` holds that claim.
+  //   3. `every theme keeps a legible glyph on the saved fill` — a
+  //      4.5:1 check of `onSavedFill` against `savedFill`. Replaced by
+  //      `summary_button_contrast_test.dart`, which measures the glyph
+  //      against the tint it is actually painted on and holds it to WCAG
+  //      1.4.11's 3:1 rather than the text bar: 3.36 / 6.88 / 5.97.
+  //
+  // Nothing here needs rebuilding. Every pair is measured where it is
+  // painted now, which is what made the roles removable in the first
+  // place.
 
-    test('Quiet Ink fills it with the unread orange', () {
-      // Here the accent IS right: orange appears nowhere else in a resting
-      // feed, so a saved card is scannable down the column.
-      for (final b in Brightness.values) {
-        final theme = flashQuietInkTheme(brightness: b);
-        expect(theme.flashColors.savedFill, theme.colorScheme.secondary);
-      }
-    });
-
-    test('every theme keeps a legible glyph on the saved fill', () {
-      double luminance(Color c) {
-        double channel(double v) {
-          final s = v / 255.0;
-          return s <= 0.03928
-              ? s / 12.92
-              : math.pow((s + 0.055) / 1.055, 2.4) as double;
-        }
-
-        return 0.2126 * channel((c.r * 255).roundToDouble()) +
-            0.7152 * channel((c.g * 255).roundToDouble()) +
-            0.0722 * channel((c.b * 255).roundToDouble());
-      }
-
-      for (final (name, theme) in [
-        ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
-        ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
-        ('Newspaper', flashNewspaperTheme()),
-      ]) {
-        final ink = theme.flashColors;
-        final la = luminance(ink.savedFill);
-        final lb = luminance(ink.onSavedFill);
-        final ratio = (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
-        expect(ratio, greaterThanOrEqualTo(4.5),
-            reason: '$name paints the saved glyph at '
-                '${ratio.toStringAsFixed(2)}:1 — this is the pair that was '
-                '4.12:1 before the glyph moved off onSecondary');
-      }
-    });
-  });
 
   group('every ink role used for text clears 4.5:1 on its own surface', () {
     // The test that should have existed before Newspaper's ink levels were

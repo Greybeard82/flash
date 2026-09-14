@@ -79,9 +79,14 @@ const Color darkBg = Color(0xFF0D1211);
 //     `primary` or `primaryContainer`.
 //   * **Orange means the article is in your queue.** It has exactly three
 //     jobs and no others: the unread dot on a feed row (`secondary`), the
-//     saved half of the action rail (`savedFill` under `onSavedFill`), and
-//     the swipe-to-unread reveal on Bookmarks (`secondary` at 15% behind a
+//     saved bookmark glyph on the action rail (`secondary`, on the same
+//     `primaryContainer` tint the unsaved glyph sits on), and the
+//     swipe-to-unread reveal on Bookmarks (`secondary` at 15% behind a
 //     `secondary` glyph).
+//
+//     The second of those was a `savedFill` block under an `onSavedFill`
+//     glyph until the fill was removed. Both roles are deleted; see the
+//     block above `navPill` for why they are not being kept warm.
 //
 //     This used to read "orange means unread, and nothing else", which
 //     described a UI that never shipped — there is no unread dot in the code
@@ -103,19 +108,6 @@ const Color _qiPrimaryContainerLight = Color(0xFFDCEBEB);
 const Color _qiOnPrimaryContainerLight = Color(0xFF0E6A70);
 const Color _qiUnreadLight = Color(0xFFBE6530);
 const Color _qiPlaceholderLight = Color(0xFFF0F2F2);
-
-/// The glyph on the saved half of the action rail, in both brightnesses.
-///
-/// Near-black rather than `onSecondary`, which is white in light mode. White
-/// on the light unread orange is 4.12:1, under the 4.5:1 this app holds a
-/// lone glyph to — a glyph is the only thing identifying that button, so it
-/// gets the text bar rather than the graphical one.
-///
-/// For the record, and not as a softening: 4.12:1 does clear WCAG 1.4.11's
-/// 3:1 for graphical objects, because an icon is not text. The app's own bar
-/// is stricter, and it is the right one to hold here. This value is 4.58:1,
-/// which is slightly more headroom than `onSurface`'s 4.51:1.
-const Color _qiOnSavedFill = Color(0xFF0D1211);
 
 /// Empty-state glyphs, in both brightnesses.
 const Color _qiIllustrationLight = Color(0xFFC3CAC9);
@@ -214,19 +206,35 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// Fill behind a thumbnail that is missing or still loading.
   final Color placeholder;
 
-  /// The action rail's save half once an article is saved, and the glyph on
-  /// top of it.
-  ///
-  /// A role rather than `secondary` under `onSecondary`, for two reasons that
-  /// pull the same way. `secondary` also paints the swipe-reveal background,
-  /// so tuning the saved fill through it would move an unrelated surface. And
-  /// Newspaper needs a different answer entirely: there, `secondary` is
-  /// `primary` is `_npRed`, already the nav selection, the FAB, the switch and
-  /// the masthead tint, so a red saved block buys none of the scannability
-  /// that justified orange in Quiet Ink and is simply the loudest thing on the
-  /// row.
-  final Color savedFill;
-  final Color onSavedFill;
+  // **`savedFill` and `onSavedFill` were here, and this is why they
+  // went.**
+  //
+  // They painted the action rail's lower half when an article was saved:
+  // an `#BE6530` block under a near-black glyph, `_npInk` under
+  // `_npPaper` in Newspaper. Design 2a asked for the fill so a saved
+  // article would be scannable down the feed, and that justification did
+  // not survive contact with the app — scanning for saved
+  // articles is what the Bookmarks destination is for, one tap from
+  // every screen. The feed was carrying a solid orange block on every
+  // saved row to duplicate a screen that already exists, on its
+  // quietest surface.
+  //
+  // The saved state is a glyph now: `bookmark_rounded` in `secondary`,
+  // on the same `primaryContainer` tint the unsaved glyph sits on.
+  //
+  // **Deleted rather than kept warm for a future consumer.** A role with
+  // no call site is still lerped on every theme animation, compared in
+  // every `==` and hashed in every `hashCode` — but the real
+  // cost is that it reads as an available answer. The next person
+  // needing a saved treatment would find two roles here and assume the
+  // decision had already been made. It had, and it was reversed.
+  // Restoring the fill means restoring these two deliberately, which is
+  // the right amount of friction.
+  //
+  // `_qiOnSavedFill` went with them. It was `#0D1211`, and it existed
+  // only because `onSecondary` gave 4.12:1 on the orange — under
+  // the 4.5:1 this app holds a lone glyph to. A whole authored constant
+  // written to solve a contrast problem that the fill had created.
 
   /// The fill behind the selected bottom-navigation item.
   ///
@@ -267,8 +275,6 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.onSurfaceMuted,
     required this.onSurfaceRead,
     required this.placeholder,
-    required this.savedFill,
-    required this.onSavedFill,
     required this.navPill,
     required this.illustration,
     required this.inert,
@@ -284,8 +290,6 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? onSurfaceMuted,
     Color? onSurfaceRead,
     Color? placeholder,
-    Color? savedFill,
-    Color? onSavedFill,
     Color? navPill,
     Color? illustration,
     Color? inert,
@@ -295,8 +299,6 @@ class FlashColors extends ThemeExtension<FlashColors> {
       onSurfaceMuted: onSurfaceMuted ?? this.onSurfaceMuted,
       onSurfaceRead: onSurfaceRead ?? this.onSurfaceRead,
       placeholder: placeholder ?? this.placeholder,
-      savedFill: savedFill ?? this.savedFill,
-      onSavedFill: onSavedFill ?? this.onSavedFill,
       navPill: navPill ?? this.navPill,
       illustration: illustration ?? this.illustration,
       inert: inert ?? this.inert,
@@ -319,8 +321,6 @@ class FlashColors extends ThemeExtension<FlashColors> {
       onSurfaceMuted: Color.lerp(onSurfaceMuted, other.onSurfaceMuted, t)!,
       onSurfaceRead: Color.lerp(onSurfaceRead, other.onSurfaceRead, t)!,
       placeholder: Color.lerp(placeholder, other.placeholder, t)!,
-      savedFill: Color.lerp(savedFill, other.savedFill, t)!,
-      onSavedFill: Color.lerp(onSavedFill, other.onSavedFill, t)!,
       navPill: Color.lerp(navPill, other.navPill, t)!,
       illustration: Color.lerp(illustration, other.illustration, t)!,
       inert: Color.lerp(inert, other.inert, t)!,
@@ -335,8 +335,6 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.onSurfaceMuted == onSurfaceMuted &&
           other.onSurfaceRead == onSurfaceRead &&
           other.placeholder == placeholder &&
-          other.savedFill == savedFill &&
-          other.onSavedFill == onSavedFill &&
           other.navPill == navPill &&
           other.illustration == illustration &&
           other.inert == inert &&
@@ -344,7 +342,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
 
   @override
   int get hashCode => Object.hash(onSurfaceMuted, onSurfaceRead, placeholder,
-      savedFill, onSavedFill, navPill, illustration, inert, brightness);
+      navPill, illustration, inert, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -369,8 +367,6 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     onSurfaceMuted: mix(0.62),
     onSurfaceRead: mix(0.55),
     placeholder: mix(0.92),
-    savedFill: scheme.secondary,
-    onSavedFill: scheme.onSecondary,
     navPill: scheme.primaryContainer,
     illustration: mix(0.78),
     inert: mix(0.78),
@@ -392,8 +388,6 @@ const FlashColors _flashColorsLight = FlashColors(
   onSurfaceMuted: _qiOnSurfaceMutedLight,
   onSurfaceRead: _qiOnSurfaceReadLight,
   placeholder: _qiPlaceholderLight,
-  savedFill: _qiUnreadLight,
-  onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerLight,
   illustration: _qiIllustrationLight,
   inert: _qiInertLight,
@@ -404,8 +398,6 @@ const FlashColors _flashColorsDark = FlashColors(
   onSurfaceMuted: _qiOnSurfaceMutedDark,
   onSurfaceRead: _qiOnSurfaceReadDark,
   placeholder: _qiPlaceholderDark,
-  savedFill: _qiUnreadDark,
-  onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerDark,
   illustration: _qiIllustrationDark,
   inert: _qiInertDark,
@@ -750,8 +742,6 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // saved block is the loudest thing on the row while buying none of the
   // scannability that justified orange in Quiet Ink, where orange appears
   // nowhere else.
-  savedFill: _npInk,
-  onSavedFill: _npPaper,
   // No pill. Newspaper's nav is a red mark on a paper-grey bar and has been
   // since it shipped; a teal-shaped capsule behind the selected item would be
   // Quiet Ink furniture wearing newsprint colours. Transparent here is how it

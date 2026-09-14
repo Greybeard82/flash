@@ -92,6 +92,13 @@ Color _resolved(WidgetTester tester, String text) {
   return style.color!;
 }
 
+/// The authored unread orange, per brightness. Written out rather than
+/// compared to another role, because every role it could be compared to
+/// is one that could move with it.
+Color _expectedUnread(Brightness b) => b == Brightness.light
+    ? const Color(0xFFBE6530)
+    : const Color(0xFFE79E62);
+
 void main() {
   group('1.1 read state is two named levels', () {
     for (final brightness in Brightness.values) {
@@ -212,11 +219,28 @@ void main() {
         // are faults, and a fault that borrows the queue colour tells the
         // reader something is unread.
         expect(scheme.error, isNot(scheme.secondary));
-        expect(scheme.error, isNot(theme.flashColors.savedFill));
       });
 
-      test('${brightness.name}: the saved fill IS the queue orange', () {
-        expect(theme.flashColors.savedFill, scheme.secondary);
+      // **Two assertions went from here with `savedFill`.** A second line
+      // in the test above read `expect(scheme.error, isNot(flashColors
+      // .savedFill))`, and a whole test beside it was named "the saved
+      // fill IS the queue orange".
+      //
+      // The first asked the same question twice: `savedFill` resolved to
+      // `secondary` in both Quiet Ink brightnesses, so the surviving line
+      // already covered it. The second described a block the rail stopped
+      // painting — the saved state is a glyph now.
+      //
+      // What replaced them is not here but in
+      // `summary_button_contrast_test.dart`, which measures the saved
+      // glyph against the tint it actually sits on: 3.36 / 6.88 / 5.97.
+      test('${brightness.name}: orange still means one thing', () {
+        // Kept because the claim is about orange's MEANING rather than
+        // about the deleted role. Whatever paints "saved" has to be the
+        // same orange that paints "unread", or a row that is both
+        // carries two accents that look like two different states.
+        expect(scheme.secondary, _expectedUnread(brightness));
+        expect(scheme.error, isNot(scheme.secondary));
       });
     }
   });
