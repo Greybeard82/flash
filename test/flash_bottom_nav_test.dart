@@ -402,4 +402,173 @@ void main() {
       });
     }
   });
+
+  group('the label respects the user font size, down to a floor', () {
+    // What went wrong in the first fix, and why this matrix exists.
+    //
+    // The labels were originally wrapped in a bare FittedBox(scaleDown) to
+    // stop them ellipsizing. That solved the truncation and created something
+    // worse: FittedBox has no floor and no idea what textScaler is for, so a
+    // user who set Android's font size to large got the label scaled up by the
+    // system and scaled straight back down by the widget. Their accessibility
+    // setting did nothing whatsoever, on the surface they touch most, and no
+    // test noticed because no test ever set a scale factor.
+    //
+    // The sizing is deliberate now: the scaled size is where it starts, the
+    // pill's padding gives way first because a narrower pill is invisible and
+    // a smaller label is not, and only then does the label shrink — stopping
+    // at a hard 9px, because below that it is not a label any more and an
+    // unreadable word is no better than a truncated one.
+    //
+    // FittedBox is still there, but only as a backstop for the gap between
+    // what TextPainter measures and what the raster needs.
+
+    Future<void> pumpAt(
+      WidgetTester tester, {
+      required double width,
+      required double scale,
+    }) async {
+      tester.view.physicalSize = Size(width * 3, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: flashQuietInkTheme(brightness: Brightness.light),
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+          child: Scaffold(
+            body: Container(key: const ValueKey('body'), color: Colors.white),
+            bottomNavigationBar: FlashBottomNav(
+              currentIndex: 1,
+              onTap: (_) {},
+              destinations: const [
+                FlashNavDestination(
+                  icon: Icon(Icons.bolt),
+                  selectedIcon: Icon(Icons.bolt),
+                  label: 'Flash',
+                ),
+                FlashNavDestination(
+                  icon: Icon(Icons.rss_feed),
+                  selectedIcon: Icon(Icons.rss_feed),
+                  label: 'Categories',
+                ),
+                FlashNavDestination(
+                  icon: Icon(Icons.bookmark),
+                  selectedIcon: Icon(Icons.bookmark),
+                  label: 'Bookmarks',
+                ),
+                FlashNavDestination(
+                  icon: Icon(Icons.notifications),
+                  selectedIcon: Icon(Icons.notifications),
+                  label: 'Alerts',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    Text labelOf(WidgetTester tester, String label) =>
+        tester.widget<Text>(find.descendant(
+          of: find.byType(FlashBottomNav),
+          matching: find.text(label),
+        ));
+
+    const labels = ['Flash', 'Categories', 'Bookmarks', 'Alerts'];
+
+    for (final width in [320.0, 360.0, 411.0]) {
+      for (final scale in [1.0, 1.3, 2.0]) {
+        final at = 'at ${width.toInt()}dp / ${scale}x';
+
+        testWidgets('$at no label goes below the 9px floor', (tester) async {
+          await pumpAt(tester, width: width, scale: scale);
+
+          for (final label in labels) {
+            final size = labelOf(tester, label).style!.fontSize!;
+            expect(size, greaterThanOrEqualTo(FlashBottomNav.minLabelSize),
+                reason: '$at "$label" rendered at '
+                    '${size.toStringAsFixed(2)}px, below the floor');
+          }
+        });
+
+        testWidgets('$at no label is truncated', (tester) async {
+          await pumpAt(tester, width: width, scale: scale);
+
+          for (final label in labels) {
+            final text = labelOf(tester, label);
+            expect(text.data, label, reason: '$at the whole word must survive');
+            expect(text.overflow, isNot(TextOverflow.ellipsis));
+          }
+        });
+
+        testWidgets('$at the bar is still a bar and the body still has room',
+            (tester) async {
+          // A larger font must not reopen the bug that started all this: the
+          // bar growing until the page has nothing left.
+          await pumpAt(tester, width: width, scale: scale);
+
+          expect(
+              tester.getSize(find.byType(FlashBottomNav)).height, lessThan(160),
+              reason: '$at the bar grew out of proportion');
+          expect(tester.getSize(find.byKey(const ValueKey('body'))).height,
+              greaterThan(400),
+              reason: '$at the body lost the screen');
+        });
+
+        testWidgets('$at nothing overflows', (tester) async {
+          await pumpAt(tester, width: width, scale: scale);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+
+    testWidgets('a larger setting really does produce a larger label',
+        (tester) async {
+      // The assertion the old FittedBox would have failed. Measured at the
+      // widest tier and on the shortest label, so there is room for the
+      // scale-up to actually happen rather than being spent on fitting.
+      await pumpAt(tester, width: 411, scale: 1.0);
+      final plain = labelOf(tester, 'Flash').style!.fontSize!;
+
+      await pumpAt(tester, width: 411, scale: 1.3);
+      final larger = labelOf(tester, 'Flash').style!.fontSize!;
+
+      expect(larger, greaterThan(plain),
+          reason: 'Android font size is set to large and the label did not '
+              'change — which is the accessibility setting doing nothing');
+    });
+
+    testWidgets('padding gives way before the label does', (tester) async {
+      // The ordering that makes the floor reachable at all: under pressure
+      // the pill tightens before the text shrinks.
+      //
+      // Measured on the SHORT label for the roomy case, deliberately. In
+      // `flutter test` the real font is replaced by a fixed-width test font
+      // where every glyph is a square of the font size, so "Categories" comes
+      // out 110px at 11px where Instrument Sans draws it near 58. That makes
+      // the harness considerably harsher than a phone — which is fine, and
+      // useful, but it means even 411dp is already tightening for the long
+      // labels here and would not be on device.
+      EdgeInsets padOf(WidgetTester tester, int item) => tester
+          .widget<Container>(find.descendant(
+            of: find.byKey(ValueKey('nav_item_$item')),
+            matching: find.byType(Container),
+          ))
+          .padding as EdgeInsets;
+
+      await pumpAt(tester, width: 411, scale: 1.0);
+      expect(padOf(tester, 0).left, FlashBottomNav.pillPaddingH,
+          reason:
+              'a short label on a wide screen keeps the 18dp the mock asks for');
+
+      await pumpAt(tester, width: 320, scale: 2.0);
+      final tight = padOf(tester, 1);
+      expect(tight.left, lessThan(FlashBottomNav.pillPaddingH),
+          reason: 'the pill should have tightened under pressure');
+      expect(tight.left, greaterThanOrEqualTo(FlashBottomNav.minPillPaddingH),
+          reason: 'but not past its own minimum');
+    });
+  });
 }

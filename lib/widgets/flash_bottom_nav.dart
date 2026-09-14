@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
@@ -59,15 +61,27 @@ class FlashBottomNav extends StatelessWidget {
   /// the system reports.
   static const EdgeInsets barPadding = EdgeInsets.fromLTRB(6, 10, 6, 16);
 
-  /// The selected item's pill.
+  /// The selected item's pill, at the width the mock was drawn for.
   static const EdgeInsets pillPadding =
-      EdgeInsets.symmetric(horizontal: 18, vertical: 6);
+      EdgeInsets.symmetric(horizontal: pillPaddingH, vertical: pillPaddingV);
+  static const double pillPaddingH = 18;
+  static const double pillPaddingV = 6;
   static const double pillRadius = 14;
+
+  /// What the pill tightens to before the label is allowed to shrink.
+  ///
+  /// Padding gives way first because a slightly narrower pill is invisible
+  /// and a smaller label is not.
+  static const double minPillPaddingH = 8;
 
   /// Between the glyph and its label.
   static const double iconLabelGap = 3;
   static const double iconSize = 21;
   static const double labelSize = 11;
+
+  /// The floor the label may never go below, whatever the width or the user's
+  /// font-size setting. Under this it stops being a label.
+  static const double minLabelSize = 9;
 
   @override
   Widget build(BuildContext context) {
@@ -131,88 +145,145 @@ class _NavItem extends StatelessWidget {
     required this.onTap,
   });
 
+  /// How wide [text] draws at [size], in this context's font and direction.
+  double _measure(BuildContext context, String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: Directionality.of(context),
+      maxLines: 1,
+      // The size in [style] is already the final pixel size — the scale was
+      // applied when it was chosen — so scaling again here would measure a
+      // string nobody is going to draw.
+      textScaler: TextScaler.noScaling,
+    )..layout();
+    return painter.width;
+  }
+
   @override
   Widget build(BuildContext context) {
     final content = isSelected ? selectedColor : unselectedColor;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(FlashBottomNav.pillRadius),
-      // No Center here, and that is load-bearing rather than a simplification.
-      //
-      // Center takes the largest size its constraints allow. In the Scaffold's
-      // bottomNavigationBar slot the incoming height constraint is the whole
-      // viewport, so a Center made every item as tall as the screen, the Row
-      // with it, and the bar with that — leaving the body exactly zero pixels
-      // and the nav floating in the vertical middle of an empty page. The
-      // Container below has an intrinsic height, so the Row sizes to its
-      // tallest child and the bar is as tall as its content.
-      // Align, not Center, and heightFactor is the whole reason.
-      //
-      // The tap target should be the full slot the Expanded gives it, but the
-      // pill should hug its own content — 18dp of padding around the label,
-      // not 18dp bitten out of a quarter of the bar, which is what a
-      // slot-width Container does and why the labels were ellipsizing.
-      // heightFactor: 1 sizes this box to the child's height instead of to
-      // the constraint, which is exactly what Center would not do.
-      child: Align(
-        alignment: Alignment.center,
-        heightFactor: 1,
-        child: Container(
-          // The padding is the same whether or not the pill is painted, so
-          // moving the selection does not shift the row. An unselected item
-          // is the same shape as a selected one with nothing behind it.
-          padding: FlashBottomNav.pillPadding,
-          decoration: BoxDecoration(
-            color: isSelected ? pillColor : Colors.transparent,
-            borderRadius: BorderRadius.circular(FlashBottomNav.pillRadius),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // The index-0 glyph is an SVG recoloured by the ambient
-              // IconTheme rather than by an Icon.color, so the theme has to be
-              // supplied here rather than passed down as a property.
-              IconTheme.merge(
-                data: IconThemeData(
-                  color: content,
-                  size: FlashBottomNav.iconSize,
-                ),
-                child: isSelected ? destination.selectedIcon : destination.icon,
+    // The item is inside an Expanded, so this is the slot it has to live in.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slot = constraints.maxWidth;
+
+        // The user's font-size setting, honoured rather than undone.
+        //
+        // The previous version wrapped the label in a bare FittedBox, which
+        // meant Android's "large text" setting scaled the label up and the
+        // FittedBox scaled it straight back down — the accessibility setting
+        // did nothing at all, on the surface a user touches most. So the
+        // scaled size is the *starting* size here, and it is only given up
+        // when it genuinely will not fit, and never below a floor.
+        final desired =
+            MediaQuery.textScalerOf(context).scale(FlashBottomNav.labelSize);
+
+        TextStyle styleAt(double size) => TextStyle(
+              fontFamily: kSansFamily,
+              fontSize: size,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: content,
+            );
+
+        // Padding gives way before the label does. 18dp is the mock's number
+        // at the width it was drawn for; when four destinations no longer fit
+        // at that, the pill tightens toward [minPillPaddingH] before anything
+        // starts shrinking. A slightly narrower pill is invisible. A smaller
+        // label is not.
+        var size = desired;
+        var pad = FlashBottomNav.pillPaddingH;
+        var width = _measure(context, destination.label, styleAt(size));
+
+        if (width + 2 * pad > slot) {
+          pad = math.max(
+            FlashBottomNav.minPillPaddingH,
+            (slot - width) / 2,
+          );
+        }
+
+        if (width + 2 * pad > slot) {
+          // Padding is already at its minimum, so the label has to give. It
+          // shrinks proportionally and stops at [minLabelSize]: below that it
+          // is not a label any more, and an unreadable word is no better than
+          // a truncated one.
+          pad = FlashBottomNav.minPillPaddingH;
+          final available = slot - 2 * pad;
+          final scale = width == 0 ? 1.0 : available / width;
+          size = math.max(FlashBottomNav.minLabelSize, desired * scale);
+          width = _measure(context, destination.label, styleAt(size));
+        }
+
+        return InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(FlashBottomNav.pillRadius),
+          // Align, not Center, and heightFactor is the whole reason.
+          //
+          // The tap target should be the full slot the Expanded gives it, but
+          // the pill should hug its own content. Center takes the largest size
+          // its constraints allow, and in the Scaffold's bottomNavigationBar
+          // slot that is the entire viewport — which is exactly how this bar
+          // once grew to 800dp and left the body zero pixels.
+          child: Align(
+            alignment: Alignment.center,
+            heightFactor: 1,
+            child: Container(
+              // The padding is the same whether or not the pill is painted, so
+              // moving the selection does not shift the row. An unselected
+              // item is the same shape as a selected one with nothing behind
+              // it.
+              padding: EdgeInsets.symmetric(
+                horizontal: pad,
+                vertical: FlashBottomNav.pillPaddingV,
               ),
-              // Keyed for the same reason: an Icon wraps itself in a SizedBox
-              // of its own size, so an unkeyed search finds 21 before 3.
-              const SizedBox(
-                key: ValueKey('nav_icon_label_gap'),
-                height: FlashBottomNav.iconLabelGap,
+              decoration: BoxDecoration(
+                color: isSelected ? pillColor : Colors.transparent,
+                borderRadius: BorderRadius.circular(FlashBottomNav.pillRadius),
               ),
-              // scaleDown rather than ellipsis. Four destinations, each
-              // carrying 36dp of pill padding, is tight on a narrow phone —
-              // and "Categori..." is a worse answer than a label half a point
-              // smaller, because the truncated one stops being the word.
-              //
-              // The Container hugs its content but is still handed the slot
-              // width as a maximum, so this only shrinks when the label
-              // genuinely cannot fit. At the width the mock was drawn for it
-              // renders at its stated 11px and this does nothing.
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  destination.label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: TextStyle(
-                    fontFamily: kSansFamily,
-                    fontSize: FlashBottomNav.labelSize,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: content,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // The index-0 glyph is an SVG recoloured by the ambient
+                  // IconTheme rather than by an Icon.color, so the theme has
+                  // to be supplied here rather than passed down as a property.
+                  IconTheme.merge(
+                    data: IconThemeData(
+                      color: content,
+                      size: FlashBottomNav.iconSize,
+                    ),
+                    child: isSelected
+                        ? destination.selectedIcon
+                        : destination.icon,
                   ),
-                ),
+                  // Keyed for the same reason: an Icon wraps itself in a
+                  // SizedBox of its own size, so an unkeyed search finds 21
+                  // before 3.
+                  const SizedBox(
+                    key: ValueKey('nav_icon_label_gap'),
+                    height: FlashBottomNav.iconLabelGap,
+                  ),
+                  // A backstop, not the mechanism. The size above already
+                  // fits by measurement; this only catches the gap between
+                  // what TextPainter reports and what the raster actually
+                  // needs, and it scales rather than truncating, because
+                  // "Categori..." stops being the word.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      destination.label,
+                      maxLines: 1,
+                      softWrap: false,
+                      // Already scaled, by hand, above.
+                      textScaler: TextScaler.noScaling,
+                      style: styleAt(size),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
