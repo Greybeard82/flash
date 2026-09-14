@@ -175,6 +175,12 @@ void main() {
       ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
       ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
       ('Newspaper', flashNewspaperTheme()),
+      // The fallback is in the loop now. It was the last inverted pair —
+      // muted blended 0.5 toward the surface against read's 0.55, and further
+      // toward the surface means less contrast, so read came out quieter than
+      // muted. Fixed by moving muted to 0.62, mirroring Newspaper.
+      ('the fallback, light', ThemeData()),
+      ('the fallback, dark', ThemeData.dark()),
     ]) {
       test('$name: a read title outranks a timestamp', () {
         final ink = theme.flashColors;
@@ -191,30 +197,6 @@ void main() {
                 'metadata.');
       });
     }
-
-    test('the fallback DOES invert, and that is not fixed here', () {
-      // Flagged rather than corrected, because it was not in scope and the
-      // brief cites this pair as the reference the Newspaper fix was matched
-      // to. `_fallbackFlashColors` blends muted at 0.5 and read at 0.55
-      // toward the surface, and further toward the surface means *less*
-      // contrast — so read comes out quieter than muted, exactly the fault
-      // just corrected in Newspaper.
-      //
-      // No user sees it: the fallback is only reached by a theme carrying no
-      // FlashColors, which in practice means a stock ThemeData in a widget
-      // test. Production themes all register their own.
-      //
-      // The fix is one character, muted 0.5 -> 0.62, mirroring Newspaper.
-      // This test fails when someone makes it, which is the point: at that
-      // moment this block moves up into the loop above and the comment goes.
-      for (final base in [ThemeData(), ThemeData.dark()]) {
-        final ink = base.flashColors;
-        final surface = base.colorScheme.surface;
-        expect(contrast(ink.onSurfaceRead, surface),
-            lessThan(contrast(ink.onSurfaceMuted, surface)),
-            reason: 'a known inversion, awaiting a decision — not a pass');
-      }
-    });
   });
 
   group('the saved rail takes a role, not the accent', () {

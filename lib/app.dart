@@ -13,6 +13,7 @@ import 'services/article_detail_controller.dart';
 import 'services/section_actions_controller.dart';
 import 'services/feeds_changed_notifier.dart';
 import 'services/settings_notifier.dart';
+import 'widgets/flash_bottom_nav.dart';
 import 'widgets/spinning_refresh_icon.dart';
 import 'widgets/article_detail_pane.dart';
 import 'screens/feed_screen.dart';
@@ -1544,32 +1545,34 @@ class _AppShellState extends State<_AppShell>
       },
       child: Scaffold(
         body: _buildScreenStack(),
-        bottomNavigationBar: _onboardingComplete ? BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _navigateTo,
-          items: [
-            BottomNavigationBarItem(
-              icon: const FlashBolt(),
-              activeIcon: const FlashBolt(),
-              label: l10n.appTitle,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.rss_feed_outlined),
-              activeIcon: const Icon(Icons.rss_feed_rounded),
-              label: l10n.categories,
-            ),
-            BottomNavigationBarItem(
-              icon: const Icon(Icons.bookmark_border_rounded),
-              activeIcon: const Icon(Icons.bookmark_rounded),
-              label: l10n.bookmarks,
-            ),
-            BottomNavigationBarItem(
-              icon: _alertsIcon(Icons.notifications_none_rounded),
-              activeIcon: _alertsIcon(Icons.notifications_active_rounded),
-              label: l10n.alertsTab,
-            ),
-          ],
-        ) : null,
+        bottomNavigationBar: _onboardingComplete
+            ? FlashBottomNav(
+                currentIndex: _currentIndex,
+                onTap: _navigateTo,
+                destinations: [
+                  FlashNavDestination(
+                    icon: const FlashBolt(),
+                    selectedIcon: const FlashBolt(),
+                    label: l10n.appTitle,
+                  ),
+                  FlashNavDestination(
+                    icon: const Icon(Icons.rss_feed_outlined),
+                    selectedIcon: const Icon(Icons.rss_feed_rounded),
+                    label: l10n.categories,
+                  ),
+                  FlashNavDestination(
+                    icon: const Icon(Icons.bookmark_border_rounded),
+                    selectedIcon: const Icon(Icons.bookmark_rounded),
+                    label: l10n.bookmarks,
+                  ),
+                  FlashNavDestination(
+                    icon: _alertsIcon(Icons.notifications_none_rounded),
+                    selectedIcon: _alertsIcon(Icons.notifications_active_rounded),
+                    label: l10n.alertsTab,
+                  ),
+                ],
+              )
+            : null,
       ),
     );
   }

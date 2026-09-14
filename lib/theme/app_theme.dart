@@ -204,6 +204,15 @@ class FlashColors extends ThemeExtension<FlashColors> {
   final Color savedFill;
   final Color onSavedFill;
 
+  /// The fill behind the selected bottom-navigation item.
+  ///
+  /// A role rather than `primaryContainer` read directly, because it is how
+  /// Newspaper opts out of the pill without a second widget. Newspaper sets
+  /// this to [Colors.transparent], and the nav then renders exactly as it
+  /// always has — its own red on its own surface, no pill, no shape change —
+  /// while the widget stays ignorant of which theme it is drawing.
+  final Color navPill;
+
   /// Which brightness this instance belongs to, so [category] can answer
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
@@ -214,6 +223,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.placeholder,
     required this.savedFill,
     required this.onSavedFill,
+    required this.navPill,
     required this.brightness,
   });
 
@@ -228,6 +238,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? placeholder,
     Color? savedFill,
     Color? onSavedFill,
+    Color? navPill,
     Brightness? brightness,
   }) {
     return FlashColors(
@@ -236,6 +247,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       placeholder: placeholder ?? this.placeholder,
       savedFill: savedFill ?? this.savedFill,
       onSavedFill: onSavedFill ?? this.onSavedFill,
+      navPill: navPill ?? this.navPill,
       brightness: brightness ?? this.brightness,
     );
   }
@@ -257,6 +269,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       placeholder: Color.lerp(placeholder, other.placeholder, t)!,
       savedFill: Color.lerp(savedFill, other.savedFill, t)!,
       onSavedFill: Color.lerp(onSavedFill, other.onSavedFill, t)!,
+      navPill: Color.lerp(navPill, other.navPill, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
     );
   }
@@ -270,12 +283,13 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.placeholder == placeholder &&
           other.savedFill == savedFill &&
           other.onSavedFill == onSavedFill &&
+          other.navPill == navPill &&
           other.brightness == brightness;
 
   @override
   int get hashCode =>
       Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, savedFill,
-          onSavedFill, brightness);
+          onSavedFill, navPill, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -292,11 +306,17 @@ class FlashColors extends ThemeExtension<FlashColors> {
 FlashColors _fallbackFlashColors(ColorScheme scheme) {
   Color mix(double t) => Color.lerp(scheme.onSurface, scheme.surface, t)!;
   return FlashColors(
-    onSurfaceMuted: mix(0.5),
+    // 0.62, not 0.5. At 0.5 muted sat closer to the ink than onSurfaceRead at
+    // 0.55 did, which inverted the hierarchy: a read title receded behind the
+    // timestamp beneath it. Blending further toward the surface means less
+    // contrast, so muted has to take the larger number. This was the last
+    // inverted pair left after Newspaper was corrected.
+    onSurfaceMuted: mix(0.62),
     onSurfaceRead: mix(0.55),
     placeholder: mix(0.92),
     savedFill: scheme.secondary,
     onSavedFill: scheme.onSecondary,
+    navPill: scheme.primaryContainer,
     brightness: scheme.brightness,
   );
 }
@@ -317,6 +337,7 @@ const FlashColors _flashColorsLight = FlashColors(
   placeholder: _qiPlaceholderLight,
   savedFill: _qiUnreadLight,
   onSavedFill: _qiOnSavedFill,
+  navPill: _qiPrimaryContainerLight,
   brightness: Brightness.light,
 );
 
@@ -326,6 +347,7 @@ const FlashColors _flashColorsDark = FlashColors(
   placeholder: _qiPlaceholderDark,
   savedFill: _qiUnreadDark,
   onSavedFill: _qiOnSavedFill,
+  navPill: _qiPrimaryContainerDark,
   brightness: Brightness.dark,
 );
 
@@ -575,6 +597,11 @@ final FlashColors _flashColorsNewspaper = FlashColors(
   // nowhere else.
   savedFill: _npInk,
   onSavedFill: _npPaper,
+  // No pill. Newspaper's nav is a red mark on a paper-grey bar and has been
+  // since it shipped; a teal-shaped capsule behind the selected item would be
+  // Quiet Ink furniture wearing newsprint colours. Transparent here is how it
+  // opts out, without FlashBottomNav needing to know it exists.
+  navPill: Colors.transparent,
   brightness: Brightness.light,
 );
 
