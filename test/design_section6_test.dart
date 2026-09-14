@@ -102,10 +102,24 @@ void main() {
       expect(flash.onSurfaceRead, const Color(0xFF92928F));
     });
 
-    test('illustration and inert are the old 0.78 mix, to the byte', () {
+    test('illustration is the 0.78 mix, not the hex the document prints', () {
+      // The document says #C3C2BF in three sections, under the guarantee that
+      // authoring these values changes no pixel. Those disagree by one unit of
+      // blue, and the document settles it against itself: on the blue channel
+      // the lerps give 157.82 / 143.05 / 191.58 at 0.62 / 0.55 / 0.78, and the
+      // document writes 9E, 8F, BF — the first two rounded, only the third
+      // truncated. One value converted the other way from its neighbours,
+      // under a promise of no pixel change, is a slip.
+      //
+      // The guarantee wins. If the document is later corrected to #C3C2C0 this
+      // test is already right; if Design instead rules that BF was deliberate,
+      // this fails and says so rather than the change passing unnoticed.
       expect(_px(flash.illustration), _px(Color.lerp(ink, paper, 0.78)!));
-      expect(_px(flash.inert), _px(Color.lerp(ink, paper, 0.78)!));
       expect(flash.illustration, const Color(0xFFC3C2C0));
+      expect(flash.inert, const Color(0xFFC3C2C0));
+      expect(flash.illustration, isNot(const Color(0xFFC3C2BF)),
+          reason: 'adopting the printed hex would move the one pixel the '
+              'document promises not to move');
     });
 
     test('Newspaper keeps its two greys equal; only Quiet Ink dark splits them',

@@ -264,7 +264,9 @@ and a 300×250 media slot — total **306dp**. Insertion: first no earlier than
 index 8, one per 10 after, never directly under a day header, never last, never
 two in a viewport. **No fill renders nothing at all** and the slot is not
 retried in the same list. The ad's height must be known to the scroll
-read-marking walk — see task 5.2.
+read-marking walk — see task 5.2, **which is a prerequisite: `FeedRow` is
+sealed and four unguarded casts throw on a third subtype. Those come first,
+before any ad widget exists.**
 
 **B7 · Grouped alert notifications get a summary.** Shared `groupKey` plus a
 summary notification carrying `alertNotificationSummary`. The per-notification
@@ -372,6 +374,53 @@ shades get a slightly quiet app name, not that the token changes.
 heights to decide what has passed the viewport midpoint. A 306dp row the walk
 does not know about puts every mark-read below it at the wrong offset,
 compounding down the list.
+
+> **ANSWERED, and it is a prerequisite rather than a caveat.**
+>
+> Two corrections to the question first. The walk uses the viewport **top**,
+> not the midpoint — `final offset = _scrollController.offset` at
+> `feed_screen.dart:1102`, with the code's own comment at `:1106` reading "a
+> guessed row puts the viewport top at the wrong article". The consequence is
+> as described; the threshold is not.
+>
+> And the sum does not go out of balance, because **the walk never runs.**
+> `FeedRow` is a `sealed class` with exactly two subtypes, `DayHeaderRow` and
+> `ArticleRow` (`lib/utils/day_grouping.dart:17-35`). Every consumer branches
+> on the header and then *casts* everything else:
+>
+> | | |
+> |---|---|
+> | `feed_screen.dart:872` | `_rowHeight` — used by the read walk **and** the retirement planner |
+> | `feed_screen.dart:1117` | `_onScroll`'s accumulate loop |
+> | `feed_screen.dart:1685` | the three-column list builder |
+> | `feed_screen.dart:1830` | the phone list builder |
+>
+> Each reads `if (row is DayHeaderRow) … ; final x = (row as ArticleRow)…`. A
+> third subtype does not mis-measure — it throws a `TypeError`, in the scroll
+> listener, on every frame of a scroll, and at paint in both list builders.
+>
+> **So B6 has three prerequisites before any ad widget exists:**
+>
+> 1. **Open the sealed type.** Add `AdRow` to `day_grouping.dart`. Being
+>    `sealed`, this turns all four sites into non-exhaustive-switch problems
+>    the analyser can point at, which is the good version of this — do it
+>    first so the compiler enumerates the work rather than a scroll gesture.
+> 2. **Give `_rowHeight` a branch** returning the ad's height as a constant,
+>    exactly as it returns `kDayHeaderHeight`. An ad is not measurable from a
+>    `_cardKeys` entry, because it has no article id.
+> 3. **`continue` past it in `_onScroll`**, as headers already do. An ad is
+>    not something a reader can have read, so it must contribute height
+>    without ever deciding the cutoff.
+>
+> The header is the working precedent for all three. Note the scale difference
+> though: a header is 36dp and the ad is 306, roughly eight and a half headers,
+> so an off-by-one in the accumulate loop that is invisible today becomes a
+> third of a screen.
+>
+> The scroll and retirement code has a documented regression history, which is
+> why this is listed as a prerequisite: the ad row is a change to the read
+> walk that happens to have a widget attached, not a widget that happens to
+> sit in a list.
 
 **5.3 · Check `folder_tab_bar_test.dart` and `action_rail_test.dart` against
 this document.** Both pin geometry the redesign has now settled. The rail
@@ -511,3 +560,110 @@ that needs a real database, or outside the app entirely:
 - **Tablet → open an article.** The list row highlights `surfaceContainer`, the
   rail inside it is unchanged, and swapping sides mid-read does not reload the
   page (B2).
+
+---
+
+## 7. Corrections from the code (added by implementation)
+
+Findings from cross-checking every claim in this document against `lib/`. Each
+is a place the document and the code disagree; none is blocking.
+
+### 7.1 Newspaper `illustration` is `#C3C2C0`, not `#C3C2BF`
+
+Printed as `#C3C2BF` in 1.1, 1.4 and 6.6, under the guarantee that authoring
+these values **changes no pixel**. Those two statements disagree by one unit of
+blue, and the document settles it against itself.
+
+On the blue channel, `lerp(_npInk, _npPaper, t)` gives:
+
+| t | exact | rounded | truncated | document |
+|---|---|---|---|---|
+| 0.62 | 157.82 | `9E` | `9D` | `9E` — **rounded** |
+| 0.55 | 143.05 | `8F` | `8F` | `8F` — rounded |
+| 0.78 | 191.58 | `C0` | `BF` | `BF` — **truncated** |
+
+Two of the three are rounded; only this one is not. One value converted the
+other way from its neighbours, under a promise of no pixel change, reads as a
+transcription slip rather than an override — so **the code keeps `#C3C2C0`**
+and the document is the thing to correct. `design_section6_test.dart` pins it
+and fails loudly if Design rules the other way.
+
+### 7.2 Two alpha ink sites survived the "allowlist is empty" claim
+
+`_NewspaperMasthead` (`feed_screen.dart`) bound `final ink =
+theme.colorScheme.onSurface` and then thinned that local twice — a 0.4 divider
+and a 0.55 dateline. The guard looks for `onSurface` immediately followed by
+`.withValues`, so a variable in between hid both for four passes.
+
+Fixed: the rule takes `outline`, the dateline takes `onSurfaceMuted`, and the
+guard now also bans binding `onSurface` to a local at all, since aliasing is
+the mechanism rather than the symptom.
+
+**Related: Newspaper's `outlineVariant` resolves to pure black** (`#000000`).
+It is never declared and does not fall back to anything sensible. Nothing in
+`lib/` reads it today, so nothing is broken — but the next widget that reaches
+for the standard hairline role will draw a hard black line on newsprint.
+Newspaper should declare it.
+
+### 7.3 5.2's threshold is the viewport top, not the midpoint
+
+`_onScroll` reads `final offset = _scrollController.offset`
+(`feed_screen.dart:1102`), and the code's own comment at `:1106` says "a
+guessed row puts the viewport top at the wrong article". The consequence 5.2
+describes is right; the threshold is not. See the answer block under 5.2.
+
+### 7.4 1.6's site lists do not match the code
+
+- **The unread dot does not exist.** `colorScheme.secondary` has exactly two
+  consumers in `lib/`, both the swipe reveal on the article card. B1 builds
+  the dot; until then, one of the three named unread sites is real.
+- **The Alerts `Badge.count` is `error` red, not orange.** `app.dart:319` and
+  `:1294` pass no `backgroundColor`, and there is no `badgeTheme`, so it takes
+  Material's default — which is `error`. That quietly contradicts 1.6's own
+  "neither meaning is faults", since a fault colour is painting an unread
+  count. Needs either a `badgeTheme` entry or an explicit colour at both call
+  sites; neither is mentioned in 1.6 or 1.7.
+- **The reader's filled bookmark glyph does not exist.** There is no bookmark
+  control in `article_detail_pane.dart` or the clean view; the proposal in
+  section 4 is what would add it.
+- **`error`'s scope is wider than the three named items.** Also
+  `keyword_alerts_panel.dart:557`, `keyword_group_panel.dart:388` (delete icon
+  buttons) and `settings_screen.dart:160` (a red `backgroundColor`). The last
+  is a button background and worth a look against "never a confirmation
+  button".
+
+### 7.5 1.7's "only capsules left beside r9 chips and r9 nav pills"
+
+The chip half is right (`folder_tab_bar.dart`, `_radius = 9`). **The nav pill
+is r14**, not r9 — `flash_bottom_nav.dart`, `pillRadius = 14`, which is the
+value 1.7's own sibling sections specify. There is no `BorderRadius.circular(9)`
+anywhere in `lib/` outside the chip constant.
+
+### 7.6 The ARB parity test does not do what 2.1 assumes
+
+2.1 says "every new or changed value needs de, es, fr, it or the parity test
+fails". True for **new keys** — `arb_parity_test.dart:78-88` fails on a key
+missing from a locale. Not true for **changed values**: the only value-level
+check (`:90-102`) fails when the English and translated strings are *identical*,
+so changing an English value makes that collision less likely, never more.
+Re-translating the four changed values may still be editorially right; the
+stated enforcement mechanism just is not there.
+
+### 7.7 `alertsFilterAll` is a dead key
+
+2.4 describes it as one of "two chip bars that now render identically". There is
+only one chip bar. `alertsFilterAll` has no call site in `lib/` — only the
+generated accessors — and `alerts_screen.dart` contains no `Chip` at all. Its
+description documents a filter control that was never built.
+
+### 7.8 Three B-items already disagree with shipped code
+
+- **B8 "silent and ongoing"** — `unread_badge_service.dart:236` sets
+  `ongoing: false` deliberately, with a comment explaining why an
+  un-dismissible notification was wrong. B8 would reverse a considered
+  decision; worth confirming that is intended.
+- **B9 "clamp to 999+"** — a clamp exists in `UnreadWidgetProvider.kt:39` but
+  at a different threshold. The autosize half is genuinely missing.
+- **Bookmarks' separator** — already identical to the feed's, and neither is
+  full-bleed. Nothing to adopt.
+

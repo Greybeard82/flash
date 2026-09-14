@@ -25,9 +25,27 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The three SDK levels are pinned, not inherited.
+//
+// They used to read flutter.compileSdkVersion / minSdkVersion /
+// targetSdkVersion, which are defaults defined in the Flutter SDK
+// (packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt), not in
+// this repo. That meant upgrading Flutter could move this app's minSdk,
+// compileSdk and targetSdk with no line changing here and nothing in review
+// showing it.
+//
+// targetSdk is the one that matters. API 37 makes adaptive UI mandatory on
+// large screens: tablets and foldables can no longer opt out of resizability,
+// which is exactly what PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY in the
+// manifest is holding up, and the tablet landscape lock goes with it. Left
+// inherited, that would have arrived in a Flutter upgrade with no related
+// change in the diff, and the first symptom would have been a Lenovo Tab M11
+// rendering a layout the PRD describes as decided but not built.
+//
+// Moving any of these is now a deliberate edit. See PRD-Flash.md for the date.
 android {
     namespace = "io.getflash.app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -45,8 +63,13 @@ android {
         applicationId = "io.getflash.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // 24 = Android 7.0. What flutter.minSdkVersion already resolved to;
+        // pinned so a Flutter upgrade cannot raise it and drop devices
+        // silently.
+        minSdk = 24
+        // Do not raise to 37 without a portrait tablet layout. See the comment
+        // above the android block.
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

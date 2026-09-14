@@ -343,9 +343,8 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.brightness == brightness;
 
   @override
-  int get hashCode =>
-      Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, savedFill,
-          onSavedFill, navPill, illustration, inert, brightness);
+  int get hashCode => Object.hash(onSurfaceMuted, onSurfaceRead, placeholder,
+      savedFill, onSavedFill, navPill, illustration, inert, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -626,9 +625,9 @@ ThemeData flashQuietInkTheme({required Brightness brightness}) {
 }
 
 // ── Newspaper palette ──────────────────────────────────────────────────────
-const Color _npPaper    = Color(0xFFF2F1EE); // newsprint background
-const Color _npInk      = Color(0xFF1D1D1B); // ink text
-const Color _npRed      = Color(0xFFA0231A); // spot-colour accent
+const Color _npPaper = Color(0xFFF2F1EE); // newsprint background
+const Color _npInk = Color(0xFF1D1D1B); // ink text
+const Color _npRed = Color(0xFFA0231A); // spot-colour accent
 const Color _npSurface2 = Color(0xFFE7E7E3); // nav / secondary surface
 const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
 
@@ -665,11 +664,23 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // Quiet Ink furniture wearing newsprint colours. Transparent here is how it
   // opts out, without FlashBottomNav needing to know it exists.
   navPill: Colors.transparent,
-  // Authored, not computed, and byte-identical to the lerps they replace.
-  // These were mixed from _npInk toward _npPaper at 0.78, which produced a
-  // reasonable newsprint grey that nobody had chosen. Same pixels, now a
-  // decision. Newspaper keeps illustration and inert equal; only Quiet Ink
-  // separates them, and only in dark.
+  // #C3C2C0, not the #C3C2BF printed in DESIGN-HANDOFF.md 1.1 / 1.4 / 6.6.
+  //
+  // The document gives that hex under the guarantee that authoring these
+  // "changes no pixel", and #C3C2BF is one unit of blue away from what the
+  // lerp it replaces actually produces — so the two statements disagree, and
+  // the value cannot satisfy both.
+  //
+  // The document settles it against itself. lerp(_npInk, _npPaper, t) on the
+  // blue channel gives 157.82 at 0.62, 143.05 at 0.55 and 191.58 at 0.78. The
+  // document writes 9E, 8F and BF: the first two are ROUNDED (157.82 -> 9E,
+  // not 9D) and only the third is truncated. One value converted the other way
+  // from its two neighbours, under a promise of no pixel change, is a
+  // transcription slip rather than an override.
+  //
+  // So the guarantee wins and the code keeps the lerped value. The document is
+  // the thing to correct; flagged in the handoff rather than silently
+  // reconciled.
   illustration: Color(0xFFC3C2C0),
   inert: Color(0xFFC3C2C0),
   brightness: Brightness.light,
@@ -695,26 +706,36 @@ ThemeData flashNewspaperTheme() {
   const ptSerif = 'PT Serif';
   const playfair = 'Playfair Display';
 
-  final baseText = const TextTheme().copyWith(
-    displayLarge:   const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    displayMedium:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    displaySmall:   const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    headlineLarge:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    headlineMedium: const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    headlineSmall:  const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
-    titleLarge:   const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
-    titleMedium:  const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
-    titleSmall:   const TextStyle(fontFamily: ptSerif),
-    bodyLarge:    const TextStyle(fontFamily: ptSerif),
-    bodyMedium:   const TextStyle(fontFamily: ptSerif),
-    bodySmall:    const TextStyle(fontFamily: ptSerif),
-    labelLarge:   const TextStyle(fontFamily: ptSerif),
-    labelMedium:  const TextStyle(fontFamily: ptSerif),
-    labelSmall:   const TextStyle(fontFamily: ptSerif),
-  ).apply(
-    bodyColor: _npInk,
-    displayColor: _npInk,
-  );
+  final baseText = const TextTheme()
+      .copyWith(
+        displayLarge:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        displayMedium:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        displaySmall:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        headlineLarge:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        headlineMedium:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        headlineSmall:
+            const TextStyle(fontFamily: playfair, fontWeight: FontWeight.w700),
+        titleLarge:
+            const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
+        titleMedium:
+            const TextStyle(fontFamily: ptSerif, fontWeight: FontWeight.w700),
+        titleSmall: const TextStyle(fontFamily: ptSerif),
+        bodyLarge: const TextStyle(fontFamily: ptSerif),
+        bodyMedium: const TextStyle(fontFamily: ptSerif),
+        bodySmall: const TextStyle(fontFamily: ptSerif),
+        labelLarge: const TextStyle(fontFamily: ptSerif),
+        labelMedium: const TextStyle(fontFamily: ptSerif),
+        labelSmall: const TextStyle(fontFamily: ptSerif),
+      )
+      .apply(
+        bodyColor: _npInk,
+        displayColor: _npInk,
+      );
 
   return ThemeData(
     useMaterial3: true,
@@ -784,4 +805,3 @@ ThemeData flashNewspaperTheme() {
     ),
   );
 }
-

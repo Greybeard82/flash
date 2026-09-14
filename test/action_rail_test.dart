@@ -34,9 +34,30 @@ import 'package:flash/theme/app_theme.dart';
 import 'package:flash/screens/article_summary_sheet.dart';
 import 'package:flash/widgets/article_card.dart';
 
-/// The geometry this pass must not change, measured on the card before it.
-const Size _cardSizeBefore = Size(1080, 92);
+/// The rail's footprint, which is a real invariant: `_ActionRail` declares
+/// itself `SizedBox(width: 40, height: 72)`, and the tests below assert the two
+/// halves still sum to exactly that.
 const Size _railSizeBefore = Size(40, 72);
+
+// There was a `_cardSizeBefore = Size(1080, 92)` here. It was removed
+// deliberately, and the reason is worth keeping.
+//
+// It was a snapshot, not an invariant. The card's height is declared nowhere —
+// it falls out of the title font, its line height, the maxLines: 3 cap and the
+// row padding — and 92 was measured on the pre-split card under
+// `flutter_test`'s substitute font, where every glyph is a square of the font
+// size. It was never the height the card has on a phone.
+//
+// So it was a tripwire with a misleading label: it would fire on any
+// typography change while reporting "the card's outer geometry changed", when
+// what changed was a font. It did its job for the pass that added it, whose
+// whole claim was that the card did not move. As a standing assertion it is a
+// future false positive.
+//
+// What replaced it asserts the actual claim — that changing an article's state
+// does not resize its card — by comparing two cards in one run rather than one
+// card against a number from a previous one. That survives a font change,
+// which is the point.
 
 /// The heights settled on for this pass. Equal halves.
 const double _summaryTouchHeight = 36;
@@ -58,6 +79,7 @@ Article _article({bool isSaved = false, bool isRead = false}) => Article(
 Future<void> _pump(
   WidgetTester tester, {
   required bool isSaved,
+  bool isRead = false,
   ThemeData? theme,
   VoidCallback? onBookmark,
 }) async {
@@ -77,7 +99,7 @@ Future<void> _pump(
     home: Scaffold(
       body: ListView(children: [
         ArticleCard(
-          article: _article(isSaved: isSaved),
+          article: _article(isSaved: isSaved, isRead: isRead),
           onTap: () {},
           onMarkRead: () {},
           onMarkUnread: () {},
@@ -285,14 +307,35 @@ void main() {
       }
     });
 
-    testWidgets('the card itself is exactly the size it was', (tester) async {
-      // The measurement that proves the pass stayed inside the rail. Both
-      // values were taken from the card before this change.
-      for (final saved in [false, true]) {
-        await _pump(tester, isSaved: saved);
-        expect(tester.getSize(find.byType(ArticleCard)), _cardSizeBefore,
-            reason: 'saved=$saved changed the card\'s outer geometry');
-      }
+    testWidgets('saving an article does not resize its card', (tester) async {
+      // The measurement that proves the split stayed inside the rail, stated
+      // as the claim itself: the same card, in both states, in one run. No
+      // hardcoded pixel height, so a typography change cannot make this fail
+      // while blaming card geometry.
+      await _pump(tester, isSaved: false);
+      final unsaved = tester.getSize(find.byType(ArticleCard));
+
+      await _pump(tester, isSaved: true);
+      final saved = tester.getSize(find.byType(ArticleCard));
+
+      expect(saved, unsaved,
+          reason: 'the saved and unsaved cards are different sizes, so the '
+              'rail is pushing on the row it lives in');
+    });
+
+    testWidgets('and neither does marking it read', (tester) async {
+      // The same claim on the other state change, and the one with history:
+      // read state used to alter the title weight, which reflowed a wrapped
+      // title and slid every card below it mid-scroll.
+      await _pump(tester, isSaved: false, isRead: false);
+      final unread = tester.getSize(find.byType(ArticleCard));
+
+      await _pump(tester, isSaved: false, isRead: true);
+      final read = tester.getSize(find.byType(ArticleCard));
+
+      expect(read, unread,
+          reason: 'reading an article changed its card height — this is the '
+              'mid-scroll reflow the read treatment is colour-only to avoid');
     });
   });
 

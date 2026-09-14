@@ -220,4 +220,58 @@ void main() {
     expect(strip(trailing).contains('extension<FlashColors>()!'), isTrue,
         reason: 'code with a trailing comment is still code');
   });
+
+  test('nothing aliases onSurface into a local and thins that', () {
+    // The hole the allowlist fell through, found by cross-checking the design
+    // document against the code rather than by this file.
+    //
+    // `_NewspaperMasthead` read:
+    //
+    //     final ink = theme.colorScheme.onSurface;
+    //     ...
+    //     Divider(color: ink.withValues(alpha: 0.4))
+    //     ...
+    //     color: ink.withValues(alpha: 0.55)
+    //
+    // Two alpha-faked ink sites that the pattern above cannot see, because it
+    // looks for `onSurface` immediately followed by `.withValues`, and here
+    // the two are separated by a variable and twenty lines. The allowlist was
+    // reported empty while they were sitting in the file.
+    //
+    // This is the same class of blind spot as the wrapped-chain one, and the
+    // same lesson: a guard that matches a shape rather than a meaning only
+    // catches the shapes someone thought of. So this bans the aliasing itself.
+    // Binding `onSurface` to a local is not useful on its own — it is one
+    // field access — and the only reason to do it is to reuse the value, which
+    // is exactly when a `.withValues` tends to appear next to it.
+    final aliases = <String>[];
+
+    final pattern = RegExp(
+      r'(?:final|var|const)\s+\w+\s*=\s*[\w.]*\.onSurface\s*;',
+      multiLine: true,
+    );
+
+    for (final entity in Directory('lib').listSync(recursive: true)) {
+      if (entity is! File || !entity.path.endsWith('.dart')) continue;
+      final path = entity.path.replaceAll(r'\', '/');
+      if (path == 'lib/theme/app_theme.dart') continue;
+
+      final code = entity
+          .readAsLinesSync()
+          .where((l) => !l.trimLeft().startsWith('//'))
+          .join('\n');
+
+      for (final m in pattern.allMatches(code)) {
+        aliases.add('$path  ${m.group(0)!.trim()}');
+      }
+    }
+
+    expect(aliases, isEmpty,
+        reason: 'These bind onSurface to a local, which is how an alpha gets '
+            'applied to it out of sight of the pattern above:\n'
+            '  ${aliases.join('\n  ')}\n\n'
+            'Read the role at the point of use instead. If the value really '
+            'is needed several times, it is still one field access each time, '
+            'and the repetition is what keeps it visible.');
+  });
 }

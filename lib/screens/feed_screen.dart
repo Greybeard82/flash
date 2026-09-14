@@ -72,8 +72,7 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen>
-    with WidgetsBindingObserver {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   // ── Repos & services ───────────────────────────────────────────────────────
   final _articleRepo = ArticleRepository();
   final _alertMatchRepo = AlertMatchRepository();
@@ -134,7 +133,6 @@ class _FeedScreenState extends State<FeedScreen>
   UnreadCounts _counts = const UnreadCounts.empty();
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
-
 
   /// One page per tab, in the tab strip's order. Only the selected page holds
   /// the live list (and the one shared _scrollController); every other page
@@ -471,7 +469,8 @@ class _FeedScreenState extends State<FeedScreen>
       // it is the last moment the position is definitely trustworthy.
       _captureAnchor();
     }
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
       _pausedAt = DateTime.now();
       return;
     }
@@ -592,8 +591,7 @@ class _FeedScreenState extends State<FeedScreen>
     final folders = await _folderRepo.getAll();
     if (!mounted) return;
     final probe = await _articlesForTab(_selectedTabIndex, folders);
-    final hasNew =
-        NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
+    final hasNew = NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
 
     // Two independent reasons to rebuild: something new arrived, or the
     // flush removed rows that are still on screen. Only when neither is true
@@ -650,7 +648,8 @@ class _FeedScreenState extends State<FeedScreen>
         _pageController.jumpToPage(safeTab);
       }
       _feedFolderId = {for (final f in feeds) f.id!: f.folderId};
-      _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
+      _counts =
+          UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
     });
     UnreadBadgeService.instance.update(allCount);
@@ -693,8 +692,7 @@ class _FeedScreenState extends State<FeedScreen>
 
     setState(() {
       _setArticles([
-        for (final a in _articles)
-          a.id == id ? a.copyWith(isSaved: saved) : a,
+        for (final a in _articles) a.id == id ? a.copyWith(isSaved: saved) : a,
       ]);
     });
   }
@@ -809,7 +807,10 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   void _syncCardKeys(List<Article> articles) {
-    final activeIds = {for (final a in articles) if (a.id != null) a.id!};
+    final activeIds = {
+      for (final a in articles)
+        if (a.id != null) a.id!
+    };
     _cardKeys.removeWhere((id, _) => !activeIds.contains(id));
     _measuredHeights.removeWhere((id, _) => !activeIds.contains(id));
     for (final a in articles) {
@@ -1027,7 +1028,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// methods.
   Future<void> _onPageChanged(int index) async {
     if (index == _selectedTabIndex) return;
-    await LoadingController.instance.run(() => _onTabSelectedBody(index), label: 'Loading');
+    await LoadingController.instance
+        .run(() => _onTabSelectedBody(index), label: 'Loading');
   }
 
   Future<void> _onTabSelectedBody(int index) async {
@@ -1178,7 +1180,8 @@ class _FeedScreenState extends State<FeedScreen>
 
     // UI dim update is debounced.
     _scrollDebounce?.cancel();
-    _scrollDebounce = Timer(const Duration(milliseconds: 150), _flushMarkReadUI);
+    _scrollDebounce =
+        Timer(const Duration(milliseconds: 150), _flushMarkReadUI);
   }
 
   void _flushMarkReadUI() {
@@ -1384,7 +1387,8 @@ class _FeedScreenState extends State<FeedScreen>
       if (!mounted) return;
       setState(() {
         _setArticles(freshArticles);
-        _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
+        _counts = UnreadCounts.fromRepository(
+            total: allCount, byFolder: folderCounts);
       });
       _resetScrollToTop();
       UnreadBadgeService.instance.update(allCount);
@@ -1405,7 +1409,6 @@ class _FeedScreenState extends State<FeedScreen>
   /// See [_AlertPanelHost].
   Widget _alertKeywordsPanel() => AlertPanelHost(
       onClosed: () => AlertsChangedNotifier.instance.alertsChanged());
-
 
   // ── Top bubbles ────────────────────────────────────────────────────────────
 
@@ -1521,8 +1524,7 @@ class _FeedScreenState extends State<FeedScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Center(
                   child: SpinningRefreshIcon(
-                      size: 20,
-                      color: Theme.of(context).colorScheme.primary)),
+                      size: 20, color: Theme.of(context).colorScheme.primary)),
             ),
           ),
           // Quick settings and filter moved here from a floating cluster that
@@ -1553,8 +1555,8 @@ class _FeedScreenState extends State<FeedScreen>
                 key: _filterFabKey,
                 onPressed: live ? _openFilterBubble : null,
                 tooltip: l10n.filterTooltip,
-                icon: Icon(Icons.filter_alt_outlined,
-                    color: live ? null : inert),
+                icon:
+                    Icon(Icons.filter_alt_outlined, color: live ? null : inert),
               ),
               IconButton(
                 key: _quickSettingsFabKey,
@@ -1570,39 +1572,40 @@ class _FeedScreenState extends State<FeedScreen>
       floatingActionButton: hostedInSidebar
           ? null
           : _hasFeeds && !_booting
-          ? FabCluster(
-              controller: _fabFade,
-              actions: [
-                FabAction(
-                  heroTag: 'refresh',
-                  onPressed: _refreshing ? null : () => _refreshCurrentTab(),
-                  tooltip: l10n.refresh,
-                  // The same circular arrow either way — it just turns while
-                  // the refresh is in flight. Swapping in the bolt replaced
-                  // the control under the user's finger with a different
-                  // glyph.
-                  icon: _refreshing
-                      ? const SpinningRefreshIcon()
-                      : const Icon(Icons.refresh_rounded),
-                ),
-                FabAction(
-                  heroTag: 'search',
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SearchScreen()),
-                  ),
-                  tooltip: l10n.searchArticles,
-                  icon: const Icon(Icons.search_rounded),
-                ),
-                FabAction(
-                  heroTag: 'mark_all_read',
-                  onPressed: _markAllRead,
-                  tooltip: l10n.markAllRead,
-                  icon: const Icon(Icons.done_all_rounded),
-                ),
-              ],
-            )
-          : null,
+              ? FabCluster(
+                  controller: _fabFade,
+                  actions: [
+                    FabAction(
+                      heroTag: 'refresh',
+                      onPressed:
+                          _refreshing ? null : () => _refreshCurrentTab(),
+                      tooltip: l10n.refresh,
+                      // The same circular arrow either way — it just turns while
+                      // the refresh is in flight. Swapping in the bolt replaced
+                      // the control under the user's finger with a different
+                      // glyph.
+                      icon: _refreshing
+                          ? const SpinningRefreshIcon()
+                          : const Icon(Icons.refresh_rounded),
+                    ),
+                    FabAction(
+                      heroTag: 'search',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      ),
+                      tooltip: l10n.searchArticles,
+                      icon: const Icon(Icons.search_rounded),
+                    ),
+                    FabAction(
+                      heroTag: 'mark_all_read',
+                      onPressed: _markAllRead,
+                      tooltip: l10n.markAllRead,
+                      icon: const Icon(Icons.done_all_rounded),
+                    ),
+                  ],
+                )
+              : null,
       body: Stack(
         children: [
           Column(
@@ -1703,7 +1706,6 @@ class _FeedScreenState extends State<FeedScreen>
       },
     );
   }
-
 
   /// Offers the starter pack without leaving the Flash tab.
   ///
@@ -1867,7 +1869,6 @@ class _NewspaperMasthead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ink = theme.colorScheme.onSurface;
     final today = DateTime.now();
     final dateline =
         'INTERNATIONAL EDITION · ${today.day.toString().padLeft(2, '0')}.'
@@ -1882,18 +1883,28 @@ class _NewspaperMasthead extends StatelessWidget {
             fontFamily: 'Playfair Display',
             fontWeight: FontWeight.w700,
             fontSize: 26,
-            color: ink,
+            // Read at the point of use. This was bound to a local called
+            // `ink`, which is how the two alpha-thinned sites below it stayed
+            // invisible to the ink guard for four passes.
+            color: theme.colorScheme.onSurface,
             height: 1.1,
           ),
         ),
-        Divider(height: 3, thickness: 1, color: ink.withValues(alpha: 0.4)),
+        // The masthead rule takes `outline`, which Newspaper authors as
+        // _npHairline and comments "rule / outline" — literally this. Not
+        // `outlineVariant`: Newspaper never declares that one and it falls
+        // back to pure black, which would draw a hard 1dp line under the
+        // masthead instead of a newsprint rule.
+        Divider(height: 3, thickness: 1, color: theme.colorScheme.outline),
         Text(
           dateline,
           style: TextStyle(
             fontFamily: 'PT Serif',
             fontSize: 9,
             letterSpacing: 0.8,
-            color: ink.withValues(alpha: 0.55),
+            // A dateline is a caption, so it takes the caption level rather
+            // than ink thinned by hand.
+            color: theme.flashColors.onSurfaceMuted,
           ),
         ),
       ],
