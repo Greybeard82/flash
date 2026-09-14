@@ -36,48 +36,27 @@ final RegExp _alphaInk = RegExp(
 ///
 /// Keyed by the alpha expression rather than a line number, so reformatting the
 /// file does not break the test and a genuinely new site still does.
-const Map<String, Map<String, int>> _allowed = {
-  // ── drag handles ─────────────────────────────────────────────────────────
-  // 40x4 rounded Containers at the top of a bottom sheet, each under a
-  // `// Handle` comment. A grabber is furniture, not text, and none of the
-  // ink levels describes one.
-  //
-  // Design's Batch 4 gave empty-state glyphs their own role and said it
-  // closed "the four 20%-alpha sites". There were four 20% sites and four
-  // empty-state icons, but they are not the same four: three of the 20% ones
-  // are these handles, and one of the icons sits at 30%. The role is named
-  // `illustration` and describes a picture, so it went to the four icons.
-  // These three stay, and a grabber still has no role of its own.
-  'lib/screens/article_summary_sheet.dart': {'0.2': 1},
-  'lib/screens/feeds_screen.dart': {'0.2': 1},
-  'lib/widgets/starter_pack_picker.dart': {'0.2': 1},
-
-  // ── ornament ─────────────────────────────────────────────────────────────
-  // A 20dp leading marker repeated beside every matched article. At 0.3 it
-  // sits below all three ink levels — decoration rather than a
-  // meaning-carrying icon. Its 48dp sibling, the empty-state glyph in the
-  // same file, moved to `illustration`.
-  'lib/widgets/keyword_group_panel.dart': {'0.3': 1},
-
-  // ── disabled states, and a fill ──────────────────────────────────────────
-  // 0.08 is the disabled button's circular wash and 0.3 its glyph; the second
-  // 0.3 and the 0.8 are the disabled and enabled halves of one label. They
-  // express "inactive", not "quieter", which is a different axis from the ink
-  // scale — and converting one half of a pair while leaving the other on an
-  // alpha reads worse than leaving both.
-  //
-  // The close button used to be in this list too. It painted itself in
-  // `error`, which said "delete this forever" in the same red as "cancel this
-  // menu"; it is a neutral glyph on a transparent circle now.
-  'lib/widgets/radial_menu.dart': {'0.08': 1, '0.3': 2, '0.8': 1},
-
-  // ── unresolved ───────────────────────────────────────────────────────────
-  // Read state as opacity, on a search result's title. Batch 4 settled this
-  // shape on the article card — title to `onSurfaceRead`, source to
-  // `onSurfaceMuted` — and named only those two sites, so the search result
-  // was left alone rather than assumed to follow.
-  'lib/screens/search_screen.dart': {'a.isRead ? 0.5 : 1.0': 1},
-};
+/// Empty, and that is the finished state rather than a starting one.
+///
+/// Pass 2 converted 41 alpha-faked ink sites and left 16 behind, each with a
+/// reason written next to it. Design closed the last of them in section 6:
+/// sheet grabbers take onSurfaceMuted like the resize grip already did (6.1),
+/// a read search result follows the card elementwise (6.3), the keyword row
+/// tick is onSurfaceMuted rather than an illustration (6.4), and disabled and
+/// inert turned out to be one role — with the faint wash behind a disabled
+/// glyph deleted rather than restyled (6.5).
+///
+/// So `onSurface` at an alpha is now simply not how this app expresses ink,
+/// anywhere, and the guard below has no exceptions to police.
+///
+/// The one thing that still dims by opacity is `_DimTransition`, and it never
+/// appears here because it does not touch `onSurface`: it wraps imagery in an
+/// Opacity and a greyscale matrix. No ink role describes a photograph, which
+/// is exactly why it was left alone.
+///
+/// If something lands in this map again, that is a decision worth arguing
+/// about rather than a line worth adding.
+const Map<String, Map<String, int>> _allowed = {};
 
 /// Newspaper mode is out of scope for every pass, and its own theme function
 /// legitimately blends ink toward paper.
@@ -173,14 +152,14 @@ void main() {
     // exception list.
     final total =
         _allowed.values.expand((m) => m.values).fold<int>(0, (a, b) => a + b);
-    expect(total, 9,
-        reason: 'Down from 16 after Batch 4. The article card moved its two '
-            'read-state alphas and its thumbnail monogram onto named ink '
-            'roles, four empty-state glyphs took the new illustration role, '
-            'and the radial menu stopped painting its close button in the '
-            'destructive red. What remains is 3 drag handles, 1 row marker, '
-            '4 radial-menu disabled states, and 1 search-result read '
-            'conditional with no role to convert to.');
+    expect(total, 0,
+        reason: 'The allowlist is empty and should stay that way. Every site '
+            'it used to hold was closed by Design section 6 — grabbers and '
+            'the keyword tick to onSurfaceMuted, the search result to the '
+            'card rules, and the radial menu disabled state to the inert '
+            'role with its wash removed. Adding an entry here means arguing '
+            'that some new thing cannot be expressed as a role, which is a '
+            'conversation, not a diff.');
   });
 
   test('nothing reads FlashColors through a null check', () {

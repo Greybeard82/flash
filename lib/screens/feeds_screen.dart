@@ -1105,7 +1105,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                // 6.1: a drag affordance is onSurfaceMuted, the same
+                // level as the resize grip in article_card.dart. It is not
+                // an illustration — it stands in for nothing — and alpha
+                // over ink gave a different grey on every surface it sat on.
+                color: theme.flashColors.onSurfaceMuted,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),

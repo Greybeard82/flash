@@ -414,7 +414,10 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                         leading: Icon(
                           widget.matchIcon,
                           size: 20,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                          // 6.4: onSurfaceMuted. It is a repeated row tick,
+                          // not an illustration — the Batch 6 line putting it
+                          // under the illustration role is superseded.
+                          color: theme.flashColors.onSurfaceMuted,
                         ),
                         title: Text(
                           articles[i].title,

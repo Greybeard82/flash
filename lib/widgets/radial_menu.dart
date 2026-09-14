@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../theme/app_theme.dart';
 
 class RadialMenu extends StatefulWidget {
   final VoidCallback onShare;
@@ -333,8 +334,12 @@ class _RadialButton extends StatelessWidget {
       bg = accent.withValues(alpha: 0.15);
       iconColor = accent;
     } else {
-      bg = theme.colorScheme.onSurface.withValues(alpha: 0.08);
-      iconColor = theme.colorScheme.onSurface.withValues(alpha: 0.3);
+      // 6.5: disabled and inert are one role, and the 8% wash goes away
+      // rather than changing value. A faint disc behind a faint glyph was
+      // two ways of saying the same thing, and the fainter it got the more
+      // it read as a rendering artefact.
+      bg = Colors.transparent;
+      iconColor = theme.flashColors.inert;
     }
 
     return Column(
@@ -362,9 +367,13 @@ class _RadialButton extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
+              // The disabled half is `inert` per 6.5. The enabled half was
+              // ink at 80%, which is not a level the scale has; it is a
+              // caption under an icon button, so it takes onSurfaceVariant.
+              // Inferred — 6.5 ruled on the disabled half only.
               color: enabled
-                  ? theme.colorScheme.onSurface.withValues(alpha: 0.8)
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.flashColors.inert,
               fontWeight: FontWeight.w600,
             ),
           ),

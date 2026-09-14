@@ -121,6 +121,17 @@ const Color _qiOnSavedFill = Color(0xFF0D1211);
 const Color _qiIllustrationLight = Color(0xFFC3CAC9);
 const Color _qiIllustrationDark = Color(0xFF3A4241);
 
+/// Controls that are present with nothing to act on, and controls that are
+/// disabled — 6.5 ruled those one thing, not two.
+///
+/// Light still shares illustration's value; dark is authored one step lighter,
+/// so the two roles are visibly different in the theme where the difference is
+/// easiest to see. Around 2.2:1 against the surface is intended rather than
+/// tolerated: WCAG exempts disabled controls, and a disabled control that
+/// meets text contrast does not read as disabled.
+const Color _qiInertLight = _qiIllustrationLight;
+const Color _qiInertDark = Color(0xFF464E4D);
+
 // Dark
 const Color _qiSurfaceDark = Color(0xFF0D1211);
 const Color _qiSurfaceContainerDark = Color(0xFF161D1C);
@@ -238,18 +249,14 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// A control that is present but has nothing to act on — the feed's filter
   /// and quick-settings icons before the first feed arrives.
   ///
-  /// **Its values are borrowed from [illustration] and are not its own.**
-  /// Design specified #C3CAC9 for an inert control and #C3CAC9 for an
-  /// empty-state glyph, which is the same hex, and gave a dark value for the
-  /// glyph only. Merging them would have been the smaller diff and the worse
-  /// one: "nothing to act on" and "a picture standing in for missing content"
-  /// are different statements that happen to agree on one number in one
-  /// brightness, and a single role meaning both would make the next change to
-  /// either move the other.
+  /// Also the role for a *disabled* control: 6.5 ruled that inert and
+  /// disabled are one thing, not two, and the faint wash that used to sit
+  /// behind a disabled glyph went away entirely rather than changing value.
   ///
-  /// So the distinction lives in the code and only the values are shared. When
-  /// Design authors a dark value for an inert control, it lands here and
-  /// nothing else has to move.
+  /// Light shares [illustration]'s value; dark is authored a step lighter, so
+  /// the two roles differ visibly where that is easiest to see. It sits around
+  /// 2.2:1 against the surface on purpose — WCAG exempts disabled controls,
+  /// and one that meets text contrast does not read as disabled.
   final Color inert;
 
   /// Which brightness this instance belongs to, so [category] can answer
@@ -390,8 +397,7 @@ const FlashColors _flashColorsLight = FlashColors(
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerLight,
   illustration: _qiIllustrationLight,
-  // Borrowed from illustration; see FlashColors.inert.
-  inert: _qiIllustrationLight,
+  inert: _qiInertLight,
   brightness: Brightness.light,
 );
 
@@ -403,8 +409,7 @@ const FlashColors _flashColorsDark = FlashColors(
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerDark,
   illustration: _qiIllustrationDark,
-  // Borrowed, and this is the one Design still owes an authored value for.
-  inert: _qiIllustrationDark,
+  inert: _qiInertDark,
   brightness: Brightness.dark,
 );
 
@@ -637,15 +642,16 @@ const Color _npHairline = Color(0xFFC7C7C1); // rule / outline
 /// The values are newsprint greys mixed from this palette's own ink and paper,
 /// not Quiet Ink's: a teal-tinted grey on a warm paper background would read as
 /// a rendering fault. Nothing else about this theme changes.
-final FlashColors _flashColorsNewspaper = FlashColors(
-  // 0.62 and 0.55, not 0.45 and 0.50. The original pair inverted the
-  // hierarchy: muted landed at #7D7C7A and read at #888785, so a read title
-  // came out *lighter* than the timestamp beneath it. Quiet Ink runs the other
-  // way — a read title is quieter than an unread one but still outranks a
-  // timestamp — and read at 0.55 also matches both _fallbackFlashColors and
-  // the alpha it replaced.
-  onSurfaceMuted: Color.lerp(_npInk, _npPaper, 0.62)!,
-  onSurfaceRead: Color.lerp(_npInk, _npPaper, 0.55)!,
+const FlashColors _flashColorsNewspaper = FlashColors(
+  // Authored, and byte-identical to the lerps they replace: 0.62 and 0.55
+  // from _npInk toward _npPaper.
+  //
+  // The ratios mattered because the original pair, 0.45 and 0.50, inverted the
+  // hierarchy — muted landed at #7D7C7A and read at #888785, so a read title
+  // came out *lighter* than the timestamp beneath it. That is fixed and the
+  // numbers below are the fixed values, written out.
+  onSurfaceMuted: Color(0xFFA1A09E),
+  onSurfaceRead: Color(0xFF92928F),
   placeholder: _npSurface2,
   // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
   // the nav selection, the FAB, the switch and the masthead tint — so a red
@@ -659,10 +665,13 @@ final FlashColors _flashColorsNewspaper = FlashColors(
   // Quiet Ink furniture wearing newsprint colours. Transparent here is how it
   // opts out, without FlashBottomNav needing to know it exists.
   navPill: Colors.transparent,
-  // Newsprint, not Quiet Ink's cool grey: mixed from this palette's own ink
-  // and paper so an empty state reads as a faint print rather than a fault.
-  illustration: Color.lerp(_npInk, _npPaper, 0.78)!,
-  inert: Color.lerp(_npInk, _npPaper, 0.78)!,
+  // Authored, not computed, and byte-identical to the lerps they replace.
+  // These were mixed from _npInk toward _npPaper at 0.78, which produced a
+  // reasonable newsprint grey that nobody had chosen. Same pixels, now a
+  // decision. Newspaper keeps illustration and inert equal; only Quiet Ink
+  // separates them, and only in dark.
+  illustration: Color(0xFFC3C2C0),
+  inert: Color(0xFFC3C2C0),
   brightness: Brightness.light,
 );
 
@@ -713,7 +722,7 @@ ThemeData flashNewspaperTheme() {
     colorScheme: base,
     scaffoldBackgroundColor: _npPaper,
     textTheme: baseText,
-    extensions: <ThemeExtension<dynamic>>[_flashColorsNewspaper],
+    extensions: const <ThemeExtension<dynamic>>[_flashColorsNewspaper],
     appBarTheme: AppBarTheme(
       backgroundColor: _npPaper,
       foregroundColor: _npInk,
