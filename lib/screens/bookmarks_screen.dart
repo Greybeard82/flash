@@ -226,8 +226,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.bookmark_border_rounded,
-                          size: 48,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
+                          size: 48, color: theme.flashColors.illustration),
                       const SizedBox(height: 12),
                       Text(
                         l10n.noBookmarks,

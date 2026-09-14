@@ -183,8 +183,12 @@ class ArticleCard extends StatelessWidget {
                         curve: Curves.easeOut,
                         style: (theme.textTheme.labelSmall ?? const TextStyle())
                             .copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: isRead ? 0.33 : 0.6),
+                          // Two named levels, not two alphas. Reading an
+                          // article drops the source one step down the ink
+                          // scale rather than thinning the same colour.
+                          color: isRead
+                              ? theme.flashColors.onSurfaceMuted
+                              : theme.colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w500,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -198,8 +202,13 @@ class ArticleCard extends StatelessWidget {
                       curve: Curves.easeOut,
                       style: (theme.textTheme.labelSmall ?? const TextStyle())
                           .copyWith(
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: isRead ? 0.25 : 0.45),
+                        // One value, read or unread. The timestamp already
+                        // sits at the floor of the ink scale, so there is no
+                        // quieter level to move it to — and a third of the
+                        // row changing on read, when the title and source
+                        // already do, was more motion than the state change
+                        // is worth.
+                        color: theme.flashColors.onSurfaceMuted,
                       ),
                       child: Text(
                         formatRelativeTimestamp(
@@ -574,7 +583,9 @@ class _ThumbnailWidget extends StatelessWidget {
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            // The floor of the ink scale, not an illustration: this is a
+            // letter standing in for a picture, and it is still read as text.
+            color: theme.flashColors.onSurfaceMuted,
           ),
         ),
       ),

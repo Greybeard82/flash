@@ -351,11 +351,7 @@ class _FeedsScreenState extends State<FeedsScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.rss_feed,
-              size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3)),
+              size: 64, color: Theme.of(context).flashColors.illustration),
           const SizedBox(height: 16),
           Text(l10n.noFeedsYet,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -653,13 +649,13 @@ class _FolderSectionState extends State<_FolderSection>
                       onPressed: widget.onDeleteFolder,
                       tooltip: l10n.deleteCategory,
                       visualDensity: VisualDensity.compact,
-                      // Teal, matching the edit button beside it. Red here
-                      // made one of six controls in the header shout, for an
-                      // action that only opens a confirmation — the sentence
-                      // in that sheet is where the consequence is stated, and
-                      // it is still there in full.
+                      // Neutral, not teal. It was red, which made one of six
+                      // controls in the header shout for an action that only
+                      // opens a confirmation. Teal was the overcorrection:
+                      // two teal icons side by side rank deleting a category
+                      // equal to renaming it.
                       icon: Icon(Icons.delete_outline,
-                          size: 18, color: theme.colorScheme.primary),
+                          size: 18, color: theme.colorScheme.onSurfaceVariant),
                     ),
                     RotationTransition(
                       turns: Tween(begin: -0.25, end: 0.0)

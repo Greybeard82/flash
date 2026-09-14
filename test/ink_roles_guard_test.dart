@@ -38,50 +38,44 @@ final RegExp _alphaInk = RegExp(
 /// file does not break the test and a genuinely new site still does.
 const Map<String, Map<String, int>> _allowed = {
   // ── drag handles ─────────────────────────────────────────────────────────
-  // 40x4 rounded Containers at the top of a bottom sheet, each sitting under
-  // a `// Handle` comment. A grabber is furniture, not text, and none of the
-  // three ink levels describes one.
+  // 40x4 rounded Containers at the top of a bottom sheet, each under a
+  // `// Handle` comment. A grabber is furniture, not text, and none of the
+  // ink levels describes one.
+  //
+  // Design's Batch 4 gave empty-state glyphs their own role and said it
+  // closed "the four 20%-alpha sites". There were four 20% sites and four
+  // empty-state icons, but they are not the same four: three of the 20% ones
+  // are these handles, and one of the icons sits at 30%. The role is named
+  // `illustration` and describes a picture, so it went to the four icons.
+  // These three stay, and a grabber still has no role of its own.
   'lib/screens/article_summary_sheet.dart': {'0.2': 1},
+  'lib/screens/feeds_screen.dart': {'0.2': 1},
   'lib/widgets/starter_pack_picker.dart': {'0.2': 1},
 
-  // ── empty-state icons ────────────────────────────────────────────────────
-  // Large illustrative glyphs, 48-64px, above their own message. No ink role
-  // fits an illustration and there is no mock for one yet. The text beneath
-  // each of these WAS converted; only the picture is left.
-  'lib/screens/bookmarks_screen.dart': {'0.2': 1}, // bookmark_border, 48px
-  'lib/widgets/keyword_alerts_panel.dart': {'0.3': 1}, // notifications, 48px
-
-  // Two categories in one file: 0.3 is the 64px rss_feed empty state, 0.2 is
-  // the sheet drag handle.
-  'lib/screens/feeds_screen.dart': {'0.3': 1, '0.2': 1},
-
-  // Also two, and they collide on the same alpha: one is the 48px empty-state
-  // icon, the other a 20dp leading marker repeated beside every matched
-  // article — ornament rather than a meaning-carrying icon.
-  'lib/widgets/keyword_group_panel.dart': {'0.3': 2},
+  // ── ornament ─────────────────────────────────────────────────────────────
+  // A 20dp leading marker repeated beside every matched article. At 0.3 it
+  // sits below all three ink levels — decoration rather than a
+  // meaning-carrying icon. Its 48dp sibling, the empty-state glyph in the
+  // same file, moved to `illustration`.
+  'lib/widgets/keyword_group_panel.dart': {'0.3': 1},
 
   // ── disabled states, and a fill ──────────────────────────────────────────
-  // 0.08 is the disabled button's circular wash — a fill, not a glyph. The
-  // two 0.3s are the disabled halves of enabled/disabled pairs, so they say
-  // "inactive", not "quieter". 0.8 is the *enabled* half of the second pair:
-  // converting it alone would split one expression between a role and an
-  // alpha, which reads worse than leaving both.
+  // 0.08 is the disabled button's circular wash and 0.3 its glyph; the second
+  // 0.3 and the 0.8 are the disabled and enabled halves of one label. They
+  // express "inactive", not "quieter", which is a different axis from the ink
+  // scale — and converting one half of a pair while leaving the other on an
+  // alpha reads worse than leaving both.
+  //
+  // The close button used to be in this list too. It painted itself in
+  // `error`, which said "delete this forever" in the same red as "cancel this
+  // menu"; it is a neutral glyph on a transparent circle now.
   'lib/widgets/radial_menu.dart': {'0.08': 1, '0.3': 2, '0.8': 1},
 
-  'lib/widgets/article_card.dart': {
-    // The favicon monogram: a 26px letter on a placeholder tile, standing in
-    // for an image rather than reading as text.
-    '0.3': 1,
-
-    // ── unresolved ─────────────────────────────────────────────────────────
-    // Read state encoded as opacity, on the publisher line and the timestamp.
-    // There is no read-variant of either role, and onSurfaceRead is the title
-    // colour specifically. Converting these would silently drop the
-    // read/unread distinction on those two elements. Needs a design answer.
-    'isRead ? 0.33 : 0.6': 1,
-    'isRead ? 0.25 : 0.45': 1,
-  },
-  // The same shape, on a search result's title.
+  // ── unresolved ───────────────────────────────────────────────────────────
+  // Read state as opacity, on a search result's title. Batch 4 settled this
+  // shape on the article card — title to `onSurfaceRead`, source to
+  // `onSurfaceMuted` — and named only those two sites, so the search result
+  // was left alone rather than assumed to follow.
   'lib/screens/search_screen.dart': {'a.isRead ? 0.5 : 1.0': 1},
 };
 
@@ -179,13 +173,14 @@ void main() {
     // exception list.
     final total =
         _allowed.values.expand((m) => m.values).fold<int>(0, (a, b) => a + b);
-    expect(total, 16,
-        reason: 'Pass 2 converted 41 sites and left exactly 16: 3 sheet drag '
-            'handles, 4 empty-state icons, 1 repeated row marker, 1 favicon '
-            'monogram, 4 in the radial menu (a disabled wash, two disabled '
-            'labels, and the enabled half of one of those pairs), and 3 '
-            'read-state conditionals with no role to convert to. Changing '
-            'this number means changing that decision.');
+    expect(total, 9,
+        reason: 'Down from 16 after Batch 4. The article card moved its two '
+            'read-state alphas and its thumbnail monogram onto named ink '
+            'roles, four empty-state glyphs took the new illustration role, '
+            'and the radial menu stopped painting its close button in the '
+            'destructive red. What remains is 3 drag handles, 1 row marker, '
+            '4 radial-menu disabled states, and 1 search-result read '
+            'conditional with no role to convert to.');
   });
 
   test('nothing reads FlashColors through a null check', () {

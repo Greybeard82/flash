@@ -77,8 +77,17 @@ const Color darkBg = Color(0xFF0D1211);
 //
 //   * **Teal is the only interactive colour.** Anything you can press is
 //     `primary` or `primaryContainer`.
-//   * **Orange means unread, and nothing else.** It lives in `secondary` and
-//     should appear exactly once on screen: the unread dot.
+//   * **Orange means the article is in your queue.** It has exactly three
+//     jobs and no others: the unread dot on a feed row (`secondary`), the
+//     saved half of the action rail (`savedFill` under `onSavedFill`), and
+//     the swipe-to-unread reveal on Bookmarks (`secondary` at 15% behind a
+//     `secondary` glyph).
+//
+//     This used to read "orange means unread, and nothing else", which
+//     described a UI that never shipped — there is no unread dot in the code
+//     yet, and `secondary` has only ever been painted by the swipe reveal.
+//     Faults are not orange: an invalid URL in the add-feed sheet and the
+//     stale-feed warning in Categories are `error`.
 
 // Light
 const Color _qiSurfaceLight = Color(0xFFFFFFFF);
@@ -107,6 +116,10 @@ const Color _qiPlaceholderLight = Color(0xFFF0F2F2);
 /// is stricter, and it is the right one to hold here. This value is 4.58:1,
 /// which is slightly more headroom than `onSurface`'s 4.51:1.
 const Color _qiOnSavedFill = Color(0xFF0D1211);
+
+/// Empty-state glyphs, in both brightnesses.
+const Color _qiIllustrationLight = Color(0xFFC3CAC9);
+const Color _qiIllustrationDark = Color(0xFF3A4241);
 
 // Dark
 const Color _qiSurfaceDark = Color(0xFF0D1211);
@@ -213,6 +226,15 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// while the widget stays ignorant of which theme it is drawing.
   final Color navPill;
 
+  /// The large glyph above an empty state's message.
+  ///
+  /// Its own role because no ink level describes it. These sit well below
+  /// `onSurfaceMuted` — they are a picture standing in for content that is not
+  /// there, not text that has been quietened — and reading them as ink at 20%
+  /// meant every empty state in the app was a different grey depending on
+  /// which surface it happened to sit on.
+  final Color illustration;
+
   /// Which brightness this instance belongs to, so [category] can answer
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
@@ -224,6 +246,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.savedFill,
     required this.onSavedFill,
     required this.navPill,
+    required this.illustration,
     required this.brightness,
   });
 
@@ -239,6 +262,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? savedFill,
     Color? onSavedFill,
     Color? navPill,
+    Color? illustration,
     Brightness? brightness,
   }) {
     return FlashColors(
@@ -248,6 +272,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       savedFill: savedFill ?? this.savedFill,
       onSavedFill: onSavedFill ?? this.onSavedFill,
       navPill: navPill ?? this.navPill,
+      illustration: illustration ?? this.illustration,
       brightness: brightness ?? this.brightness,
     );
   }
@@ -270,6 +295,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       savedFill: Color.lerp(savedFill, other.savedFill, t)!,
       onSavedFill: Color.lerp(onSavedFill, other.onSavedFill, t)!,
       navPill: Color.lerp(navPill, other.navPill, t)!,
+      illustration: Color.lerp(illustration, other.illustration, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
     );
   }
@@ -284,12 +310,13 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.savedFill == savedFill &&
           other.onSavedFill == onSavedFill &&
           other.navPill == navPill &&
+          other.illustration == illustration &&
           other.brightness == brightness;
 
   @override
   int get hashCode =>
       Object.hash(onSurfaceMuted, onSurfaceRead, placeholder, savedFill,
-          onSavedFill, navPill, brightness);
+          onSavedFill, navPill, illustration, brightness);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -317,6 +344,7 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     savedFill: scheme.secondary,
     onSavedFill: scheme.onSecondary,
     navPill: scheme.primaryContainer,
+    illustration: mix(0.78),
     brightness: scheme.brightness,
   );
 }
@@ -338,6 +366,7 @@ const FlashColors _flashColorsLight = FlashColors(
   savedFill: _qiUnreadLight,
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerLight,
+  illustration: _qiIllustrationLight,
   brightness: Brightness.light,
 );
 
@@ -348,6 +377,7 @@ const FlashColors _flashColorsDark = FlashColors(
   savedFill: _qiUnreadDark,
   onSavedFill: _qiOnSavedFill,
   navPill: _qiPrimaryContainerDark,
+  illustration: _qiIllustrationDark,
   brightness: Brightness.dark,
 );
 
@@ -602,6 +632,9 @@ final FlashColors _flashColorsNewspaper = FlashColors(
   // Quiet Ink furniture wearing newsprint colours. Transparent here is how it
   // opts out, without FlashBottomNav needing to know it exists.
   navPill: Colors.transparent,
+  // Newsprint, not Quiet Ink's cool grey: mixed from this palette's own ink
+  // and paper so an empty state reads as a faint print rather than a fault.
+  illustration: Color.lerp(_npInk, _npPaper, 0.78)!,
   brightness: Brightness.light,
 );
 

@@ -471,8 +471,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.notifications_none_rounded,
-                size: 48,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                size: 48, color: theme.flashColors.illustration),
             const SizedBox(height: 12),
             Text(
               l10n.noKeywordAlerts,

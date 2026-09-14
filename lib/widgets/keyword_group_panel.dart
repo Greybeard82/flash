@@ -286,8 +286,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(widget.emptyIcon,
-                      size: 48,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                      size: 48, color: theme.flashColors.illustration),
                   const SizedBox(height: 12),
                   Text(
                     widget.emptyTitle,
