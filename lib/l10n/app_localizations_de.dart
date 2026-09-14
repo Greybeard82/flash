@@ -180,24 +180,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get themeDark => 'Dunkel';
 
   @override
-  String get colorPalette => 'Farbpalette';
-
-  @override
-  String get paletteGreen => 'Grün & Gold';
-
-  @override
-  String get paletteBlue => 'Blau & Terrakotta';
-
-  @override
-  String get paletteOrange => 'Orange & Waldgrün';
-
-  @override
-  String get paletteRed => 'Rot & Indigo';
-
-  @override
-  String get paletteTealOrange => 'Petrol & Orange';
-
-  @override
   String get addKeyword => 'Stichwort hinzufügen';
 
   @override

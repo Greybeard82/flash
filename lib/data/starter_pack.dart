@@ -40,7 +40,23 @@ class StarterCategory {
   final String id;
   final List<StarterFeed> feeds;
 
-  const StarterCategory({required this.id, required this.feeds});
+  /// Which of the six category hues this category seeds with.
+  ///
+  /// Explicit, and keyed off [id] rather than pack order, so the five shipped
+  /// categories always match the mocks however the list is later reordered —
+  /// and so the colours cannot follow the localised display name, which is
+  /// different on a German device.
+  ///
+  /// Index 2 is deliberately absent: it is the Gaming hue in the mocks, which
+  /// the pack does not ship, so it is the first free hue a user-created
+  /// category picks up.
+  final int colorIndex;
+
+  const StarterCategory({
+    required this.id,
+    required this.feeds,
+    required this.colorIndex,
+  });
 }
 
 /// The categories that deliberately ship with a single feed.
@@ -58,6 +74,7 @@ const Set<String> kSingleFeedStarterCategories = {'fitness_health', 'travel'};
 const List<StarterCategory> kStarterPack = [
   StarterCategory(
     id: 'world_news',
+    colorIndex: 0,
     feeds: [
       StarterFeed(
         title: 'BBC News (World)',
@@ -84,6 +101,7 @@ const List<StarterCategory> kStarterPack = [
   ),
   StarterCategory(
     id: 'tech',
+    colorIndex: 1,
     feeds: [
       StarterFeed(
         title: 'Ars Technica',
@@ -114,6 +132,7 @@ const List<StarterCategory> kStarterPack = [
   // not put breakingmuscle.com back.
   StarterCategory(
     id: 'fitness_health',
+    colorIndex: 5,
     feeds: [
       StarterFeed(
         title: 'Muscle & Fitness',
@@ -131,6 +150,7 @@ const List<StarterCategory> kStarterPack = [
   // operation clears a 7-day window.
   StarterCategory(
     id: 'travel',
+    colorIndex: 3,
     feeds: [
       StarterFeed(
         title: 'The Points Guy',
@@ -143,6 +163,7 @@ const List<StarterCategory> kStarterPack = [
   ),
   StarterCategory(
     id: 'sports',
+    colorIndex: 4,
     feeds: [
       StarterFeed(
         title: 'BBC Sport',

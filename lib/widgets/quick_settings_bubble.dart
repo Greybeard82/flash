@@ -8,21 +8,7 @@ import '../services/settings_notifier.dart';
 import '../services/summary_formatter.dart'
     show kSummaryLengthShort, kSummaryLengthStandard, kSummaryLengthDetailed;
 import '../services/unread_badge_service.dart';
-import '../theme/app_theme.dart';
 import 'bubble_panel.dart';
-
-/// The five palette keys (values stored under `color_palette`), in the order
-/// the picker lists them.
-const List<String> kPaletteKeys = ['green', 'blue', 'orange', 'red', 'teal_orange'];
-
-String _paletteLabel(AppLocalizations l10n, String key) => switch (key) {
-      'green' => l10n.paletteGreen,
-      'blue' => l10n.paletteBlue,
-      'orange' => l10n.paletteOrange,
-      'red' => l10n.paletteRed,
-      'teal_orange' => l10n.paletteTealOrange,
-      _ => key,
-    };
 
 /// Quick settings panel: theme, color palette, and Newspaper mode.
 ///
@@ -49,91 +35,42 @@ class QuickSettingsBubble extends StatefulWidget {
   /// Applies Newspaper mode immediately, same reason.
   final ValueChanged<bool>? onNewspaperChanged;
 
-  /// Applies the color palette immediately, same reason.
-  final ValueChanged<String>? onPaletteChanged;
-
   const QuickSettingsBubble({
     super.key,
     required this.initial,
     this.onThemeChanged,
     this.onNewspaperChanged,
-    this.onPaletteChanged,
   });
 
   @override
   State<QuickSettingsBubble> createState() => _QuickSettingsBubbleState();
 }
 
-class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
-    with SingleTickerProviderStateMixin {
+class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
   final _repo = SettingsRepository();
 
   late String _theme;
   late bool _newspaper;
-  late String _palette;
   late bool _markReadOnScroll;
   late bool _markAllReadConfirm;
   late bool _iconBadge;
   late String _summaryLength;
-
-  /// Collapsed by default — see the picker's own row for why.
-  bool _paletteExpanded = false;
-
-  /// Drives the chevron's rotation. Same duration and the same
-  /// begin/end turns as the Categories screen's folder chevron
-  /// (`_FolderSectionState._chevronController` in `feeds_screen.dart`), so
-  /// the two collapse affordances feel like the same control.
-  late final AnimationController _paletteChevronController;
 
   @override
   void initState() {
     super.initState();
     _theme = widget.initial.theme;
     _newspaper = widget.initial.newspaperMode;
-    _palette = widget.initial.colorPalette;
     _markReadOnScroll = widget.initial.markReadOnScroll;
     _markAllReadConfirm = widget.initial.markAllReadConfirm;
     _iconBadge = widget.initial.unreadBadgeNotification;
     _summaryLength = widget.initial.summaryLength;
-    _paletteChevronController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-      value: 0.0, // starts collapsed, matching _paletteExpanded
-    );
-  }
-
-  @override
-  void dispose() {
-    _paletteChevronController.dispose();
-    super.dispose();
-  }
-
-  void _togglePaletteExpanded() {
-    setState(() => _paletteExpanded = !_paletteExpanded);
-    if (_paletteExpanded) {
-      _paletteChevronController.forward();
-    } else {
-      _paletteChevronController.reverse();
-    }
   }
 
   Future<void> _setTheme(String value) async {
     setState(() => _theme = value);
     widget.onThemeChanged?.call(value);
     await _repo.set('theme', value);
-    SettingsNotifier.instance.settingsChanged();
-  }
-
-  Future<void> _setPalette(String value) async {
-    // Collapses back down on the same tap that picks one — the picker opens
-    // to make a choice, and once it's made there is nothing left to compare.
-    setState(() {
-      _palette = value;
-      _paletteExpanded = false;
-    });
-    _paletteChevronController.reverse();
-    widget.onPaletteChanged?.call(value);
-    await _repo.set('color_palette', value);
     SettingsNotifier.instance.settingsChanged();
   }
 
@@ -253,65 +190,6 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
                   onSelectionChanged: (s) => _setSummaryLength(s.first),
                 ),
 
-                const SizedBox(height: 16),
-                Text(l10n.colorPalette, style: theme.textTheme.bodyMedium),
-                const SizedBox(height: 8),
-                // Collapsed to just the current palette by default — five full
-                // rows (each its own swatch strip) pushed everything below
-                // them, including the refresh interval this panel opens the
-                // most, a full page-scroll down. The chevron is the only way
-                // back to comparing all five; picking one while expanded
-                // (_setPalette) collapses it again on the same tap.
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      // AnimatedSize so the panel's own height eases into the
-                      // change rather than snapping — `_BubblePanel` sizes
-                      // itself to this content via a plain
-                      // SingleChildScrollView with no size animation of its
-                      // own, so without this the one-to-five-row jump (and
-                      // back) would be an instant cut.
-                      child: AnimatedSize(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        alignment: Alignment.topCenter,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Previewed at the currently active brightness —
-                            // Theme.of already resolved System/Light/Dark
-                            // against live OS state by the time this builds,
-                            // so this is exactly the brightness the person is
-                            // looking at right now, not a guess.
-                            for (final key
-                                in _paletteExpanded ? kPaletteKeys : [_palette])
-                              _PaletteRow(
-                                selected: _palette == key,
-                                label: _paletteLabel(l10n, key),
-                                scheme: paletteColorScheme(
-                                  palette: key,
-                                  brightness: theme.brightness,
-                                ),
-                                onTap: () => _setPalette(key),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _togglePaletteExpanded,
-                      visualDensity: VisualDensity.compact,
-                      icon: RotationTransition(
-                        turns: Tween(begin: -0.25, end: 0.0)
-                            .animate(_paletteChevronController),
-                        child: Icon(Icons.expand_more_rounded,
-                            color: theme.colorScheme.onSurface
-                                .withValues(alpha: 0.7)),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -322,7 +200,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
             child: Text(
               l10n.newspaperModeOverridesTheme,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -386,108 +264,12 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble>
                 ),
                 Icon(Icons.chevron_right_rounded,
                     size: 20,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5)),
+                    color: theme.colorScheme.onSurfaceVariant),
               ],
             ),
           ),
         ),
       ],
-    );
-  }
-}
-
-/// One selectable row in the palette picker: a strip previewing the
-/// palette's actual generated tones, its name, and a checkmark when selected
-/// — colors pulled from the real [ColorScheme] rather than a separate set of
-/// preview constants that could drift from what the palette actually renders.
-class _PaletteRow extends StatelessWidget {
-  final bool selected;
-  final String label;
-  final ColorScheme scheme;
-  final VoidCallback onTap;
-
-  const _PaletteRow({
-    required this.selected,
-    required this.label,
-    required this.scheme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline.withValues(alpha: 0.4),
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Row(
-            children: [
-              _PaletteSwatchStrip(scheme: scheme),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-              if (selected)
-                Icon(Icons.check_circle_rounded,
-                    color: theme.colorScheme.primary, size: 20)
-              else
-                const SizedBox(width: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Three swatches — primary, secondary, surface — from one palette's
-/// generated [ColorScheme], side by side as a single small strip.
-class _PaletteSwatchStrip extends StatelessWidget {
-  final ColorScheme scheme;
-
-  const _PaletteSwatchStrip({required this.scheme});
-
-  @override
-  Widget build(BuildContext context) {
-    Widget swatch(Color color) => Container(
-          width: 18,
-          height: 28,
-          color: color,
-        );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            swatch(scheme.primary),
-            swatch(scheme.secondary),
-            swatch(scheme.surface),
-          ],
-        ),
-      ),
     );
   }
 }

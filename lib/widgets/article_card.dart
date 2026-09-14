@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../utils/date_utils.dart';
+import '../theme/app_theme.dart';
 import '../utils/form_factor.dart';
 import '../screens/article_summary_sheet.dart';
 import 'radial_menu.dart';
@@ -37,14 +38,6 @@ const List<double> _kIdentityMatrix = <double>[
 
 /// The AI-summary button's two colours, fixed rather than theme-derived.
 ///
-/// Top-level so `summary_button_contrast_test.dart` asserts on the same two
-/// values the button actually paints, instead of a copy that could drift.
-/// See the note on colour in [_SummaryButton] for why both are fixed: a
-/// fixed light fill cannot be paired with a theme role that resolves light
-/// in dark mode.
-const Color kSummaryButtonFill = Color(0xFFB0EBFF);
-const Color kSummaryButtonIcon = Color(0xFF0A2540);
-
 /// How long a card takes to grey out once it's marked read.
 const Duration kReadDimDuration = Duration(milliseconds: 180);
 
@@ -190,8 +183,12 @@ class ArticleCard extends StatelessWidget {
                         curve: Curves.easeOut,
                         style: (theme.textTheme.labelSmall ?? const TextStyle())
                             .copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: isRead ? 0.33 : 0.6),
+                          // Two named levels, not two alphas. Reading an
+                          // article drops the source one step down the ink
+                          // scale rather than thinning the same colour.
+                          color: isRead
+                              ? theme.flashColors.onSurfaceMuted
+                              : theme.colorScheme.onSurfaceVariant,
                           fontWeight: FontWeight.w500,
                         ),
                         overflow: TextOverflow.ellipsis,
@@ -205,8 +202,13 @@ class ArticleCard extends StatelessWidget {
                       curve: Curves.easeOut,
                       style: (theme.textTheme.labelSmall ?? const TextStyle())
                           .copyWith(
-                        color: theme.colorScheme.onSurface
-                            .withValues(alpha: isRead ? 0.25 : 0.45),
+                        // One value, read or unread. The timestamp already
+                        // sits at the floor of the ink scale, so there is no
+                        // quieter level to move it to — and a third of the
+                        // row changing on read, when the title and source
+                        // already do, was more motion than the state change
+                        // is worth.
+                        color: theme.flashColors.onSurfaceMuted,
                       ),
                       child: Text(
                         formatRelativeTimestamp(
@@ -222,17 +224,29 @@ class ArticleCard extends StatelessWidget {
                   curve: Curves.easeOut,
                   style: (theme.textTheme.bodyMedium ?? const TextStyle())
                       .copyWith(
-                    // Constant by design. This used to drop to w400 when
-                    // read. Lighter glyphs are narrower, so a title sitting
-                    // near a wrap boundary reflowed from three lines to two
-                    // the moment mark-read-on-scroll fired: the card lost a
-                    // line of height and every card below it slid up under
-                    // the user's eyes, mid-scroll, with no gesture to explain
-                    // it. Read state is now carried by colour and opacity
-                    // alone — neither can change layout.
+                    // Constant by design, and Quiet Ink does not change
+                    // that.
+                    //
+                    // This used to drop to w400 when read. Lighter glyphs are
+                    // narrower, so a title sitting near a wrap boundary
+                    // reflowed from three lines to two the moment
+                    // mark-read-on-scroll fired: the card lost a line of
+                    // height and every card below it slid up under the user's
+                    // eyes, mid-scroll, with no gesture to explain it.
+                    //
+                    // The Quiet Ink spec asks for w300 on read titles, which
+                    // is a *larger* step than the w400 that caused that bug,
+                    // against the app's central invariant that the list never
+                    // moves under the reader. So the weight stays put and the
+                    // lighter reading comes from the colour, which is what
+                    // the spec's other half asks for anyway.
                     fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface
-                        .withValues(alpha: isRead ? 0.45 : 1.0),
+                    // A named role now, not ink at 45%. Alpha over a white
+                    // surface and alpha over a near-black one are different
+                    // greys, and neither was the one the palette specifies.
+                    color: isRead
+                        ? theme.flashColors.onSurfaceRead
+                        : theme.colorScheme.onSurface,
                     height: 1.35,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -252,7 +266,7 @@ class ArticleCard extends StatelessWidget {
           // 6, down from 12: the summary button needs the room and the
           // tightening is wanted rather than tolerated.
           const SizedBox(width: 6),
-          _SummaryButton(article: article),
+          _ActionRail(article: article, onBookmark: onBookmark),
           const SizedBox(width: 2),
           _ThumbnailWidget(
             article: article,
@@ -569,7 +583,9 @@ class _ThumbnailWidget extends StatelessWidget {
           style: TextStyle(
             fontSize: 26,
             fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+            // The floor of the ink scale, not an illustration: this is a
+            // letter standing in for a picture, and it is still read as text.
+            color: theme.flashColors.onSurfaceMuted,
           ),
         ),
       ),
@@ -577,58 +593,132 @@ class _ThumbnailWidget extends StatelessWidget {
   }
 }
 
-/// The one-tap AI summary button, at the card's right edge.
+/// The card's right-edge action rail: AI summary on top, save underneath.
 ///
 /// Summary used to be a button in the long-press radial menu, which meant
 /// every summary cost a long-press, a wait for the menu to spread, and a
 /// second tap. It is the one action on a card people take repeatedly, so it
-/// gets a target of its own; the radial menu keeps the ones you reach for
-/// occasionally.
+/// got a target of its own; the radial menu keeps the ones you reach for
+/// occasionally. Save now shares that target, in the same footprint.
 ///
-/// **Geometry.** 28dp of visible button, 72dp tall to match the thumbnail
-/// exactly, with the thumbnail's own 8dp corner radius. The touch box around
-/// it is 40dp wide: 6dp of invisible padding on each side, which is where the
-/// card's right margin comes from — the card itself now has a right inset of
-/// zero. The left 6dp sits in the card's own margin rather than over the
-/// thumbnail, deliberately: the whole card is one InkWell, so a hit box that
-/// reached back over the image would eat "open the article" taps in a strip
-/// the user cannot see.
+/// Save is still in the radial menu too, and that is deliberate rather than
+/// duplication left to tidy up: long-press has to keep working because swipe
+/// can be turned off, and the comment above `tappable` explains why.
 ///
-/// That makes it 40x72 rather than the 48x48 this app holds itself to
-/// elsewhere. 48 is not reachable on this axis without taking 8dp off the
-/// card's own tap target, and the trade is a bad one: at 40x72 the button is
-/// 2880dp² against a 48dp square's 2304dp², so it is a *larger* thing to hit,
-/// just a differently shaped one.
+/// **Geometry.** 28dp of visible button inside a 40dp touch box, 72dp tall to
+/// match the thumbnail exactly, with the thumbnail's 8dp corner radius on the
+/// rail's outer corners. The 6dp of invisible padding each side is what takes
+/// the touch box from 28 to 40.
 ///
-/// The splash stays on the painted 28dp rather than filling the touch box:
-/// an ink ripple spreading into empty card margin reads as a misdrawn button.
+/// The rail is not at the card's edge: the row runs text, 6dp, rail, 2dp,
+/// thumbnail, inside a symmetric 16dp card inset. (An earlier version of this
+/// comment said the card's right inset was zero and that the rail supplied
+/// the margin from inside its own touch box. That stopped being true when the
+/// thumbnail became the rightmost element again, and the note on the padding
+/// in `build` already records the change.)
 ///
-/// **Colour.** Two fixed hex values, deliberately outside the theme. This
-/// used to be `secondary` under `onSecondary`, which meant the button pulled
-/// whichever accent the active palette generated — and in this position, on
-/// every card, that read as garish rather than as an accent.
+/// **What the split cost, stated plainly.** This box used to hold one button,
+/// and the justification here used to be that 40x72 is 2880dp² against a 48dp
+/// square's 2304dp², so it was a *larger* thing to hit, just a differently
+/// shaped one.
 ///
-/// Because [_fill] is a fixed *light* colour, the icon has to be fixed too.
-/// A theme role like `onSecondary` or `onSurface` resolves toward light in
-/// dark mode — correct against a dark surface, and light-on-light here. So
-/// the pair is set together and checked together: #0A2540 on #B0EBFF is
-/// 11.97:1, well past the 4.5:1 this app holds text-like content to, and
-/// pinned in `summary_button_contrast_test.dart` so a later edit to either
-/// value cannot quietly break the other.
-class _SummaryButton extends StatelessWidget {
+/// That argument does not survive the split and is not worth restating in a
+/// weaker form. The rail now holds two controls of 40x36. Each is 1440dp²,
+/// which is 62% of the 48dp square this app holds itself to, and it is under
+/// the minimum on both axes rather than on one. Comparing 980dp² — the
+/// painted 28x35 — against the old 2880dp² would flatter it, but those are
+/// not the same measurement: 2880 was the touch area, and the touch area is
+/// what a thumb meets.
+///
+/// The second cost is the larger one. A mis-tap on the old button did
+/// nothing, because there was nothing else in the box to hit. A mis-tap now
+/// performs the other action: reaching for a summary and saving the article
+/// instead is a visible, annoying wrong outcome that has to be noticed and
+/// undone.
+///
+/// Both costs were on the table and the split was chosen anyway, for a second
+/// one-tap action on the most-used surface in the app. That is a product
+/// decision, not a geometric one, and it is written here so the next person
+/// to read this file gets the real numbers rather than a rounded-off defence
+/// of them. `action_rail_test.dart` pins both heights so nothing shaves them
+/// further by accident.
+///
+/// **Every available dp is in a touch box.** The two boxes are 36dp each and
+/// share an edge at the rail's midpoint; no gap is laid out between them. The
+/// 2dp visual slot is painted, by aligning each half's 35dp block to the
+/// outer end of its own box. A laid-out gap would have put dead pixels
+/// exactly where a thumb aiming at the boundary between two small targets is
+/// most likely to land.
+///
+/// **The splash stays on the painted 28dp** rather than filling the touch
+/// box, independently for each half: an ink ripple spreading into empty card
+/// margin reads as a misdrawn button.
+///
+/// **Colour.** The summary half is the teal tint, `primaryContainer` under
+/// `onPrimaryContainer`.
+///
+/// This was two fixed hexes for a while, and the reason is worth keeping
+/// because it no longer applies. The button used to take `secondary` under
+/// `onSecondary`, which meant it pulled whichever accent the active palette
+/// had generated — in this position, on every card, that read as garish. The
+/// fix was to leave the theme entirely: a pale cyan fill with a navy glyph,
+/// fixed together because a fixed *light* fill cannot be paired with a role
+/// that resolves light in dark mode.
+///
+/// Quiet Ink removes the premise. There is one interactive colour and the
+/// container roles are authored rather than derived, so `primaryContainer`
+/// is both predictable and already the tint every other chip-shaped thing in
+/// the app uses — and unlike the fixed pair, it resolves correctly in dark
+/// mode instead of staying stubbornly light.
+///
+/// The save half is the same tint when the article is not saved, with a
+/// neutral `onSurfaceVariant` glyph so the two halves read as one control
+/// with two jobs. Saved, it fills with `secondary` under `onSecondary`.
+///
+/// **That last pair is a live design question, not a settled one.** Two rules
+/// are written into `app_theme.dart`: teal is the only interactive colour,
+/// and orange means unread and nothing else. A pressable orange breaks both.
+/// It is here because design 2a asks for it by name, and the reasoning given
+/// is that "a saved article is scannable down the column without adding a
+/// colour to the row's default state" — but that reasoning describes a feed
+/// with unread dots in it, and this card has none. `secondary` currently has
+/// two consumers in the whole app, both the swipe-reveal background, and
+/// `onSecondary` has none at all. So this button is the first thing to paint
+/// that pair, and in light mode it is 4.12:1, under the 4.5:1 the summary
+/// glyph is held to. `summary_button_contrast_test.dart` records the exact
+/// shortfall rather than lowering the bar to fit it.
+///
+/// Pinned in that file against the roles it actually paints, so a later edit
+/// to either cannot quietly break a pair.
+class _ActionRail extends StatelessWidget {
   final Article article;
+  final VoidCallback onBookmark;
 
-  const _SummaryButton({required this.article});
+  const _ActionRail({required this.article, required this.onBookmark});
 
   /// Visible width. The touch box is [_touchWidth].
   static const double _visibleWidth = 28;
   static const double _touchWidth = 40;
   static const double _height = 72;
 
+  /// The two touch heights. Equal, and summing to [_height] exactly so the
+  /// boxes meet rather than leaving anything untappable between them.
+  static const double summaryTouchHeight = 36;
+  static const double saveTouchHeight = 36;
+
+  /// Painted height per half. The 1dp each block leaves inside its own touch
+  /// box is what opens the 2dp slot between the two.
+  static const double _paintedHeight = 35;
+
+  static const Radius _corner = Radius.circular(8);
+
   @override
   Widget build(BuildContext context) {
-    // No Theme.of here any more: both colours are fixed, which is the point.
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final ink = theme.flashColors;
+    final saved = article.isSaved;
 
     void open() => showModalBottomSheet<void>(
           context: context,
@@ -637,48 +727,125 @@ class _SummaryButton extends StatelessWidget {
           builder: (_) => ArticleSummarySheet(article: article),
         );
 
+    // Deliberately not wrapped in _DimTransition, unlike the thumbnail and
+    // the favicon beside it. Reading an article does not make summarising or
+    // saving it any less available, and a control that fades with the content
+    // it acts on reads as disabled — the one impression this rail must not
+    // give.
+    return SizedBox(
+      width: _touchWidth,
+      height: _height,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RailHalf(
+            tooltip: l10n.summary,
+            touchHeight: summaryTouchHeight,
+            // Top of its own box, so the slot opens downwards.
+            align: Alignment.topCenter,
+            radius: const BorderRadius.vertical(top: _corner),
+            fill: scheme.primaryContainer,
+            glyph: scheme.onPrimaryContainer,
+            icon: Icons.auto_awesome_rounded,
+            onTap: open,
+          ),
+          _RailHalf(
+            // The radial menu's own strings, for the radial menu's own
+            // action. A card offering a different word for bookmarking than
+            // the menu that bookmarks the same article is a bug in waiting.
+            tooltip: saved ? l10n.saved : l10n.bookmark,
+            touchHeight: saveTouchHeight,
+            align: Alignment.bottomCenter,
+            radius: const BorderRadius.vertical(bottom: _corner),
+            fill: saved ? ink.savedFill : scheme.primaryContainer,
+            glyph: saved ? ink.onSavedFill : scheme.onSurfaceVariant,
+            icon: saved
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_border_rounded,
+            onTap: onBookmark,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One half of the rail: a touch box with a painted block aligned to one end.
+///
+/// The fill and glyph cross-fade over [kReadDimDuration] rather than snapping.
+/// That tempo is not chosen here — it is the one the card already uses for
+/// read-state dimming, on the thumbnail, favicon and title beside this rail,
+/// so a save lands at the same speed as everything else that changes on the
+/// card. The icon itself swaps immediately: the outline-to-filled change is
+/// the primary signal and cross-fading two different glyphs through each
+/// other reads as a rendering fault rather than a transition.
+class _RailHalf extends StatelessWidget {
+  final String tooltip;
+  final double touchHeight;
+  final Alignment align;
+  final BorderRadius radius;
+  final Color fill;
+  final Color glyph;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RailHalf({
+    required this.tooltip,
+    required this.touchHeight,
+    required this.align,
+    required this.radius,
+    required this.fill,
+    required this.glyph,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Tooltip(
-      message: l10n.summary,
+      message: tooltip,
       // The outer box is the target; the InkWell inside only covers the
-      // painted 28dp. Opaque so the 6dp margins belong to this button and not
-      // to the card's own InkWell underneath — without it those strips would
-      // open the article, which is the one thing a user aiming here is not
-      // asking for. A tap on the visible part is claimed by the child, so the
-      // two never both fire.
-      //
-      // Deliberately not wrapped in _DimTransition, unlike the thumbnail and
-      // the favicon beside it. Reading an article does not make summarising it
-      // any less available, and a control that fades with the content it acts
-      // on reads as disabled — the one impression this button must not give.
+      // painted 28dp. Opaque so the invisible margins belong to this half and
+      // not to the card's own InkWell underneath — without it those strips
+      // would open the article, which is the one thing a user aiming here is
+      // not asking for. A tap on the visible part is claimed by the child, so
+      // the two never both fire.
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: open,
+        onTap: onTap,
         child: SizedBox(
-          width: _touchWidth,
-          height: _height,
-          child: Center(
-            // The Tooltip above already labels this button, and the InkWell
-            // and Icon below were each contributing a second "Summary" of
-            // their own -- an accessibility dump showed two identically
-            // labelled, separately focusable nodes per card, one 40dp wide
-            // and one 28dp. The InkWell stays for its ripple and the Icon for
-            // the glyph; neither needs to be reachable in its own right, so
-            // the whole painted layer is excluded and the outer 40dp target
-            // is the single node that remains.
+          width: _ActionRail._touchWidth,
+          height: touchHeight,
+          child: Align(
+            alignment: align,
+            // The Tooltip above already labels this half, and the InkWell and
+            // Icon below were each contributing a second label of their own --
+            // an accessibility dump showed two identically labelled,
+            // separately focusable nodes per button, one 40dp wide and one
+            // 28dp. The InkWell stays for its ripple and the Icon for the
+            // glyph; neither needs to be reachable in its own right, so the
+            // whole painted layer is excluded and the outer touch box is the
+            // single node that remains.
             child: ExcludeSemantics(
-              child: Material(
-                color: kSummaryButtonFill,
-                borderRadius: BorderRadius.circular(8),
-                clipBehavior: Clip.antiAlias,
+              child: TweenAnimationBuilder<Color?>(
+                tween: ColorTween(end: fill),
+                duration: kReadDimDuration,
+                builder: (context, animatedFill, child) => Material(
+                  color: animatedFill,
+                  borderRadius: radius,
+                  clipBehavior: Clip.antiAlias,
+                  child: child,
+                ),
                 child: InkWell(
-                  onTap: open,
-                  child: const SizedBox(
-                    width: _visibleWidth,
-                    height: _height,
-                    child: Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 18,
-                      color: kSummaryButtonIcon,
+                  onTap: onTap,
+                  child: SizedBox(
+                    width: _ActionRail._visibleWidth,
+                    height: _ActionRail._paintedHeight,
+                    child: TweenAnimationBuilder<Color?>(
+                      tween: ColorTween(end: glyph),
+                      duration: kReadDimDuration,
+                      builder: (context, animatedGlyph, _) =>
+                          Icon(icon, size: 18, color: animatedGlyph),
                     ),
                   ),
                 ),

@@ -148,7 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         l10n.onboardingTagline,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurfaceVariant,
                           height: 1.5,
                         ),
                       ),
@@ -164,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Text(
                         l10n.onboardingStarterSubtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 8),

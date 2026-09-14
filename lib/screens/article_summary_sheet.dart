@@ -14,6 +14,7 @@ import '../services/summary_cache.dart';
 import '../services/summary_formatter.dart';
 import '../services/summary_source.dart';
 import '../utils/date_utils.dart';
+import '../theme/app_theme.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
@@ -242,7 +243,11 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  // 6.1: a drag affordance is onSurfaceMuted, the same
+                  // level as the resize grip in article_card.dart. It is not
+                  // an illustration — it stands in for nothing — and alpha
+                  // over ink gave a different grey on every surface it sat on.
+                  color: theme.flashColors.onSurfaceMuted,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -268,7 +273,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
 
@@ -290,7 +295,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: theme.flashColors.onSurfaceMuted,
                 ),
               ),
             ],
@@ -313,8 +318,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                                 ? l10n.aiSummaryWriting
                                 : l10n.aiSummaryReading,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                              color: theme.flashColors.onSurfaceMuted,
                             ),
                           ),
                         ],
@@ -440,7 +444,9 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final l10n = widget.l10n;
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+    // Named for the role it holds, not the one it used to fake. This was
+    // `muted` while it was onSurface at 50%; it is the secondary ink level.
+    final secondary = theme.colorScheme.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -451,11 +457,11 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
             children: [
               Icon(Icons.info_outline_rounded,
                   size: 18,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                  color: theme.flashColors.onSurfaceMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(widget.message,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: secondary)),
               ),
             ],
           ),
@@ -478,14 +484,14 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
                             ? l10n.aiSummaryHideDetails
                             : l10n.aiSummaryShowDetails,
                         style: theme.textTheme.labelMedium?.copyWith(
-                            color: muted, fontWeight: FontWeight.w500),
+                            color: secondary, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(width: 2),
                       AnimatedRotation(
                         turns: _showDetails ? 0.5 : 0,
                         duration: const Duration(milliseconds: 150),
                         child: Icon(Icons.expand_more_rounded,
-                            size: 18, color: muted),
+                            size: 18, color: secondary),
                       ),
                     ],
                   ),
@@ -499,7 +505,7 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
                 child: SelectableText(
                   widget.debugReason!,
                   style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: theme.colorScheme.onSurfaceVariant,
                       fontFamily: 'monospace'),
                 ),
               ),
@@ -571,7 +577,7 @@ class _SummaryText extends StatelessWidget {
             const SizedBox(height: 8),
             Text(l10n.aiSummaryTeaserOnly,
                 style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: theme.flashColors.onSurfaceMuted,
                     fontStyle: FontStyle.italic)),
           ],
           const SizedBox(height: 16),
@@ -584,7 +590,7 @@ class _SummaryText extends StatelessWidget {
                         : l10n.aiSummaryDisclaimer,
                     style: theme.textTheme.labelSmall?.copyWith(
                         color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                            theme.flashColors.onSurfaceMuted,
                         fontStyle: FontStyle.italic)),
               ),
               IconButton(

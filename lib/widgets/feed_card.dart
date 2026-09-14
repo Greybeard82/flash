@@ -33,7 +33,7 @@ class FeedCard extends StatelessWidget {
       subtitle: Text(
         feed.domain,
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          color: theme.colorScheme.onSurfaceVariant,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

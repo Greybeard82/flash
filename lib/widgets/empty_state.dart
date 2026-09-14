@@ -43,7 +43,7 @@ class EmptyState extends StatelessWidget {
             Text(
               l10n.addFirstFeed,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),

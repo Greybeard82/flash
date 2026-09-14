@@ -56,12 +56,12 @@ Future<bool> confirmMarkAllRead(BuildContext context) async {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(l10n.cancel),
           ),
+          // Teal, with no override. The danger is already carried by the
+          // sentence above it — "You won't be able to undo this" — and a red
+          // button on top of that says a fault has occurred rather than that
+          // a choice is being offered.
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
             child: Text(l10n.markAllReadConfirm),
           ),
         ],

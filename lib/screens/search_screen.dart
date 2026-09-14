@@ -9,6 +9,7 @@ import '../repositories/article_repository.dart';
 import '../services/article_opener.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
+import '../theme/app_theme.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -120,7 +121,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       child: Text(
                         l10n.noSearchResults(_lastQuery),
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -136,16 +137,30 @@ class _SearchScreenState extends State<SearchScreen> {
                             a.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                            // 6.3: a read search result follows the card,
+                            // elementwise. Title to onSurfaceRead, source to
+                            // onSurfaceMuted, and the weight held at w600
+                            // either way.
+                            //
+                            // The weight is the part worth stating. This read
+                            // w400 when read, and lighter glyphs are narrower,
+                            // so a title near the two-line wrap boundary
+                            // reflowed the moment it was marked read. That is
+                            // the bug article_card_read_colour_test.dart was
+                            // written for; the same list, the same trap.
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: a.isRead ? FontWeight.w400 : FontWeight.w600,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: a.isRead ? 0.5 : 1.0),
+                              fontWeight: FontWeight.w600,
+                              color: a.isRead
+                                  ? theme.flashColors.onSurfaceRead
+                                  : theme.colorScheme.onSurface,
                             ),
                           ),
                           subtitle: Text(
                             a.feedTitle ?? '',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                              color: a.isRead
+                                  ? theme.flashColors.onSurfaceMuted
+                                  : theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           onTap: () => _open(a),

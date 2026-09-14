@@ -178,24 +178,6 @@ class AppLocalizationsIt extends AppLocalizations {
   String get themeDark => 'Scuro';
 
   @override
-  String get colorPalette => 'Tavolozza colori';
-
-  @override
-  String get paletteGreen => 'Verde e oro';
-
-  @override
-  String get paletteBlue => 'Blu e terracotta';
-
-  @override
-  String get paletteOrange => 'Arancione e bosco';
-
-  @override
-  String get paletteRed => 'Rosso e indaco';
-
-  @override
-  String get paletteTealOrange => 'Verde acqua e arancione';
-
-  @override
   String get addKeyword => 'Aggiungi parola';
 
   @override

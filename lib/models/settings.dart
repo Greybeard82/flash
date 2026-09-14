@@ -42,12 +42,6 @@ class AppSettings {
   final int cleanupAgeDays; // [2, 20]
   final bool newspaperMode;
 
-  /// One of [kPaletteSeeds]' keys — which color palette drives the theme's
-  /// generated [ColorScheme] when Newspaper mode isn't overriding it.
-  /// Defaults to `'orange'`, the palette closest to the gold this app already
-  /// shipped with, so nobody already using the app sees a surprise change.
-  final String colorPalette;
-
   /// Whether read articles stay in the list until the next refresh.
   ///
   /// This no longer decides *whether* a read article survives — every read
@@ -131,7 +125,6 @@ class AppSettings {
     this.useEmbeddedWebView = true,
     this.cleanModeEnabled = true,
     this.summaryLength = kSummaryLengthStandard,
-    this.colorPalette = 'orange',
     this.layoutSwapped = false,
   });
 
@@ -163,7 +156,6 @@ class AppSettings {
           kSummaryTierLimits.containsKey(map['summary_length'])
               ? map['summary_length']!
               : kSummaryLengthStandard,
-      colorPalette: map['color_palette'] ?? 'orange',
       layoutSwapped: (map['layout_swapped'] ?? 'false') == 'true',
     );
   }
@@ -184,7 +176,6 @@ class AppSettings {
     bool? useEmbeddedWebView,
     bool? cleanModeEnabled,
     String? summaryLength,
-    String? colorPalette,
     bool? layoutSwapped,
   }) {
     return AppSettings(
@@ -205,7 +196,6 @@ class AppSettings {
       useEmbeddedWebView: useEmbeddedWebView ?? this.useEmbeddedWebView,
       cleanModeEnabled: cleanModeEnabled ?? this.cleanModeEnabled,
       summaryLength: summaryLength ?? this.summaryLength,
-      colorPalette: colorPalette ?? this.colorPalette,
       layoutSwapped: layoutSwapped ?? this.layoutSwapped,
     );
   }

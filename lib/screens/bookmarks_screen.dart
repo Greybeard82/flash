@@ -15,6 +15,7 @@ import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/quick_settings_action.dart';
+import '../theme/app_theme.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -225,13 +226,12 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.bookmark_border_rounded,
-                          size: 48,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
+                          size: 48, color: theme.flashColors.illustration),
                       const SizedBox(height: 12),
                       Text(
                         l10n.noBookmarks,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.flashColors.onSurfaceMuted,
                         ),
                       ),
                     ],

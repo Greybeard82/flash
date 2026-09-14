@@ -32,6 +32,7 @@ import '../reading/new_content_check.dart';
 import '../reading/read_gate.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
+import '../widgets/fab_cluster.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
@@ -49,6 +50,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import 'search_screen.dart';
+import '../theme/app_theme.dart';
 
 class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
@@ -1533,76 +1535,72 @@ class _FeedScreenState extends State<FeedScreen>
           // all four top-level screens and sits rightmost on every one (the
           // rule is written out on its button in alerts_screen.dart). This
           // screen was the only one with the two the other way round.
-          if (_hasFeeds && !_booting) ...[
-            IconButton(
-              key: _filterFabKey,
-              onPressed: _openFilterBubble,
-              tooltip: l10n.filterTooltip,
-              icon: const Icon(Icons.filter_alt_outlined),
-            ),
-            IconButton(
-              key: _quickSettingsFabKey,
-              onPressed: _openQuickSettingsBubble,
-              tooltip: l10n.quickSettingsTooltip,
-              icon: const Icon(Icons.tune_rounded),
-            ),
-          ],
+          // Present but inert when there is nothing to act on, rather than
+          // absent. An app bar that gains two controls the moment the first
+          // feed arrives reads as the bar itself changing shape; leaving them
+          // greyed says "these are yours, there is just nothing to filter
+          // yet".
+          //
+          // The tone is the `inert` role, which currently carries the same
+          // values as `illustration` — see FlashColors.inert for why they are
+          // two roles sharing one number rather than one role meaning two
+          // things.
+          Builder(builder: (context) {
+            final live = _hasFeeds && !_booting;
+            final inert = Theme.of(context).flashColors.inert;
+            return Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                key: _filterFabKey,
+                onPressed: live ? _openFilterBubble : null,
+                tooltip: l10n.filterTooltip,
+                icon: Icon(Icons.filter_alt_outlined,
+                    color: live ? null : inert),
+              ),
+              IconButton(
+                key: _quickSettingsFabKey,
+                onPressed: live ? _openQuickSettingsBubble : null,
+                tooltip: l10n.quickSettingsTooltip,
+                icon: Icon(Icons.tune_rounded, color: live ? null : inert),
+              ),
+            ]);
+          }),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: hostedInSidebar
           ? null
           : _hasFeeds && !_booting
-          ? Padding(
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'refresh',
-                      onPressed: _refreshing
-                          ? null
-                          : () => _refreshCurrentTab(),
-                      tooltip: l10n.refresh,
-                      mini: true,
-                      // The same circular arrow either way — it just turns
-                      // while the refresh is in flight. Swapping in the bolt
-                      // replaced the control under the user's finger with a
-                      // different glyph.
-                      child: _refreshing
-                          ? const SpinningRefreshIcon()
-                          : const Icon(Icons.refresh_rounded),
-                    ),
+          ? FabCluster(
+              controller: _fabFade,
+              actions: [
+                FabAction(
+                  heroTag: 'refresh',
+                  onPressed: _refreshing ? null : () => _refreshCurrentTab(),
+                  tooltip: l10n.refresh,
+                  // The same circular arrow either way — it just turns while
+                  // the refresh is in flight. Swapping in the bolt replaced
+                  // the control under the user's finger with a different
+                  // glyph.
+                  icon: _refreshing
+                      ? const SpinningRefreshIcon()
+                      : const Icon(Icons.refresh_rounded),
+                ),
+                FabAction(
+                  heroTag: 'search',
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SearchScreen()),
                   ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'search',
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SearchScreen()),
-                      ),
-                      tooltip: l10n.searchArticles,
-                      mini: true,
-                      child: const Icon(Icons.search_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
-                      heroTag: 'mark_all_read',
-                      onPressed: _markAllRead,
-                      tooltip: l10n.markAllRead,
-                      mini: true,
-                      child: const Icon(Icons.done_all_rounded),
-                    ),
-                  ),
-                ],
-              ),
+                  tooltip: l10n.searchArticles,
+                  icon: const Icon(Icons.search_rounded),
+                ),
+                FabAction(
+                  heroTag: 'mark_all_read',
+                  onPressed: _markAllRead,
+                  tooltip: l10n.markAllRead,
+                  icon: const Icon(Icons.done_all_rounded),
+                ),
+              ],
             )
           : null,
       body: Stack(
@@ -1752,15 +1750,18 @@ class _FeedScreenState extends State<FeedScreen>
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.35),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.30),
+            // The glyph the mock asks for. Caught-up is the one empty state
+            // that is an achievement rather than an absence, and a bare line
+            // of text reads as the list having failed to load.
+            Icon(Icons.done_all_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 16),
             Text(
               l10n.noNewArticles,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],

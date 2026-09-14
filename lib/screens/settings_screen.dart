@@ -437,8 +437,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context)
                       .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
+                      .onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 10),
@@ -475,7 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             l10n.localBackupSubtitle,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 10),

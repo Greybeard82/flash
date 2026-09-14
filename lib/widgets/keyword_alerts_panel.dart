@@ -10,6 +10,7 @@ import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
 import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
+import '../theme/app_theme.dart';
 
 /// Manages the alert keywords themselves: add, edit, delete, and how many
 /// cards each one currently accounts for.
@@ -366,7 +367,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             Text(
               l10n.deleteAlertKeywordBody(_confirmOrphans),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -411,7 +412,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           child: Text(
             l10n.keywordAlertsSubtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -470,13 +471,12 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.notifications_none_rounded,
-                size: 48,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                size: 48, color: theme.flashColors.illustration),
             const SizedBox(height: 12),
             Text(
               l10n.noKeywordAlerts,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.flashColors.onSurfaceMuted,
               ),
             ),
             const SizedBox(height: 6),
@@ -484,7 +484,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
               l10n.keywordAlertsEmpty,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                color: theme.flashColors.onSurfaceMuted,
               ),
             ),
           ],
@@ -549,7 +549,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             Text(
               l10n.articlesCount(_counts[entry.keyword] ?? 0),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.flashColors.onSurfaceMuted,
               ),
             ),
             IconButton(

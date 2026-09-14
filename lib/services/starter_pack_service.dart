@@ -95,6 +95,9 @@ class StarterPackService {
           // list the user has arranged.
           position: await _folderRepo.getNextPosition(),
           createdAt: now,
+          // The pack's own hue, not the next free one: these five have to
+          // match the mocks on every install.
+          colorIndex: category.colorIndex,
         ));
         existingFolders.add(folder);
         foldersCreated++;

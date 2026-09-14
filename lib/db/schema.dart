@@ -11,12 +11,17 @@ class TableNames {
 }
 
 class SchemaStatements {
+  /// `color_index` is the category's hue, stored rather than derived — see
+  /// lib/theme/category_colors.dart for why every cheap alternative breaks.
+  /// DEFAULT 0 so the v19 ALTER has something to write; the backfill in
+  /// `_onUpgrade` then spreads existing categories across the six.
   static const String createFolders = '''
     CREATE TABLE folders (
-      id         INTEGER PRIMARY KEY AUTOINCREMENT,
-      name       TEXT    NOT NULL,
-      position   INTEGER NOT NULL DEFAULT 0,
-      created_at INTEGER NOT NULL
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      position    INTEGER NOT NULL DEFAULT 0,
+      created_at  INTEGER NOT NULL,
+      color_index INTEGER NOT NULL DEFAULT 0
     )
   ''';
 

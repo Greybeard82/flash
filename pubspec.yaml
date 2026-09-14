@@ -1,6 +1,6 @@
 name: flash
 description: A fast, local-first RSS reader with AI-powered filtering.
-version: 0.1.0+6
+version: 0.5.2+12
 publish_to: none
 
 environment:
@@ -114,3 +114,46 @@ flutter:
       fonts:
         - asset: assets/fonts/PlayfairDisplay-VF.ttf
           weight: 700
+    # Quiet Ink. Variable fonts, one asset per family: three families of
+    # static weight sets would add several hundred KB to an APK that is
+    # about to go back through Play review.
+    #
+    # Literata is subset to Latin. Google ships it with Cyrillic,
+    # Cyrillic-ext, Greek, Greek-ext and Vietnamese, which none of Flash's
+    # five locales use, and that carried it to 933 KB raw / 501 KB deflated —
+    # past the per-family ceiling on its own. Subsetting to
+    # Latin-1 + Latin Extended-A/B + punctuation + currency takes it to
+    # 474 KB raw / 275 KB deflated with both variable axes intact
+    # (opsz 7-72, wght 200-900) and every accented glyph the five locales
+    # need. Regenerate with:
+    #
+    #   python -m fontTools.subset Literata[opsz,wght].ttf \
+    #     --output-file=assets/fonts/Literata.ttf \
+    #     --unicodes="U+0000-00FF,U+0100-017F,U+0180-024F,U+2000-206F,U+20A0-20BF,U+2122,U+2212" \
+    #     --layout-features="*"
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata.ttf
+          weight: 400
+        - asset: assets/fonts/Literata.ttf
+          weight: 500
+        - asset: assets/fonts/Literata.ttf
+          weight: 600
+        - asset: assets/fonts/Literata.ttf
+          weight: 700
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 500

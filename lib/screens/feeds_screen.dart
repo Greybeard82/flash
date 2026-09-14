@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/confirm_sheet.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import '../widgets/feed_card.dart';
 import '../widgets/quick_settings_action.dart';
 import '../widgets/starter_pack_picker.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart';
 
 class FeedsScreen extends StatefulWidget {
   const FeedsScreen({super.key});
@@ -349,18 +351,13 @@ class _FeedsScreenState extends State<FeedsScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.rss_feed,
-              size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3)),
+              size: 64, color: Theme.of(context).flashColors.illustration),
           const SizedBox(height: 16),
           Text(l10n.noFeedsYet,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                        .onSurfaceVariant,
                   )),
           const SizedBox(height: 24),
           // The FAB above already covers "add one feed". This covers the case
@@ -446,11 +443,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => _ConfirmSheet(
+      builder: (ctx) => ConfirmSheet(
         title: l10n.deleteCategory,
         message: l10n.deleteFolderMessage(folder.name),
         confirmLabel: l10n.delete,
-        isDestructive: true,
       ),
     );
     if (confirmed == true) {
@@ -482,11 +478,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => _ConfirmSheet(
+      builder: (ctx) => ConfirmSheet(
         title: l10n.removeFeed,
         message: l10n.removeFeedMessage(feed.title),
         confirmLabel: l10n.remove,
-        isDestructive: true,
       ),
     );
     if (confirmed == true) {
@@ -623,8 +618,7 @@ class _FolderSectionState extends State<_FolderSection>
                       index: widget.dragIndex,
                       child: Icon(Icons.drag_handle_rounded,
                           size: 20,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.35)),
+                          color: theme.flashColors.onSurfaceMuted),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.label_outline_rounded,
@@ -655,8 +649,13 @@ class _FolderSectionState extends State<_FolderSection>
                       onPressed: widget.onDeleteFolder,
                       tooltip: l10n.deleteCategory,
                       visualDensity: VisualDensity.compact,
+                      // Neutral, not teal. It was red, which made one of six
+                      // controls in the header shout for an action that only
+                      // opens a confirmation. Teal was the overcorrection:
+                      // two teal icons side by side rank deleting a category
+                      // equal to renaming it.
                       icon: Icon(Icons.delete_outline,
-                          size: 18, color: theme.colorScheme.error),
+                          size: 18, color: theme.colorScheme.onSurfaceVariant),
                     ),
                     RotationTransition(
                       turns: Tween(begin: -0.25, end: 0.0)
@@ -927,7 +926,12 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       final position = await widget.folderRepo.getNextPosition();
       final now = DateTime.now().millisecondsSinceEpoch;
       return widget.folderRepo.insert(
-        Folder(name: name, position: position, createdAt: now),
+        Folder(
+          name: name,
+          position: position,
+          createdAt: now,
+          colorIndex: await widget.folderRepo.nextColorIndex(),
+        ),
       );
     }, label: 'Adding category');
     if (!mounted) return;
@@ -1101,7 +1105,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                // 6.1: a drag affordance is onSurfaceMuted, the same
+                // level as the resize grip in article_card.dart. It is not
+                // an illustration — it stands in for nothing — and alpha
+                // over ink gave a different grey on every surface it sat on.
+                color: theme.flashColors.onSurfaceMuted,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1120,8 +1128,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Theme.of(context)
                         .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                        .onSurfaceVariant,
                   )),
           const SizedBox(height: 6),
           Wrap(
@@ -1433,63 +1440,6 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
   }
 }
 
-class _ConfirmSheet extends StatelessWidget {
-  final String title;
-  final String message;
-  final String confirmLabel;
-  final bool isDestructive;
-
-  const _ConfirmSheet({
-    required this.title,
-    required this.message,
-    required this.confirmLabel,
-    this.isDestructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: theme.textTheme.titleLarge),
-          const SizedBox(height: 12),
-          Text(message, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: isDestructive
-                      ? FilledButton.styleFrom(
-                          backgroundColor: theme.colorScheme.error,
-                          foregroundColor: theme.colorScheme.onError,
-                        )
-                      : null,
-                  child: Text(confirmLabel),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
 class _FeedActionsSheet extends StatelessWidget {
   final Feed feed;
   final VoidCallback onEdit;
@@ -1516,11 +1466,14 @@ class _FeedActionsSheet extends StatelessWidget {
               onEdit();
             },
           ),
+          // Remove was red-on-red: a red glyph beside red text, in a sheet
+          // whose other row is neutral. It read as an error state rather than
+          // a choice. The row is neutral now and the warning lives in the
+          // confirmation's copy, which is the only place it ever actually
+          // said anything.
           ListTile(
-            leading: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error),
-            title: Text(l10n.remove,
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            leading: const Icon(Icons.delete_outline),
+            title: Text(l10n.remove),
             onTap: () {
               Navigator.pop(context);
               onDelete();

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../theme/app_theme.dart';
 
 class RadialMenu extends StatefulWidget {
   final VoidCallback onShare;
@@ -315,16 +316,31 @@ class _RadialButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final surface = theme.colorScheme.surfaceContainerHighest;
-    final accent =
-        tint ?? (isClose ? theme.colorScheme.error : theme.colorScheme.primary);
 
-    final bg = isClose || enabled
-        ? accent.withValues(alpha: 0.15)
-        : theme.colorScheme.onSurface.withValues(alpha: 0.08);
+    // Close used to paint itself in `error`, which said "delete this forever"
+    // in exactly the red used for "cancel this menu" — the two loudest things
+    // on the ring were the one that destroys an article and the one that puts
+    // the menu away. It is a neutral glyph on a neutral circle now. `tint`
+    // still exists and Alerts' delete still passes `error` through it, so the
+    // one genuinely destructive action keeps the colour to itself.
+    final accent = tint ?? theme.colorScheme.primary;
 
-    final iconColor = isClose || enabled
-        ? accent
-        : theme.colorScheme.onSurface.withValues(alpha: 0.3);
+    final Color bg;
+    final Color iconColor;
+    if (isClose) {
+      bg = Colors.transparent;
+      iconColor = theme.colorScheme.onSurfaceVariant;
+    } else if (enabled) {
+      bg = accent.withValues(alpha: 0.15);
+      iconColor = accent;
+    } else {
+      // 6.5: disabled and inert are one role, and the 8% wash goes away
+      // rather than changing value. A faint disc behind a faint glyph was
+      // two ways of saying the same thing, and the fainter it got the more
+      // it read as a rendering artefact.
+      bg = Colors.transparent;
+      iconColor = theme.flashColors.inert;
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -351,9 +367,13 @@ class _RadialButton extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
+              // The disabled half is `inert` per 6.5. The enabled half was
+              // ink at 80%, which is not a level the scale has; it is a
+              // caption under an icon button, so it takes onSurfaceVariant.
+              // Inferred — 6.5 ruled on the disabled half only.
               color: enabled
-                  ? theme.colorScheme.onSurface.withValues(alpha: 0.8)
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.flashColors.inert,
               fontWeight: FontWeight.w600,
             ),
           ),
