@@ -54,12 +54,35 @@ class FlashBottomNav extends StatelessWidget {
     required this.destinations,
   });
 
-  /// Bar padding: 10 above, 6 at the sides, 16 below.
+  /// Bar padding at a system inset of zero: 10 above, 6 at the sides, 16
+  /// below. See [bottomPaddingFor] for what happens when the inset is not
+  /// zero, which on any modern phone it is not.
+  static const EdgeInsets barPadding =
+      EdgeInsets.fromLTRB(sidePadding, topPadding, sidePadding, bottomGutter);
+
+  static const double sidePadding = 6;
+  static const double topPadding = 10;
+
+  /// The gutter the bar wants below its content.
+  static const double bottomGutter = 16;
+
+  /// The bottom padding to add on top of a system inset of [inset].
   ///
-  /// The bottom 16 is not symmetry — it is the gesture-bar gutter. The bar
-  /// sits inside a `SafeArea`, so this is clearance on top of whatever inset
-  /// the system reports.
-  static const EdgeInsets barPadding = EdgeInsets.fromLTRB(6, 10, 6, 16);
+  /// **The gutter is the inset or 16, never the sum.** The bar sits inside a
+  /// `SafeArea`, which already adds the inset; adding a flat 16 on top of that
+  /// gave 40dp of dead space under the labels on a gesture-navigation phone,
+  /// where the inset alone is 24 and already clears the handle.
+  ///
+  /// So this subtracts what SafeArea is about to add, and clamps at zero for
+  /// insets larger than the gutter:
+  ///
+  ///     max(16 - inset, 0) + inset == max(16, inset)
+  ///
+  /// That identity is what `flash_bottom_nav_test.dart` pins, rather than the
+  /// arithmetic that produces it — the arithmetic can be rewritten, the
+  /// invariant is the promise.
+  static double bottomPaddingFor(double inset) =>
+      math.max(bottomGutter - inset, 0);
 
   /// The selected item's pill, at the width the mock was drawn for.
   static const EdgeInsets pillPadding =
@@ -88,6 +111,19 @@ class FlashBottomNav extends StatelessWidget {
     final navTheme = Theme.of(context).bottomNavigationBarTheme;
     final ink = Theme.of(context).flashColors;
 
+    // `paddingOf`, not `viewPaddingOf`, and the difference is not academic.
+    //
+    // `padding` is the quantity SafeArea consumes, so subtracting the same
+    // quantity keeps the two matched. `viewPadding` reports the raw inset
+    // regardless of what has already been consumed — so if this bar is ever
+    // nested inside another SafeArea, `viewPadding` would still read 24 while
+    // `padding` had gone to 0, this would subtract 16 from a gutter that was
+    // no longer being added, and the gutter would vanish entirely.
+    //
+    // Read here rather than inside the SafeArea below, because SafeArea zeroes
+    // the padding it consumes in the MediaQuery it hands to its children.
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
     // Falling back to the scheme only where a theme has left a slot empty.
     // Both of this app's themes fill all three, so these are for a stock
     // ThemeData — the one a widget test pumps.
@@ -105,7 +141,13 @@ class FlashBottomNav extends StatelessWidget {
           // Padding happens to come first in the tree — Material and SafeArea
           // both contribute their own.
           key: const ValueKey('nav_bar_padding'),
-          padding: barPadding,
+          // Bottom only. The top 10 and the side 6 are unconditional.
+          padding: EdgeInsets.fromLTRB(
+            sidePadding,
+            topPadding,
+            sidePadding,
+            bottomPaddingFor(bottomInset),
+          ),
           child: Row(
             children: List.generate(destinations.length, (i) {
               return Expanded(

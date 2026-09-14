@@ -19,6 +19,8 @@
 // without the widget branching on which theme it is. These tests assert that
 // opt-out actually holds.
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -569,6 +571,120 @@ void main() {
           reason: 'the pill should have tightened under pressure');
       expect(tight.left, greaterThanOrEqualTo(FlashBottomNav.minPillPaddingH),
           reason: 'but not past its own minimum');
+    });
+  });
+
+  group('the bottom gutter is the inset or 16, never the sum', () {
+    // The bar sits inside a SafeArea, which adds the system inset. Adding a
+    // flat 16 on top of that gave 40dp of dead space under the labels on a
+    // gesture-navigation phone, where the 24dp inset alone already clears the
+    // handle.
+    //
+    // **The invariant is pinned, not the arithmetic.** What the bar promises
+    // is that the total gutter equals `max(16, inset)` — a floor of 16 when
+    // the system gives nothing, and the system's own inset when it gives more
+    // than that. `bottomPaddingFor` currently delivers it as
+    // `max(16 - inset, 0)`, but that expression is an implementation and could
+    // be rewritten; the identity is the promise, so the identity is what
+    // fails if someone breaks it.
+    //
+    // Checked at 0 (a device with no inset, and the only case the old flat 16
+    // was correct for), 24 (gesture navigation, where the bug was visible) and
+    // 48 (past the gutter, where the clamp has to hold or the padding goes
+    // negative).
+
+    for (final inset in [0.0, 24.0, 48.0]) {
+      test('at an inset of $inset the total is max(16, $inset)', () {
+        final added = FlashBottomNav.bottomPaddingFor(inset);
+        expect(added + inset, math.max(FlashBottomNav.bottomGutter, inset),
+            reason: 'the gutter is the inset or the floor, never both');
+      });
+
+      test('at an inset of $inset the padding is never negative', () {
+        expect(
+            FlashBottomNav.bottomPaddingFor(inset), greaterThanOrEqualTo(0.0));
+      });
+    }
+
+    test('a zero inset still gets the full 16', () {
+      expect(FlashBottomNav.bottomPaddingFor(0), FlashBottomNav.bottomGutter);
+    });
+
+    test('an inset past the gutter adds nothing at all', () {
+      expect(FlashBottomNav.bottomPaddingFor(48), 0.0);
+      expect(FlashBottomNav.bottomPaddingFor(16), 0.0);
+    });
+
+    testWidgets('the rendered bar reads padding, not viewPadding',
+        (tester) async {
+      // The specific failure the wrong getter causes. Nested inside another
+      // SafeArea, `padding` has already gone to zero while `viewPadding` still
+      // reports the raw 24 — so a widget reading viewPadding would subtract 16
+      // from a gutter nobody was adding any more, and the gutter would vanish.
+      //
+      // Modelled by handing it a MediaQuery whose two values disagree, exactly
+      // as an outer SafeArea would.
+      await tester.pumpWidget(MaterialApp(
+        theme: flashQuietInkTheme(brightness: Brightness.light),
+        home: MediaQuery(
+          data: const MediaQueryData(
+            padding: EdgeInsets.zero,
+            viewPadding: EdgeInsets.only(bottom: 24),
+          ),
+          child: Scaffold(
+            body: const SizedBox.shrink(),
+            bottomNavigationBar: FlashBottomNav(
+              currentIndex: 0,
+              onTap: (_) {},
+              destinations: _destinations,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final padding = tester
+          .widget<Padding>(find.byKey(const ValueKey('nav_bar_padding')))
+          .padding as EdgeInsets;
+
+      expect(padding.bottom, FlashBottomNav.bottomGutter,
+          reason: 'padding is zero here, so the bar must add the full 16. '
+              'Reading viewPadding would have added nothing and left the '
+              'labels against the bottom edge.');
+    });
+
+    testWidgets('and it subtracts a real inset rather than stacking on it',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        theme: flashQuietInkTheme(brightness: Brightness.light),
+        home: MediaQuery(
+          data: const MediaQueryData(
+            padding: EdgeInsets.only(bottom: 24),
+            viewPadding: EdgeInsets.only(bottom: 24),
+          ),
+          child: Scaffold(
+            body: const SizedBox.shrink(),
+            bottomNavigationBar: FlashBottomNav(
+              currentIndex: 0,
+              onTap: (_) {},
+              destinations: _destinations,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final padding = tester
+          .widget<Padding>(find.byKey(const ValueKey('nav_bar_padding')))
+          .padding as EdgeInsets;
+
+      expect(padding.bottom, 0.0,
+          reason: 'a 24dp inset already exceeds the 16dp gutter, so the bar '
+              'adds nothing — 24 of dead space under the labels, not 40');
+      expect(padding.top, FlashBottomNav.topPadding,
+          reason: 'the top is unconditional and must not have moved');
+      expect(padding.left, FlashBottomNav.sidePadding);
+      expect(padding.right, FlashBottomNav.sidePadding);
     });
   });
 }
