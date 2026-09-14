@@ -182,11 +182,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
               FilledButton(
                 onPressed: (count == 0 || _seeding) ? null : _startReading,
+                // Radius comes from `filledButtonTheme` now. The local
+                // r14 was the card radius applied to a button, and it made
+                // the one screen a new user sees first the only one whose
+                // primary action is a different shape from every other
+                // primary action in the app. The full-width 52dp minimum is
+                // kept: that is this button being a CTA, not a drift.
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
                 ),
                 child: Text(
                   l10n.startReadingButton,

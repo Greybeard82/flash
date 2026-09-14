@@ -221,6 +221,27 @@ class _FolderTab extends StatelessWidget {
         ));
     }
 
+    // B3. Splitting "(12)" out of the label string fixed the layout and broke
+    // the reading: two Text widgets side by side are two semantics nodes, so
+    // TalkBack announced "Tech" and then, separately, "twelve" — a number with
+    // nothing attached to it, and no way to tell it was a count of articles
+    // rather than a position in a list.
+    //
+    // One label over the pair, with the visual text excluded so it is not
+    // announced twice. The Semantics sits *inside* the InkWell on purpose:
+    // outside it, or with `excludeSemantics` on the whole chip, the button
+    // role and the tap action go with it.
+    //
+    // `articlesCount` is an existing key with all five locales, so this adds
+    // no strings — the plural is the ARB's problem, not this widget's.
+    //
+    // **The count is omitted when it is zero**, rather than announced as
+    // "0 articles": nothing is painted at zero, and a label describing a
+    // numeral that is not on screen is its own small lie.
+    final l10n = AppLocalizations.of(context)!;
+    final semanticsLabel =
+        count > 0 ? '${this.label}, ${l10n.articlesCount(count)}' : this.label;
+
     return Padding(
       key: tabKey,
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
@@ -253,7 +274,13 @@ class _FolderTab extends StatelessWidget {
               color: background,
               borderRadius: BorderRadius.circular(_radius),
             ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: children),
+            child: Semantics(
+              label: semanticsLabel,
+              child: ExcludeSemantics(
+                child:
+                    Row(mainAxisSize: MainAxisSize.min, children: children),
+              ),
+            ),
           ),
         ),
       ),

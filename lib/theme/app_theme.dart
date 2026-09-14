@@ -524,6 +524,74 @@ TextTheme _quietInkTextTheme(ColorScheme scheme) {
       .apply(bodyColor: scheme.onSurface, displayColor: scheme.onSurface);
 }
 
+/// Handoff 1.7, and the whole of it: three SegmentedButtons ship — sort order
+/// in the filter bubble, theme and summary length in Quick Settings — and all
+/// three were stock M3 capsules at radius 20, the last capsules in an app that
+/// had settled on r9 chips and an r14 nav pill.
+///
+/// Shared by both themes rather than written twice, so the two cannot drift
+/// into disagreeing about what a segmented button is. Each is handed its own
+/// scheme and text theme, so Newspaper keeps PT Serif and its own roles
+/// without a special case here.
+///
+/// **What the theme can and cannot carry, because 1.7 asks for one thing it
+/// cannot.** `SegmentedButtonThemeData` has exactly two fields, `style` and
+/// `selectedIcon` — `showSelectedIcon` is a widget constructor argument with
+/// no theme override, so "showSelectedIcon: false" is not expressible here and
+/// is reported rather than guessed at. Everything else lands:
+///
+///   * **Height 40** needs nothing. `SegmentedButton` drops `minimumSize` when
+///     it builds each segment (`segmented_button.dart`, `segmentStyleFor`),
+///     so the segment falls back to `TextButton`'s own M3 minimum, which is
+///     already 40 tall. Setting it here would be ignored, which is worse than
+///     not setting it: it would read as pinned.
+///   * **Radius 9 outer, 0 between** falls straight out of one `shape`. The
+///     same `segmentStyleFor` forces every *segment* to a square
+///     `RoundedRectangleBorder()`, and the resolved `shape` is used only for
+///     the group's outer border and clip.
+///   * **One `side` is both the border and the divider between segments** —
+///     `ButtonStyle.side`'s own doc says so, and it is why there is no
+///     separate divider entry.
+SegmentedButtonThemeData _segmentedButtonTheme(
+  ColorScheme scheme,
+  TextTheme text,
+) {
+  // Derived from the theme's own labelLarge rather than written as a bare
+  // TextStyle, which would drop the family and give Newspaper a grotesque.
+  TextStyle label(FontWeight weight) =>
+      (text.labelLarge ?? const TextStyle()).copyWith(
+        fontSize: 13,
+        fontWeight: weight,
+      );
+
+  return SegmentedButtonThemeData(
+    style: ButtonStyle(
+      side: WidgetStatePropertyAll<BorderSide>(
+        BorderSide(color: scheme.outlineVariant, width: 1),
+      ),
+      shape: WidgetStatePropertyAll<OutlinedBorder>(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+      ),
+      textStyle: WidgetStateProperty.resolveWith<TextStyle>(
+        (states) => label(states.contains(WidgetState.selected)
+            ? FontWeight.w600
+            : FontWeight.w500),
+      ),
+      // Unselected resolves to null on purpose: the segment sits on whatever
+      // surface hosts it, which on the filter bubble and Quick Settings is
+      // not the same colour.
+      backgroundColor: WidgetStateProperty.resolveWith<Color?>((states) =>
+          states.contains(WidgetState.selected)
+              ? scheme.primaryContainer
+              : null),
+      foregroundColor: WidgetStateProperty.resolveWith<Color?>((states) =>
+          states.contains(WidgetState.selected)
+              ? scheme.onPrimaryContainer
+              : scheme.onSurfaceVariant),
+    ),
+  );
+}
+
 /// Builds the Quiet Ink [ThemeData] for one brightness.
 ///
 /// Replaces `flashPaletteTheme`, which took a palette key. There is one visual
@@ -602,6 +670,7 @@ ThemeData flashQuietInkTheme({required Brightness brightness}) {
       color: scheme.outlineVariant,
       thickness: 1,
     ),
+    segmentedButtonTheme: _segmentedButtonTheme(scheme, text),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: scheme.primary,
@@ -804,6 +873,7 @@ ThemeData flashNewspaperTheme() {
       color: _npHairline,
       thickness: 1,
     ),
+    segmentedButtonTheme: _segmentedButtonTheme(base, baseText),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         backgroundColor: _npRed,

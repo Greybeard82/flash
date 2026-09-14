@@ -352,7 +352,13 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
+          // A neutral raised surface, not a 35% error wash. Two rules
+          // met at once: alpha over a role is not a colour the palette
+          // authored, and error is for faults — inline validation, the
+          // stale-feed glyph, the radial menu's Delete — never for asking a
+          // question. The consequence is carried by the sentence inside the
+          // block, which names the number of cards that disappear.
+          color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -552,9 +558,15 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
                 color: theme.flashColors.onSurfaceMuted,
               ),
             ),
+            // Neutral, matching the Categories header this restyle already
+            // settled: a bin that opens a confirmation does not rank above
+            // the row it sits in. Handoff 4 keeps `error` for "Delete, in
+            // Alerts only" — that is the RADIAL MENU's Delete, which is the
+            // only Delete the theme comment blesses by name, and it is a
+            // different widget in a different file.
             IconButton(
-              icon:
-                  Icon(Icons.delete_outline, color: theme.colorScheme.error),
+              icon: Icon(Icons.delete_outline,
+                  color: theme.colorScheme.onSurfaceVariant),
               onPressed: () => _delete(entry),
             ),
           ],

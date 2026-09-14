@@ -384,8 +384,12 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                     color: theme.flashColors.onSurfaceMuted,
                   ),
                 ),
+                // Neutral, as in the alerts panel and the Categories
+                // header. This one is the blocklist, which handoff 4's
+                // Alerts sentence does not reach at all.
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                  icon: Icon(Icons.delete_outline,
+                      color: theme.colorScheme.onSurfaceVariant),
                   onPressed: () => _delete(entry),
                 ),
                 AnimatedRotation(

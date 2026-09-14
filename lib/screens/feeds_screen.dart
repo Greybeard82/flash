@@ -657,10 +657,18 @@ class _FolderSectionState extends State<_FolderSection>
                     RotationTransition(
                       turns: Tween(begin: -0.25, end: 0.0)
                           .animate(_chevronController),
+                      // Neutral, not teal at 70%. Alpha on `primary` is the
+                      // same faked ink the guard bans on `onSurface`, one role
+                      // over and out of the pattern's sight — and it made the
+                      // header read as three different teals: the label icon
+                      // and the folder name at full strength, the chevron at
+                      // seven tenths. The sibling chevrons in the alerts and
+                      // blocklist panels are already `onSurfaceVariant`; this
+                      // was the drifted copy, despite their comments citing it
+                      // as the original.
                       child: Icon(Icons.expand_more_rounded,
                           size: 18,
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.7)),
+                          color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),

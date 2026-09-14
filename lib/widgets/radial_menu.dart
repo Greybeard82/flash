@@ -80,7 +80,21 @@ class _RadialMenuState extends State<RadialMenu>
         children: [
           FadeTransition(
             opacity: _opacity,
-            child: Container(color: Colors.black.withValues(alpha: 0.6)),
+            // `scrim`, not `Colors.black` — the same swap the bubble panel's
+            // overlay took. Byte-identical today, since neither scheme
+            // declares a scrim and both fall to ColorScheme's own black.
+            //
+            // The two overlays still dim by different amounts, 0.6 here and
+            // 0.28 in `bubble_panel.dart`, and that is left alone: this one
+            // covers the whole screen to isolate a menu, the other blurs
+            // behind a panel that is still part of its screen. Picking one
+            // number for both is a design call, not a token swap.
+            child: Container(
+              color: Theme.of(context)
+                  .colorScheme
+                  .scrim
+                  .withValues(alpha: 0.6),
+            ),
           ),
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.10,

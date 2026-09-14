@@ -466,4 +466,111 @@ void main() {
       });
     }
   });
+
+  group('B3: the chip reads as one node, not a label and a loose number', () {
+    // The count became its own Text when "(12)" came out of the label string,
+    // which fixed the layout and broke the reading: two Text widgets are two
+    // semantics nodes, so TalkBack said "Tech", then "twelve" — a bare number
+    // with nothing attached and no way to know it counted articles rather than
+    // giving a position in the bar.
+    //
+    // `articlesCount` is an existing key in all five locales, so this adds no
+    // strings. The English plural is asserted here because this file runs in
+    // English; `arb_parity_test.dart` owns the other four.
+
+    testWidgets('label and count arrive as one announcement', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        selectedIndex: 1,
+        folderUnreadCounts: {1: 12},
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Tech, 12 articles'), findsOneWidget,
+          reason: 'the chip must announce its count as a count');
+      handle.dispose();
+    });
+
+    testWidgets('the numeral is not announced a second time', (tester) async {
+      // The half that would rot quietly: adding the label without excluding
+      // the painted text gives "Tech, 12 articles" AND "Tech" AND "12", which
+      // is worse than the bug it was meant to fix.
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        selectedIndex: 1,
+        folderUnreadCounts: {1: 12},
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('12'), findsNothing,
+          reason: 'the bare numeral must not be its own node any more');
+      expect(find.bySemanticsLabel('Tech'), findsNothing,
+          reason: 'nor the bare label — the combined one replaces both');
+      handle.dispose();
+    });
+
+    testWidgets('the singular is the ARB plural, not "1 articles"',
+        (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        selectedIndex: 1,
+        folderUnreadCounts: {1: 1},
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Tech, 1 article'), findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('a zero count announces the name alone', (tester) async {
+      // Nothing is painted at zero, so "Tech, 0 articles" would describe a
+      // numeral that is not on screen. The label follows the paint.
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        selectedIndex: 1,
+        folderUnreadCounts: {1: 0},
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('Tech'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('articles?')), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('the chip is still a button that can be tapped',
+        (tester) async {
+      // The reason the Semantics sits inside the InkWell rather than around
+      // the whole chip: wrapping outside, or using `excludeSemantics` on the
+      // lot, takes the button role and the tap action with it — a chip that
+      // reads beautifully and cannot be activated.
+      final handle = tester.ensureSemantics();
+      var tapped = -1;
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        folderUnreadCounts: {1: 12},
+        onTabSelected: (i) => tapped = i,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.bySemanticsLabel('Tech, 12 articles'));
+      expect(tapped, 1, reason: 'the labelled node must still be the target');
+      handle.dispose();
+    });
+
+    testWidgets('"All" gets the same treatment', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(_harness(
+        folders: [_folder(1, 'Tech')],
+        allUnreadCount: 238,
+      ));
+      await tester.pumpAndSettle();
+
+      expect(find.bySemanticsLabel('All, 238 articles'), findsOneWidget);
+      handle.dispose();
+    });
+  });
 }

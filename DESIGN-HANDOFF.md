@@ -548,6 +548,32 @@ Nothing in sections 1–3 is in this list.
 or it is moot — it should not stay unknown. If live, the answer is that old
 shades get a slightly quiet app name, not that the token changes.
 
+> **ANSWERED, and the question closes for a reason neither branch
+> anticipated.**
+>
+> `flutter.minSdkVersion` resolves to **24** — Flutter 3.41.6,
+> `FlutterExtension.kt:26`. `build.gradle.kts` no longer inherits it: the
+> SDK pinning commit wrote `minSdk = 24` out explicitly, so the value is
+> unchanged and is now visible in review. **The API≤ 30 window is
+> therefore live** — the app installs on Android 7.0 through 11.
+>
+> But it is moot anyway, and not because of an API level: **nothing sets
+> `Notification.color` at all.** Neither `AndroidNotificationDetails` —
+> `refresh_service.dart:176` for keyword alerts, `unread_badge_service
+> .dart:215` for the count — passes a `color:`, and `#15868E` appears
+> nowhere in `lib/` or `android/`. The constant has no consumer yet, so
+> the system draws both the small icon and the app name in its own ink on
+> every API level.
+>
+> So the conclusion stands as 1.3 wrote it, just further off: when the
+> constant IS wired, old shades get a slightly quiet app name at ~12sp,
+> and that is the cost of the value rather than a reason to move it. It
+> is a fact about Android 7–11, not a fact about `#15868E`.
+>
+> **This question is closed.** The open item it leaves behind is a
+> different one and belongs to whoever wires the accent: there is no
+> notification colour in the app today.
+
 **5.2 · Confirm the day-header sum still balances once the ad row exists.**
 `kDayHeaderHeight` is load-bearing because `FeedScreen._onScroll` walks row
 heights to decide what has passed the viewport midpoint. A 306dp row the walk
@@ -606,6 +632,21 @@ this document.** Both pin geometry the redesign has now settled. The rail
 numbers here match what ships; the chip test pinned the old round pill and
 should be updated to the 36dp / radius 9 / separate-numeral form rather than
 deleted.
+
+> **ANSWERED — both were already done, in earlier passes.**
+>
+> `folder_tab_bar_test.dart` was rewritten for the chip redesign, not
+> deleted: `kChipHeight = 36`, `kChipRadius = 9`, a whole group named
+> "the count is its own numeral now", and a per-theme test reading
+> "corners are 9dp, not a full pill". The r999 pill it warns about is
+> gone from the file and from the widget.
+>
+> `action_rail_test.dart` was updated twice since — once when the
+> saved fill was removed, once when its tooltip finders stopped carrying
+> English literals.
+>
+> Pass 7 added six tests to the chip file for B3 rather than changing
+> any geometry. Nothing in 5.3 was outstanding.
 
 **5.4 · Portrait tablet has a deadline, not just a decision.** `CLAUDE.md`
 records that the orientation lock stops working at **API 37**. "Decided, not
@@ -1115,3 +1156,177 @@ lu" on an empty feed. The next person to simplify that branch — to post a
 ARB and with every test green, because no test renders `unreadBadgeText(0)`.
 
 Fix the string, then the guard is free to change. Not the other way round.
+
+---
+
+## 9. Pass 7: the consistency sweep
+
+Not a redesign. Section 4 lists most of these screens as NOT DRAWN, so the work
+was finding the places where a screen had stopped inheriting the theme and
+closing them. Every change below is a swap to a role that already existed.
+
+### 9.1 What each surface turned out to be
+
+| surface | verdict |
+|---|---|
+| Categories | role substitution — one chevron |
+| Alerts | role substitution — two |
+| Keyword alerts panel | role substitution (one auditor said "needs a mock"; see 9.3) |
+| Keyword blocklist panel | role substitution — one |
+| Quick Settings | role substitution — one scrim |
+| Settings | role substitution — one confirm button |
+| Onboarding + starter pack | role substitution — one radius override |
+| Add-feed sheet | **already correct** |
+
+**The eight changes, all one-liners:**
+
+- `feeds_screen.dart` — the folder chevron was `primary` at **alpha 0.7**.
+  Alpha-faked ink one role over from the one the guard watches, and it made the
+  header read as three different teals. Now `onSurfaceVariant`, which is what
+  the alerts and blocklist chevrons already use — and their comments cite
+  *this* chevron as the original they match, so Categories was the drifted copy
+  of its own precedent.
+- `bubble_panel.dart` and `radial_menu.dart` — `Colors.black` at 0.28 and
+  0.6 became `scrim`. Byte-identical today, since neither scheme declares a
+  scrim and both take ColorScheme's black. That is the argument *for* it: it
+  costs nothing and gives a theme that wants a warmer wash somewhere to say so.
+  **The two opacities are left different on purpose** — one isolates a menu
+  over the whole screen, the other blurs behind a panel that is still part of
+  its screen. One number for both is a design call.
+- `settings_screen.dart` — the restore-backup confirm was a `FilledButton`
+  in `error` under `onError`. The same red on a question that B5 removed from
+  mark-all-read and `confirm_sheet_no_red_test.dart` records for the two
+  sheets. `restoreConfirmMessage` already says what restoring does.
+- `keyword_alerts_panel.dart` — the inline "this destroys N cards" prompt
+  was `errorContainer` at **35% alpha**. Both halves wrong: alpha over a role
+  is a colour nobody authored, and error on a confirmation reads as though
+  something had already gone wrong. Now `surfaceContainerHighest`.
+- `keyword_alerts_panel.dart` and `keyword_group_panel.dart` — two delete
+  bins in `error`, now `onSurfaceVariant`, matching the Categories header
+  restyle in section 3. **On section 4's "Delete, in Alerts only, keeps
+  `error`":** that sentence is inside the radial-menu bullet and is about the
+  radial menu's Delete, which is also the only Delete `app_theme.dart` blesses
+  by name. It does not reach an IconButton in a panel. Recorded because the
+  sentence is easy to read the other way.
+- `onboarding_screen.dart` — the Start-reading CTA carried its own
+  `RoundedRectangleBorder` at radius **14**, the *card* radius applied to a
+  button, making the first screen a new user sees the only one whose primary
+  action is a different shape. Deleted; it inherits `filledButtonTheme` at r20.
+  The full-width 52dp minimum stays — that is the button being a CTA.
+
+### 9.2 What was NOT done, and is listed rather than built
+
+Everything here would have meant inventing a value, a component or a decision.
+None of it is a defect; it is the boundary of a sweep.
+
+- **Two drop-target washes disagree** in `feeds_screen.dart`: `primary` at 0.08
+  for the header hover, 0.12 for the drop slot, while `article_card.dart` and
+  `radial_menu.dart` wash at 0.15. Picking one is a value decision and
+  `FlashColors` has no wash role to swap to.
+- **The empty-state caption is split 2–2** across the app between
+  `onSurfaceVariant` and `onSurfaceMuted`. Both are legal roles. Choosing is a
+  cross-surface call.
+- **`EmptyState`'s brand mark is `primary`** at 80dp while every other
+  empty-state glyph is `illustration`. Arguably correct — it is the app's
+  mark, not a decorative glyph — and arguably the last unswept one.
+- **The Alerts empty state is text-only**, where every other empty state in the
+  app pairs a large `illustration` glyph with muted copy. That is a missing
+  component, not a wrong colour.
+- **Disabled states do not use `inert` anywhere.** The OPML and backup buttons,
+  the add-feed search field and chips, and the starter-pack checkboxes all fall
+  to Flutter's framework default when disabled. 6.5 says "one role, four sites
+  close" — those four are closed; these are a different, larger set.
+- **Quick Settings expresses a disabled block as `Opacity(0.4)`** around an
+  `IgnorePointer` when Newspaper mode is on. That is a disabled state written
+  as a filter rather than as `inert`, and unpicking it is a component change.
+- **Two hardcoded `TextStyle`s survive**: `onboarding_screen.dart`'s CTA label
+  (16/w600) and `feed_card.dart`'s monogram (16). Both are sizes, not colours,
+  and both were out of a colour sweep's scope.
+- **`feed_card.dart`'s unread count is `primary`.** Proposed as `secondary`
+  and **rejected on measurement**: Quiet Ink light `secondary` is 4.12:1 on
+  white for an 11px label where `primary` is 6.34:1 — a light-mode
+  regression, and the only theme it would change.
+
+### 9.3 1.7 asks for two things a theme cannot carry
+
+`segmentedButtonTheme` ships. Radius **9** outer / 0 between, one 1dp
+`outlineVariant` `side` serving as both border and divider, selected
+`primaryContainer` under `onPrimaryContainer` at 13/w600, unselected
+`onSurfaceVariant` at 13/w500. Shared by both themes so they cannot drift on
+geometry, and derived from each theme's own `labelLarge` so Newspaper keeps PT
+Serif.
+
+Two things did not land, and neither is a slip:
+
+1. **`showSelectedIcon: false` is not a theme property.**
+   `SegmentedButtonThemeData` has exactly two fields, `style` and
+   `selectedIcon`. The flag is a `SegmentedButton` constructor argument. Fixing
+   it means three widget edits at the three call sites, which 1.7's own "no
+   widget changes" rules out — so it is reported. A test pins that the
+   checkmark is still shown, so the gap fails loudly the day someone closes it.
+
+2. **"Height 40" costs 8dp of touch target.** Measured: the segment paints at
+   **48**, and that is the painted fill, not a tap halo around a 40dp body —
+   `_SegmentedButtonRenderObject` lays every segment out at a uniform tight
+   height, so Material's tap padding ends up inside the paint. Reaching 40
+   means `tapTargetSize: shrinkWrap` or a negative `visualDensity`, and both
+   take the **touch target** to 40 with it. The two places this app already
+   goes under 48 — the 36dp folder chip, the 36dp rail halves — each
+   carry a written justification and a test. 1.7 does not mention touch targets
+   at all, so the number is reported rather than applied. Pinned at the real 48
+   so the gap is visible.
+
+### 9.4 B3 landed; the chip reads as one node
+
+`Semantics(label: "$name, ${l10n.articlesCount(n)}")` inside the `InkWell`,
+with the painted text under `ExcludeSemantics`. Inside rather than around,
+because wrapping the chip takes the button role and the tap action with it.
+
+**At a count of zero the label is the name alone.** Nothing is painted at zero,
+and "Tech, 0 articles" describes a numeral that is not on screen.
+
+### 9.5 The app bar band — logged for Design, not a defect
+
+Not a bug and nothing was changed. `height - toolbarHeight == inset` exactly at
+insets of 0, 24 and 48, and the body reads `padding.top = 0`, so the status bar
+inset is consumed once, by the `AppBar` at `primary: true`. The band is the
+status bar drawn over the same white as the app bar, plus 14dp of title
+centring — a 28dp text line inside a 56dp toolbar.
+
+**The design question behind it**, which is Design's and is not actioned here:
+should the app bar carry a different tint from the status bar so the band stops
+reading as empty? The device numbers that motivate it, since the Pixel is the
+case that makes it visible:
+
+| device | status bar | density | dp | total above the title |
+|---|---|---|---|---|
+| Lenovo Tab M11 | 59px | 1.5 | 39.3 | 53.3 |
+| Samsung M51 | 91px | 2.625 | 34.7 | 48.7 |
+| Pixel 11 Pro | 172px | 2.625 | **65.5** | 79.5 |
+
+The Pixel's band is nearly twice the Samsung's, and it is the system's number,
+not the app's.
+
+### 9.6 An ad-privacy row with nothing behind it
+
+Serving ads in the EEA and the UK needs a Google-certified CMP, and consent
+that can be given has to be withdrawable afterwards — a permanent entry
+point, not a first-launch dialog.
+
+The row ships now because **Settings was being touched tonight and will not be
+touched again before the ads pass.** It sits directly under the privacy policy
+and last in About: the policy says what is collected, this changes what the
+reader agreed to, and nothing legal sits below it.
+
+`enabled: false`, so it is reviewable in place and cannot reach a form that
+does not exist. `_onAdPrivacy()` is an empty method carrying its own
+explanation, because an empty method with no comment is indistinguishable from
+an unfinished one.
+
+**The copy is an English-only constant, not an ARB key**, and deliberately:
+the real wording ships with the ads pass, and five locales now means paying for
+the same row twice — with `arb_parity_test.dart` then holding four
+translations of a sentence nobody has agreed to. `kAdPrivacyRowLabelEn` and
+`kAdPrivacyRowSubtitleEn` are marked for deletion in that pass.
+
+No UMP SDK, no ad code, no new strings. A test asserts all three absences.
