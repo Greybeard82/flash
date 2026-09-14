@@ -266,4 +266,140 @@ void main() {
       });
     }
   });
+
+  group('it occupies a bar, not the page', () {
+    // The regression this file did not catch, and the reason it did not.
+    //
+    // FlashBottomNav shipped with a `Center` wrapping each item. Center takes
+    // the largest size its constraints allow, and in the Scaffold's
+    // bottomNavigationBar slot the incoming height constraint is the whole
+    // viewport — so every item became as tall as the screen, the Row with it,
+    // and the bar with that. The body was laid out at exactly zero pixels and
+    // the nav floated in the vertical middle of an empty page. On device: no
+    // app bar, no content, no FAB, four destinations hanging in the middle.
+    //
+    // Every test above passed throughout. They pumped the nav into a Scaffold
+    // with no `body:`, and asserted colours, paddings and the sizes of nodes
+    // *inside* an item — never the height of the bar itself, and never what
+    // was left over for anything else. A widget that renders correct-looking
+    // parts while consuming the entire screen satisfied all of them.
+    //
+    // So these assert the two things that were actually wrong: the body gets
+    // room, and the bar is at the bottom of it.
+
+    Future<void> pumpShell(WidgetTester tester, double width) async {
+      tester.view.physicalSize = Size(width * 3, 2400);
+      tester.view.devicePixelRatio = 3.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(MaterialApp(
+        theme: flashQuietInkTheme(brightness: Brightness.light),
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Flash')),
+          body: Container(key: const ValueKey('body'), color: Colors.white),
+          floatingActionButton: FloatingActionButton(
+            mini: true,
+            onPressed: () {},
+            child: const Icon(Icons.add),
+          ),
+          bottomNavigationBar: FlashBottomNav(
+            currentIndex: 1,
+            onTap: (_) {},
+            destinations: const [
+              FlashNavDestination(
+                icon: Icon(Icons.bolt),
+                selectedIcon: Icon(Icons.bolt),
+                label: 'Flash',
+              ),
+              FlashNavDestination(
+                icon: Icon(Icons.rss_feed),
+                selectedIcon: Icon(Icons.rss_feed),
+                label: 'Categories',
+              ),
+              FlashNavDestination(
+                icon: Icon(Icons.bookmark),
+                selectedIcon: Icon(Icons.bookmark),
+                label: 'Bookmarks',
+              ),
+              FlashNavDestination(
+                icon: Icon(Icons.notifications),
+                selectedIcon: Icon(Icons.notifications),
+                label: 'Alerts',
+              ),
+            ],
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+    }
+
+    for (final width in [320.0, 360.0, 411.0]) {
+      final w = width.toInt();
+
+      testWidgets('at ${w}dp the body gets the screen', (tester) async {
+        await pumpShell(tester, width);
+
+        final body = tester.getSize(find.byKey(const ValueKey('body')));
+        expect(body.height, greaterThan(0),
+            reason: 'the bar consumed the whole viewport and left the body '
+                'nothing — the bug, stated as plainly as it can be');
+        expect(body.height, greaterThan(400),
+            reason: 'and it should get most of the screen, not a sliver');
+      });
+
+      testWidgets('at ${w}dp the bar is bar-sized', (tester) async {
+        await pumpShell(tester, width);
+
+        final nav = tester.getSize(find.byType(FlashBottomNav));
+        expect(nav.height, lessThan(120),
+            reason: 'a navigation bar taller than 120dp is not a bar');
+        expect(nav.height, greaterThan(40),
+            reason: 'and one shorter than 40dp has collapsed');
+      });
+
+      testWidgets('at ${w}dp it sits at the bottom', (tester) async {
+        await pumpShell(tester, width);
+
+        final screen =
+            tester.view.physicalSize.height / tester.view.devicePixelRatio;
+        final nav = tester.getRect(find.byType(FlashBottomNav));
+        final body = tester.getRect(find.byKey(const ValueKey('body')));
+
+        expect(nav.bottom, screen, reason: 'flush with the bottom edge');
+        expect(nav.top, greaterThan(screen / 2),
+            reason: 'the bar floated at half the screen height when its items '
+                'expanded to fill it');
+        expect(body.bottom, nav.top,
+            reason: 'the body ends exactly where the bar begins');
+      });
+
+      testWidgets('at ${w}dp no label is truncated', (tester) async {
+        // Not "does it ellipsize" but whether the painted word is the whole
+        // word. scaleDown shrinks rather than cutting, so a label that does
+        // not fit gets smaller, never shorter.
+        await pumpShell(tester, width);
+
+        for (final label in ['Flash', 'Categories', 'Bookmarks', 'Alerts']) {
+          // Scoped to the bar: the AppBar title is also "Flash", and an
+          // unscoped finder matches both.
+          final widget = tester.widget<Text>(find.descendant(
+            of: find.byType(FlashBottomNav),
+            matching: find.text(label),
+          ));
+          expect(widget.data, label,
+              reason: 'the Text must carry the whole word');
+          expect(widget.overflow, isNot(TextOverflow.ellipsis),
+              reason: '"Categori..." stops being the word — the label shrinks '
+                  'instead');
+        }
+      });
+
+      testWidgets('at ${w}dp nothing overflows', (tester) async {
+        await pumpShell(tester, width);
+        expect(tester.takeException(), isNull,
+            reason: 'a RenderFlex overflow here is four destinations not '
+                'fitting across the bar');
+      });
+    }
+  });
 }

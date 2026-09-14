@@ -138,7 +138,26 @@ class _NavItem extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(FlashBottomNav.pillRadius),
-      child: Center(
+      // No Center here, and that is load-bearing rather than a simplification.
+      //
+      // Center takes the largest size its constraints allow. In the Scaffold's
+      // bottomNavigationBar slot the incoming height constraint is the whole
+      // viewport, so a Center made every item as tall as the screen, the Row
+      // with it, and the bar with that — leaving the body exactly zero pixels
+      // and the nav floating in the vertical middle of an empty page. The
+      // Container below has an intrinsic height, so the Row sizes to its
+      // tallest child and the bar is as tall as its content.
+      // Align, not Center, and heightFactor is the whole reason.
+      //
+      // The tap target should be the full slot the Expanded gives it, but the
+      // pill should hug its own content — 18dp of padding around the label,
+      // not 18dp bitten out of a quarter of the bar, which is what a
+      // slot-width Container does and why the labels were ellipsizing.
+      // heightFactor: 1 sizes this box to the child's height instead of to
+      // the constraint, which is exactly what Center would not do.
+      child: Align(
+        alignment: Alignment.center,
+        heightFactor: 1,
         child: Container(
           // The padding is the same whether or not the pill is painted, so
           // moving the selection does not shift the row. An unselected item
@@ -167,15 +186,27 @@ class _NavItem extends StatelessWidget {
                 key: ValueKey('nav_icon_label_gap'),
                 height: FlashBottomNav.iconLabelGap,
               ),
-              Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: kSansFamily,
-                  fontSize: FlashBottomNav.labelSize,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: content,
+              // scaleDown rather than ellipsis. Four destinations, each
+              // carrying 36dp of pill padding, is tight on a narrow phone —
+              // and "Categori..." is a worse answer than a label half a point
+              // smaller, because the truncated one stops being the word.
+              //
+              // The Container hugs its content but is still handed the slot
+              // width as a maximum, so this only shrinks when the label
+              // genuinely cannot fit. At the width the mock was drawn for it
+              // renders at its stated 11px and this does nothing.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  destination.label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    fontFamily: kSansFamily,
+                    fontSize: FlashBottomNav.labelSize,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: content,
+                  ),
                 ),
               ),
             ],
