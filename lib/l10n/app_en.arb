@@ -2,7 +2,7 @@
   "@@locale": "en",
 
   "appTitle": "Flash",
-  "markAllRead": "Mark all as read",
+  "markAllRead": "Mark all read",
   "refresh": "Refresh",
   "noNewArticles": "No new articles.\nYou're all caught up.",
   "feeds": "Feeds",
@@ -61,7 +61,7 @@
   "every3Hours": "Every 3 hours",
   "every6Hours": "Every 6 hours",
   "manualOnly": "Never",
-  "keywordBlocklist": "Keyword Blocklist",
+  "keywordBlocklist": "Keyword blocklist",
   "keywordBlocklistSubtitle": "Hide articles matching specific words or phrases",
   "backupSuccess": "Backup saved",
   "@backupSuccess": { "description": "Banner shown after the backup file is written via the system file picker." },
@@ -129,10 +129,12 @@
   "noSearchResults": "No articles match \"{query}\"",
   "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
   "summary": "Summary",
-  "saved": "Saved",
+  "saved": "Bookmarks",
   "bookmarks": "Bookmarks",
-  "noBookmarks": "No bookmarks yet.\nLong-press any article to save it.",
+  "noBookmarks": "No bookmarks yet.\nTap the bookmark on any article to save it.",
   "bookmark": "Bookmark",
+  "bookmarkRemoved": "Bookmark removed",
+  "@bookmarkRemoved": { "description": "Banner shown after unsaving an article in Bookmarks, where the row then leaves the list. No undo: re-saving from the reader is one tap." },
   "keywordAlerts": "Keyword alerts",
   "keywordAlertsSubtitle": "Get notified when tracked keywords appear in new articles",
   "noKeywordAlerts": "No keyword alerts yet.",
@@ -207,7 +209,7 @@
   },
   "alertsTab": "Alerts",
   "@alertsTab": {
-    "description": "Label of the pill that switches the feed list to the keyword-alert snapshots."
+    "description": "Label of the Alerts navigation destination, which opens its own screen of keyword-alert matches. Appears in the phone bottom bar, the tablet sections column and the rail."
   },
   "alertsTabEmpty": "No alerts yet.\nArticles matching your alert keywords will appear here.",
   "alertsManageKeywords": "Manage keywords",
@@ -256,6 +258,8 @@
     }
   },
   "alertNotificationCombined": "{count, plural, one{1 article triggered with the words {keywords}} other{{count} articles triggered with the words {keywords}}}",
+  "alertNotificationSummary": "{count, plural, one{1 keyword alert} other{{count} keyword alerts}}",
+  "@alertNotificationSummary": { "description": "Content text of the group summary that collapses several keyword-alert notifications into one heading. alertNotificationTitle cannot be reused there: it names one keyword when several matched.", "placeholders": { "count": { "type": "int" } } },
   "@alertNotificationCombined": {
     "description": "Body for an article that hit two or more keywords at once, which used to be attributed to only the first one.",
     "placeholders": {
@@ -393,6 +397,8 @@
   "@opmlImportedFolderName": { "description": "Folder name given to feeds that sit at the root of an OPML file with no parent outline." },
   "opmlExportEmpty": "There are no feeds to export yet.",
   "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." },
+  "adSponsored": "Sponsored",
+  "@adSponsored": { "description": "Disclosure label on the in-feed ad row. Rendered uppercase by style rather than by the string, so locales with different casing rules are unaffected. No call site yet: the ad row is parked until after launch." },
   "swapSides": "Swap sides",
-  "@swapSides": { "description": "Label under the Swap sides button in the tablet navigation bar. Mirrors the column order for right-handed use." }
+  "@swapSides": { "description": "Label and tooltip on the entry pinned at the foot of the tablet sections column, below the navigation destinations rather than among them. Mirrors the column order for left- or right-handed reach." }
 }

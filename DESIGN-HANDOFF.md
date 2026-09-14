@@ -822,6 +822,13 @@ description documents a filter control that was never built.
 
 **Deleted** from all five locales, and the generated accessors regenerated.
 
+Pass 6 section 4 then asked for a test pinning `allTab` == `alertsFilterAll`
+in every locale. There is nothing left to compare. `pass6_strings_test.dart`
+guards the deletion instead — the key is absent from all five .arb files and
+unreferenced in `lib/` — so it cannot come back by someone reading 2.4 at face
+value. If the second chip bar is ever built, that test goes in the same commit
+as the call site.
+
 ### 7.8 Three B-items already disagree with shipped code
 
 - **B8 "silent and ongoing"** — `unread_badge_service.dart:236` sets
@@ -833,3 +840,106 @@ description documents a filter control that was never built.
 - **Bookmarks' separator** — already identical to the feed's, and neither is
   full-bleed. Nothing to adopt.
 
+### 7.9 `saved` is never the destination — both its call sites are states
+
+2.2 changes `saved` from "Saved" to "Bookmarks" because "the nav label already
+says it in five locales". **The nav label is a different key.** `l10n.bookmarks`
+is the destination — `app.dart:354`, `:1329`, `:1566` and
+`bookmarks_screen.dart:200` — and it has read "Bookmarks" in English all along.
+
+`l10n.saved` has exactly two call sites, and both describe the state of one
+article rather than a place:
+
+- `article_card.dart:871` — the action rail's tooltip when the article is saved
+- `radial_menu.dart:244` — the radial menu's **visible label** when it is saved
+
+2.2 flags the first and asks it be checked on device. It does not mention the
+second, which is a rendered label rather than a tooltip, is unconditionally
+visible on long-press, and will read "Bookmarks" beside a bookmark glyph as the
+name of the state the article is in.
+
+Applied in English as specified. The other four locales are unchanged, for 7.10.
+
+### 7.10 Four locales have no bookmark noun, and never had one
+
+The lookup rule assumes each locale already has a word for the bookmark. None of
+de/es/fr/it does — all four are built on the verb *save*:
+
+| key | de | es | fr | it |
+|---|---|---|---|---|
+| `bookmarks` (destination) | Gespeichert | Guardados | Enregistrés | Salvati |
+| `saved` (state) | Gespeichert | Guardado | Enregistré | Salvato |
+| `bookmark` (action) | Speichern | Guardar | Enregistrer | Salva |
+| `noBookmarks` | …gespeichert | …guardado | …enregistré | …salvato |
+
+They do not disagree with each other, so there is **no pre-existing drift to
+report** — but the noun the lookup was meant to find is not there.
+
+The English edit aligns two different words. In the other four they are already
+the same word, separated only by grammatical number, which is the state/place
+distinction English does not mark. The only "same direction" edit available is
+singular → plural at two sites that each describe a single article: a grammar
+error in four languages, three of which would then be wrong in a way David can
+see and one in a way nobody here can.
+
+**Left unchanged, pending a ruling.** Note also that the four `noBookmarks`
+values now name the control by what it does ("das Speichern-Symbol", "el icono
+de guardar") rather than introducing Lesezeichen / marcador / marque-page /
+segnalibro, so no new noun enters the app in this pass.
+
+### 7.11 The action rail tooltip is reachable
+
+Measured rather than reasoned. Long-press on the rail's bookmark half renders
+the tooltip and does **not** open the radial menu; the same gesture on the card
+body does open it, which is the control that makes the first result mean
+something. The rail's `Tooltip` is the inner long-press recognizer and takes the
+gesture arena from the card's `GestureDetector`.
+
+So the concern in 2.2 is live, not moot: "Bookmarks" will appear as a tooltip on
+a saved card. For the device list.
+
+### 7.12 `onSurfaceRead` does not qualify for WCAG's large-text bar
+
+Both sites render at **14.0 logical px, `FontWeight.w600`** — `article_card
+.dart:357` and `search_screen.dart:160`, measured off the rendered
+`RenderParagraph` in all three themes.
+
+Worth knowing for any future measurement here: reading `flashQuietInkTheme(...)
+.textTheme.bodyMedium.fontSize` reports **null**. Sizes arrive from the text
+geometry that `Theme.of` merges in, not from the `ThemeData` object, so the
+theme has to be measured through a widget tree or it reports nothing at all.
+
+WCAG 1.4.3 sets the large-text floor at 18.66px bold or 24px regular. 14px
+clears neither at any weight, so the 4.5:1 bar stands and the 3.99:1 entry in
+`flash_colors_resolution_test.dart` stays exactly as it is. The question of
+whether `w600` counts as "bold" never arises — the size fails first.
+
+Separately, and answering a narrower question than it looks like: the large-text
+exemption is a compliance floor, not a statement that the text is comfortable.
+3.99:1 at 14px is a deliberate recession, not a comfortable read.
+
+### 7.13 An unused ARB key breaks nothing
+
+Checked for `adSponsored`, which ships with no call site. `arb_parity_test.dart`
+is the only thing in the repo that reads the .arb files, and it compares locales
+against the template in both directions — never against `lib/`. There is no
+unused-key lint, and `flutter gen-l10n` emits a public getter, which the
+analyzer does not report as unused. `flutter analyze` is clean with the key in.
+
+### 7.14 `alertNotificationSummary` has no call site either
+
+There is no group summary notification in the app. `groupKey` is set on the
+children (`refresh_service.dart:182`, `unread_badge_service.dart:233`) but
+nothing calls `setAsGroupSummary`, so the whole key is unreachable, not just its
+`one` branch. Written correctly regardless — how Android treats a group with a
+single child is version-dependent, and that is not worth betting a wrong string
+on.
+
+The French `one` branch takes `{count}`, not a literal 1, because CLDR routes
+**0 and 1 both** through `one` in French. That is already the house style in
+`alertNotificationCount` and `deleteAlertKeywordBody`.
+
+It is **not** the style in `unreadCountNotification`, whose French `one` branch
+hardcodes "1". Latent rather than live: `unread_badge_service.dart:149` clears
+at `safe == 0` and never posts, so the only way to reach it is to call
+`unreadBadgeText(0)` directly. Worth fixing when something else opens that file.

@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @markAllRead.
   ///
   /// In en, this message translates to:
-  /// **'Mark all as read'**
+  /// **'Mark all read'**
   String get markAllRead;
 
   /// No description provided for @refresh.
@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @keywordBlocklist.
   ///
   /// In en, this message translates to:
-  /// **'Keyword Blocklist'**
+  /// **'Keyword blocklist'**
   String get keywordBlocklist;
 
   /// No description provided for @keywordBlocklistSubtitle.
@@ -659,7 +659,7 @@ abstract class AppLocalizations {
   /// No description provided for @saved.
   ///
   /// In en, this message translates to:
-  /// **'Saved'**
+  /// **'Bookmarks'**
   String get saved;
 
   /// No description provided for @bookmarks.
@@ -671,7 +671,7 @@ abstract class AppLocalizations {
   /// No description provided for @noBookmarks.
   ///
   /// In en, this message translates to:
-  /// **'No bookmarks yet.\nLong-press any article to save it.'**
+  /// **'No bookmarks yet.\nTap the bookmark on any article to save it.'**
   String get noBookmarks;
 
   /// No description provided for @bookmark.
@@ -679,6 +679,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bookmark'**
   String get bookmark;
+
+  /// Banner shown after unsaving an article in Bookmarks, where the row then leaves the list. No undo: re-saving from the reader is one tap.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark removed'**
+  String get bookmarkRemoved;
 
   /// No description provided for @keywordAlerts.
   ///
@@ -908,7 +914,7 @@ abstract class AppLocalizations {
   /// **'Pick a category to continue.'**
   String get selectCategoryFirst;
 
-  /// Label of the pill that switches the feed list to the keyword-alert snapshots.
+  /// Label of the Alerts navigation destination, which opens its own screen of keyword-alert matches. Appears in the phone bottom bar, the tablet sections column and the rail.
   ///
   /// In en, this message translates to:
   /// **'Alerts'**
@@ -991,6 +997,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count, plural, one{1 article triggered with the words {keywords}} other{{count} articles triggered with the words {keywords}}}'**
   String alertNotificationCombined(int count, String keywords);
+
+  /// Content text of the group summary that collapses several keyword-alert notifications into one heading. alertNotificationTitle cannot be reused there: it names one keyword when several matched.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 keyword alert} other{{count} keyword alerts}}'**
+  String alertNotificationSummary(int count);
 
   /// Joins all but the last two keywords when a notification names several.
   ///
@@ -1262,7 +1274,13 @@ abstract class AppLocalizations {
   /// **'There are no feeds to export yet.'**
   String get opmlExportEmpty;
 
-  /// Label under the Swap sides button in the tablet navigation bar. Mirrors the column order for right-handed use.
+  /// Disclosure label on the in-feed ad row. Rendered uppercase by style rather than by the string, so locales with different casing rules are unaffected. No call site yet: the ad row is parked until after launch.
+  ///
+  /// In en, this message translates to:
+  /// **'Sponsored'**
+  String get adSponsored;
+
+  /// Label and tooltip on the entry pinned at the foot of the tablet sections column, below the navigation destinations rather than among them. Mirrors the column order for left- or right-handed reach.
   ///
   /// In en, this message translates to:
   /// **'Swap sides'**

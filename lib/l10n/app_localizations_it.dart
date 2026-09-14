@@ -321,10 +321,13 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Niente di salvato ancora.\nTieni premuto un articolo per salvarlo.';
+      'Niente di salvato ancora.\nTocca l\'icona di salvataggio su un articolo.';
 
   @override
   String get bookmark => 'Salva';
+
+  @override
+  String get bookmarkRemoved => 'Rimosso dai salvati';
 
   @override
   String get keywordAlerts => 'Avvisi per parole chiave';
@@ -547,6 +550,17 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count avvisi per parole chiave',
+      one: '1 avviso per parola chiave',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -705,6 +719,9 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Non ci sono ancora feed da esportare.';
+
+  @override
+  String get adSponsored => 'Sponsorizzato';
 
   @override
   String get swapSides => 'Inverti i lati';

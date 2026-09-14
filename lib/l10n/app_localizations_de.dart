@@ -321,10 +321,13 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Noch nichts gespeichert.\nArtikel lang drücken, um ihn zu speichern.';
+      'Noch nichts gespeichert.\nTippe bei einem Artikel auf das Speichern-Symbol.';
 
   @override
   String get bookmark => 'Speichern';
+
+  @override
+  String get bookmarkRemoved => 'Aus Gespeichert entfernt';
 
   @override
   String get keywordAlerts => 'Stichwort-Benachrichtigungen';
@@ -549,6 +552,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Stichwort-Benachrichtigungen',
+      one: '1 Stichwort-Benachrichtigung',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -707,6 +721,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Es gibt noch keine Feeds zum Exportieren.';
+
+  @override
+  String get adSponsored => 'Gesponsert';
 
   @override
   String get swapSides => 'Seiten tauschen';

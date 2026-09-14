@@ -321,10 +321,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Nada guardado aún.\nMantén pulsado un artículo para guardarlo.';
+      'Nada guardado aún.\nToca el icono de guardar en cualquier artículo.';
 
   @override
   String get bookmark => 'Guardar';
+
+  @override
+  String get bookmarkRemoved => 'Eliminado de Guardados';
 
   @override
   String get keywordAlerts => 'Alertas de palabras clave';
@@ -547,6 +550,17 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alertas de palabras clave',
+      one: '1 alerta de palabra clave',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -705,6 +719,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Aún no hay fuentes que exportar.';
+
+  @override
+  String get adSponsored => 'Patrocinado';
 
   @override
   String get swapSides => 'Cambiar de lado';

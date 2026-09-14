@@ -103,8 +103,9 @@
   "summary": "Resumen",
   "saved": "Guardado",
   "bookmarks": "Guardados",
-  "noBookmarks": "Nada guardado aún.\nMantén pulsado un artículo para guardarlo.",
+  "noBookmarks": "Nada guardado aún.\nToca el icono de guardar en cualquier artículo.",
   "bookmark": "Guardar",
+  "bookmarkRemoved": "Eliminado de Guardados",
   "keywordAlerts": "Alertas de palabras clave",
   "keywordAlertsSubtitle": "Recibe notificaciones cuando las palabras rastreadas aparezcan en nuevos artículos",
   "noKeywordAlerts": "Aún no hay alertas de palabras clave.",
@@ -174,6 +175,7 @@
   "alertNotificationCount": "{count, plural, one{1 artículo coincide con \"{keyword}\"} other{{count} artículos coinciden con \"{keyword}\"}}",
   "@alertNotificationCount": { "placeholders": { "count": { "type": "int" }, "keyword": { "type": "String" } } },
   "alertNotificationCombined": "{count, plural, one{1 artículo contiene las palabras {keywords}} other{{count} artículos contienen las palabras {keywords}}}",
+  "alertNotificationSummary": "{count, plural, one{1 alerta de palabra clave} other{{count} alertas de palabras clave}}",
   "@alertNotificationCombined": { "placeholders": { "count": { "type": "int" }, "keywords": { "type": "String" } } },
   "keywordListSeparator": ", ",
   "keywordListAnd": " y ",
@@ -245,5 +247,6 @@
   "@opmlImportedFolderName": { "description": "Folder name given to feeds that sit at the root of an OPML file with no parent outline." },
   "opmlExportEmpty": "Aún no hay fuentes que exportar.",
   "@opmlExportEmpty": { "description": "Banner shown when export is tapped with no feeds to export." },
+  "adSponsored": "Patrocinado",
   "swapSides": "Cambiar de lado"
 }

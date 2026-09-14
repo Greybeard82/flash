@@ -119,18 +119,31 @@ Finder _paintedOf(Finder half) =>
 Color _fillOf(WidgetTester tester, Finder half) =>
     tester.widget<Material>(_paintedOf(half).first).color!;
 
-Finder _summaryHalf() => find.byTooltip('Summary');
+/// Loaded once in `setUpAll`, because the tooltips below are the ARB's to
+/// decide and not this file's.
+///
+/// These finders used to carry the English literals, and pass 6 broke eight
+/// tests at once by changing `saved` from "Saved" to "Bookmarks" — a strings
+/// pass with no business touching the rail's geometry. Nothing here is
+/// asserting what the tooltip says; every one of these tests is trying to
+/// *reach* a half so it can measure or tap it, so the string is an address,
+/// not a claim, and hardcoding an address that lives in another file is how a
+/// copy edit ends up looking like a layout regression.
+late AppLocalizations _l10n;
+
+Finder _summaryHalf() => find.byTooltip(_l10n.summary);
 Finder _saveHalf({required bool isSaved}) =>
-    find.byTooltip(isSaved ? 'Saved' : 'Bookmark');
+    find.byTooltip(isSaved ? _l10n.saved : _l10n.bookmark);
 
 void main() {
   // Tapping the summary half really does open the summary sheet, and the
   // sheet really does reach for the database on init. Standing one up is
   // cheaper than pretending the tap went somewhere else.
-  setUpAll(() {
+  setUpAll(() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
     AppDatabase.useForTesting();
+    _l10n = await AppLocalizations.delegate.load(const Locale('en'));
   });
 
   group('the save half paints the state it is in', () {

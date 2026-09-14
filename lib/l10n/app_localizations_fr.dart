@@ -321,10 +321,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Rien d\'enregistré pour l\'instant.\nAppuyez longuement sur un article pour le sauvegarder.';
+      'Rien d\'enregistré pour l\'instant.\nAppuyez sur l\'icône d\'enregistrement d\'un article.';
 
   @override
   String get bookmark => 'Enregistrer';
+
+  @override
+  String get bookmarkRemoved => 'Retiré des enregistrés';
 
   @override
   String get keywordAlerts => 'Alertes par mot-clé';
@@ -549,6 +552,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alertes par mot-clé',
+      one: '$count alerte par mot-clé',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -708,6 +722,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Il n’y a pas encore de flux à exporter.';
+
+  @override
+  String get adSponsored => 'Sponsorisé';
 
   @override
   String get swapSides => 'Inverser les côtés';

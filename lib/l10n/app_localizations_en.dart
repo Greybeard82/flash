@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Flash';
 
   @override
-  String get markAllRead => 'Mark all as read';
+  String get markAllRead => 'Mark all read';
 
   @override
   String get refresh => 'Refresh';
@@ -138,7 +138,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manualOnly => 'Never';
 
   @override
-  String get keywordBlocklist => 'Keyword Blocklist';
+  String get keywordBlocklist => 'Keyword blocklist';
 
   @override
   String get keywordBlocklistSubtitle =>
@@ -311,17 +311,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get summary => 'Summary';
 
   @override
-  String get saved => 'Saved';
+  String get saved => 'Bookmarks';
 
   @override
   String get bookmarks => 'Bookmarks';
 
   @override
   String get noBookmarks =>
-      'No bookmarks yet.\nLong-press any article to save it.';
+      'No bookmarks yet.\nTap the bookmark on any article to save it.';
 
   @override
   String get bookmark => 'Bookmark';
+
+  @override
+  String get bookmarkRemoved => 'Bookmark removed';
 
   @override
   String get keywordAlerts => 'Keyword alerts';
@@ -542,6 +545,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count keyword alerts',
+      one: '1 keyword alert',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -699,6 +713,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'There are no feeds to export yet.';
+
+  @override
+  String get adSponsored => 'Sponsored';
 
   @override
   String get swapSides => 'Swap sides';
