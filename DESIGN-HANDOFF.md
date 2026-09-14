@@ -150,6 +150,69 @@ meanings rather than one strained metaphor:
 A saved article is *kept*, not pending, so "in your queue" never covered both.
 Any future site is judged against these two meanings instead of amending a list.
 
+> **SUPERSEDED for the action rail’s saved state.** The two meanings
+> above stand; the rail is no longer painted the way this row describes.
+> The row is kept as the record of what was decided.
+>
+> **The rail’s lower half no longer fills.** It is
+> `primaryContainer` in both states, and the saved signal is the glyph:
+> `bookmark_border_rounded` in `onSurfaceVariant` unsaved,
+> `bookmark_rounded` in **`secondary`** saved. `savedFill` and
+> `onSavedFill` are consequently unpainted — see below.
+>
+> Design 2a justified the fill by feed-scannability: a saved article
+> should be findable down the column. That is the Bookmarks
+> destination’s entire job, one tap from every screen, so the feed was
+> carrying a solid orange block on every saved row to duplicate a screen
+> that already exists — on the quietest surface in the app, and against
+> both of the rules 1.6 sets out.
+>
+> **The shape swap is load-bearing now and must not be tidied away.**
+> Outline-to-solid was decoration on top of a colour change while the
+> fill existed. With the fill gone it is one of exactly two things
+> separating the states; removing it would leave a colour-only
+> distinction.
+>
+> **Contrast.** A glyph is a graphical object, so the bar is WCAG
+> 1.4.11’s 3:1, not the 4.5:1 `summary_button_contrast_test.dart`
+> holds the summary glyph to — the two halves of one control now
+> answer to different bars, which is deliberate: the summary glyph’s
+> colour is the whole of its identity, and this one also changes shape.
+> Measured, `secondary` on `primaryContainer`:
+>
+>   | theme | ratio | headroom over 3:1 |
+>   |---|---|---|
+>   | Quiet Ink light | **3.36:1** | 0.36 |
+>   | Quiet Ink dark | **6.88:1** | 3.88 |
+>   | Newspaper | **5.97:1** | 2.97 |
+>
+> Light is the near thing and is pinned to its measured value, not just
+> to the threshold. It replaced a pair that measured **4.12:1 against a
+> 4.5 bar** — white `onSecondary` on the orange — which was a
+> recorded shortfall, so the treatment moved from under one bar to over
+> a lower one. Both facts belong in the record.
+>
+> **Newspaper is red, and it had to be.** `secondary` there is `_npRed`
+> at 5.97:1. The alternative considered was `_npInk`, which is not
+> viable rather than merely worse: Newspaper’s `onSurfaceVariant` —
+> the unsaved glyph — is `#1D1D1B`, and `_npInk` is the same
+> `#1D1D1B`. An ink saved glyph would be pixel-identical to an unsaved
+> one, leaving the shape swap as the sole signal. Red is the only
+> colour Newspaper has to carry a state with, and a small glyph shown
+> only when saved is a different proposition from the solid red block
+> that was rejected.
+>
+> **Transition unchanged.** The glyph colour already cross-faded over
+> `kReadDimDuration` through the same `TweenAnimationBuilder` the fill
+> used, so the tempo carried over with no edit.
+>
+> **Two roles are now unpainted:** `savedFill` and `onSavedFill` have no
+> call site in `lib/` — the same condition 7.7 found `alertsFilterAll`
+> in. They are still declared, still lerped, still compared in
+> `FlashColors`, and three tests still assert their values. Reported,
+> not deleted: the judgement about whether a role is worth keeping for a
+> future consumer is not one to make inside a correction pass.
+
 **Neither meaning is faults.** Invalid-URL text and the stale-feed glyph are
 `error`. Error's ramp is unchanged (`#BA1A1A` / `#FFB4AB`) and its scope is
 inline validation, the stale-feed glyph, and the radial menu's Delete — never a

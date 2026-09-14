@@ -150,7 +150,6 @@ void main() {
     for (final brightness in Brightness.values) {
       final theme = flashQuietInkTheme(brightness: brightness);
       final scheme = theme.colorScheme;
-      final ink = theme.flashColors;
       final name = brightness.name;
 
       testWidgets('$name: not saved is the teal tint with a neutral glyph',
@@ -171,29 +170,67 @@ void main() {
                 'the one thing distinguishing the two halves at rest');
       });
 
-      testWidgets('$name: saved fills with the accent', (tester) async {
+      testWidgets('$name: saved changes the glyph and nothing else',
+          (tester) async {
+        // **The fill no longer moves, and that is the assertion.** It used to
+        // flip to `savedFill`, and the justification was that a saved article
+        // should be scannable down the column — which is the Bookmarks
+        // destination's job, one tap away, so the feed was paying a solid
+        // orange block for work another screen already does.
         await _pump(tester, isSaved: true, theme: theme);
 
-        expect(_fillOf(tester, _saveHalf(isSaved: true)), ink.savedFill,
-            reason: '$name: a saved article is scannable down the column');
-        // In Quiet Ink the saved fill IS the unread orange; the role exists
-        // so Newspaper can answer differently without moving `secondary`,
-        // which also paints the swipe reveal.
-        expect(ink.savedFill, scheme.secondary);
+        expect(
+            _fillOf(tester, _saveHalf(isSaved: true)), scheme.primaryContainer,
+            reason: '$name: the block under the bookmark is the same teal '
+                'tint whether or not the article is saved. A fill here is '
+                'what was just removed.');
 
         final icon = tester.widget<Icon>(find.descendant(
           of: _saveHalf(isSaved: true),
           matching: find.byIcon(Icons.bookmark_rounded),
         ));
-        // Not `onSecondary`, which is white in light mode and gave 4.12:1
-        // on the orange — under the 4.5:1 a lone glyph is held to.
-        expect(icon.color, ink.onSavedFill);
-        if (brightness == Brightness.light) {
-          // Dark mode's onSecondary is already this value, so the regression
-          // this guards against can only happen in light.
-          expect(icon.color, isNot(scheme.onSecondary),
-              reason: 'light must not go back to the white glyph and 4.12:1');
-        }
+        expect(icon.color, scheme.secondary,
+            reason: '$name: the saved signal is the glyph colour now');
+        expect(icon.color, isNot(scheme.onSurfaceVariant),
+            reason: '$name: saved and unsaved must not resolve to the same '
+                'colour, or the shape swap is carrying the whole signal');
+      });
+
+      testWidgets('$name: the fill is identical in both states',
+          (tester) async {
+        // Measured across a state change rather than asserted twice against a
+        // role, because the role could be changed in both places at once and
+        // this still has to fail if the two ever diverge again.
+        await _pump(tester, isSaved: false, theme: theme);
+        final unsaved = _fillOf(tester, _saveHalf(isSaved: false));
+
+        await _pump(tester, isSaved: true, theme: theme);
+        final saved = _fillOf(tester, _saveHalf(isSaved: true));
+
+        expect(saved, unsaved,
+            reason: '$name: the saved state is a glyph, not a block');
+      });
+
+      testWidgets('$name: the shape swap survives, carrying half the signal',
+          (tester) async {
+        // It was decoration on top of a colour change while the fill existed.
+        // With the fill gone it is one of exactly two things distinguishing
+        // the states, so losing it would leave a colour-only distinction.
+        await _pump(tester, isSaved: false, theme: theme);
+        expect(
+            find.descendant(
+              of: _saveHalf(isSaved: false),
+              matching: find.byIcon(Icons.bookmark_border_rounded),
+            ),
+            findsOneWidget);
+
+        await _pump(tester, isSaved: true, theme: theme);
+        expect(
+            find.descendant(
+              of: _saveHalf(isSaved: true),
+              matching: find.byIcon(Icons.bookmark_rounded),
+            ),
+            findsOneWidget);
       });
 
       testWidgets('$name: the summary half is untouched by save state',

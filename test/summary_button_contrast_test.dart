@@ -128,60 +128,90 @@ void main() {
     });
   }
 
-  // ── the save half, new in pass 3 ──────────────────────────────────────────
+  // ── the save half ─────────────────────────────────────────────────────────
   //
-  // The rail's lower half fills with `secondary` when an article is saved.
-  // That is design 2a as specified, and it puts a pressable orange on the
-  // card — which is worth reading alongside the two tests above, because both
-  // of them exist to enforce the opposite: "teal is the only interactive
-  // colour" and "orange is reserved for the unread dot". Those rules are
-  // written into app_theme.dart and this pass breaks both by decision, not by
-  // accident. The tests are left standing because they still guard the badge,
-  // which is what they were written for.
+  // **The saved state is a glyph now, not a fill, and this group is the pair
+  // that changed.** What it used to assert, so the replacement is readable
+  // against it:
   //
-  // **Light mode does not clear the bar.** `onSecondary` is `surface`, which
-  // is white, and white on #BE6530 is 4.12:1 — under the 4.5:1 the summary
-  // glyph is held to, and under the 5.17:1 the summary pair actually
-  // achieves. Dark (8.51:1) and Newspaper (7.64:1) are fine; only light
-  // fails, and it fails because `onSecondary` had no consumer before now.
-  // The theme comment says as much: "orange is the unread dot, which carries
-  // no label, so this is very nearly unused". This button is its first real
-  // consumer, and the value was never chosen for legibility on top of the
-  // orange.
+  //   dark    `onSecondary` on `secondary`, >= 4.5     — passed at 8.51:1
+  //   light   `onSecondary` on `secondary`, == 4.12    — a pinned SHORTFALL,
+  //                                                      explicitly < 4.5
+  //   both    `secondary` vs `primaryContainer` >= 1.5 — fill-versus-fill,
+  //                                                      "saved and unsaved
+  //                                                      are told apart by
+  //                                                      more than the glyph"
   //
-  // Rather than quietly lower the bar, the shortfall is pinned to its exact
-  // measured value. It fails if anyone makes it worse, and it also fails if
-  // anyone fixes it — at which point this block moves up into the passing
-  // group and the comment goes away. Awaiting a decision between two
-  // one-line fixes: a dark glyph instead of white (`_qiOnSurfaceLight` gives
-  // 4.51:1, `_qiSurfaceDark` 4.58:1), or a darker orange for this fill
-  // (#B05C2B gives 4.76:1 with white, but moves the unread colour too).
+  // None of those pairs is painted any more. The fill is `primaryContainer`
+  // in both states, so there is no fill-versus-fill distance left to measure,
+  // and `onSecondary` is back to having no consumer at all.
+  //
+  // Design 2a filled the half to make a saved article scannable down the
+  // column. That is what the Bookmarks destination is for, one tap away, so
+  // the feed was carrying a solid orange block for a job another screen
+  // already does. The glyph does the same work at a fraction of the volume.
+  //
+  // **The bar moved with it, and downward, which is worth being explicit
+  // about.** A filled block with a glyph on it was held to 4.5:1 here. A
+  // glyph on a constant tint is a graphical object under WCAG 1.4.11, which
+  // is 3:1. So this half and the summary half above it now answer to
+  // different bars inside one control — not an oversight: the summary glyph's
+  // colour is the whole of its identity, while this one also changes shape,
+  // outline to solid, which is the other half of the signal and the reason a
+  // colour-only reading is not the only reading available.
+  //
+  // Light is the near thing at 3.36:1 — over the bar, with about 12% of room.
+  // Pinned to the measured value rather than just the threshold, so a nudge
+  // in either direction fails instead of drifting toward it.
   group('the save half', () {
-    test('dark mode clears the bar the summary glyph is held to', () {
-      final scheme =
-          flashQuietInkTheme(brightness: Brightness.dark).colorScheme;
-      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
-      expect(ratio, greaterThanOrEqualTo(4.5),
-          reason: 'dark paints a saved button at '
-              '${ratio.toStringAsFixed(2)}:1');
+    /// Measured, per theme. Pinned as exact values because the light one is
+    /// close enough to the bar that "still passes" is not the useful signal.
+    const measured = <String, double>{
+      'light': 3.36,
+      'dark': 6.88,
+      'Newspaper': 5.97,
+    };
+
+    final themes = <String, ThemeData>{
+      'light': flashQuietInkTheme(brightness: Brightness.light),
+      'dark': flashQuietInkTheme(brightness: Brightness.dark),
+      'Newspaper': flashNewspaperTheme(),
+    };
+
+    themes.forEach((name, theme) {
+      final scheme = theme.colorScheme;
+
+      test('$name: the saved glyph clears 3:1 on its tint', () {
+        final ratio = _contrast(scheme.secondary, scheme.primaryContainer);
+        expect(ratio, greaterThanOrEqualTo(minimum),
+            reason: '$name paints a saved bookmark at '
+                '${ratio.toStringAsFixed(2)}:1 against the tint underneath '
+                'it. 3:1 is WCAG 1.4.11 for a graphical object. If this has '
+                'dropped below, the fix is the glyph colour — not the bar, '
+                'and not a nudge to the hue, which is the unread dot too.');
+        expect(ratio, closeTo(measured[name]!, 0.02),
+            reason: '$name measured ${ratio.toStringAsFixed(2)}:1 against a '
+                'recorded ${measured[name]}. Something moved one of the two '
+                'roles; say which, and re-record it deliberately.');
+      });
     });
 
-    test('light mode is 4.12:1, which is BELOW the bar, by decision', () {
-      final scheme =
-          flashQuietInkTheme(brightness: Brightness.light).colorScheme;
-      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
-      expect(ratio, closeTo(4.12, 0.01),
-          reason: 'this is a known, reviewed shortfall, not a passing '
-              'result. If this assertion fails because the ratio went UP, '
-              'the fix landed: move this test into the group above and '
-              'delete the comment. If it went DOWN, something made a '
-              'marginal target worse.');
-      expect(ratio, lessThan(4.5),
-          reason: 'kept explicit so nobody reads the line above as a pass');
+    test('light has the least room, and that is the one to watch', () {
+      // Stated as its own assertion so the ordering is on the record rather
+      // than implied by three numbers in a map. If dark or Newspaper ever
+      // becomes the tightest, the palette has changed shape and this whole
+      // group needs re-reading, not just re-recording.
+      expect(measured['light']!, lessThan(measured['dark']!));
+      expect(measured['light']!, lessThan(measured['Newspaper']!));
+      expect(measured['light']! - minimum, lessThan(0.5),
+          reason: 'light sits within half a point of the bar. Kept explicit '
+              'so nobody reads 3.36 as comfortable.');
     });
 
     test('the unsaved glyph clears the bar on its teal tint', () {
-      // The resting state, which is what the rail shows most of the time.
+      // Unchanged by the fill removal — the resting state was always a glyph
+      // on `primaryContainer`, and it is held to the stricter 4.5 because
+      // nothing about it changes shape to help.
       for (final brightness in Brightness.values) {
         final scheme = flashQuietInkTheme(brightness: brightness).colorScheme;
         final ratio =
@@ -192,17 +222,18 @@ void main() {
       }
     });
 
-    test('saved and unsaved are told apart by more than the glyph', () {
-      // Orange-on-orange is the failure this was asked to catch: if the fill
-      // barely moves between states, the only signal left is the glyph shape.
-      for (final brightness in Brightness.values) {
-        final scheme = flashQuietInkTheme(brightness: brightness).colorScheme;
-        final ratio = _contrast(scheme.secondary, scheme.primaryContainer);
-        expect(ratio, greaterThanOrEqualTo(1.5),
-            reason: '${brightness.name}: the saved fill and the unsaved fill '
-                'are ${ratio.toStringAsFixed(2)}:1 apart — a saved article '
-                'has to be visible as saved while scanning the column');
-      }
+    test('the two states are not the same colour in any theme', () {
+      // The replacement for the old fill-versus-fill test, moved to the pair
+      // that now carries the distinction. Newspaper is the reason this is not
+      // trivially true: its `onSurfaceVariant` and its `_npInk` are the same
+      // hex, so a saved glyph painted in ink there would be pixel-identical
+      // to an unsaved one and the shape swap would be the only signal left.
+      themes.forEach((name, theme) {
+        final scheme = theme.colorScheme;
+        expect(scheme.secondary, isNot(scheme.onSurfaceVariant),
+            reason: '$name paints saved and unsaved in the same colour, which '
+                'leaves shape as the only difference');
+      });
     });
   });
 
@@ -218,15 +249,25 @@ void main() {
           reason: 'newspaper is ${ratio.toStringAsFixed(2)}:1');
     });
 
-    test('a saved button contrasts, whatever colour it ends up', () {
-      // Newspaper resolves `secondary` to `_npRed`, its only spot colour and
-      // also its `primary`. The contrast is fine at 7.64:1. Whether a solid
-      // red block belongs on every saved card in a theme where red already
-      // means nav-selected, FAB and masthead is a design question, flagged
-      // and not decided here.
-      final ratio = _contrast(scheme.onSecondary, scheme.secondary);
-      expect(ratio, greaterThanOrEqualTo(4.5),
-          reason: 'newspaper saved is ${ratio.toStringAsFixed(2)}:1');
+    test('the saved glyph is red, and that is the recommendation', () {
+      // Superseding the old assertion here, which measured `onSecondary` on
+      // `secondary` at 7.64:1 and flagged as an open design question whether
+      // a solid red *block* belonged on every saved card in a theme where red
+      // already means nav-selected, FAB and masthead. The block is gone, and
+      // the question goes with it: a red glyph is small, appears only when
+      // saved, and is the only colour Newspaper has to carry a state with.
+      //
+      // The alternative was `_npInk`, and it is not viable rather than merely
+      // worse: Newspaper's `onSurfaceVariant` — the unsaved glyph — is
+      // `#1D1D1B`, and `_npInk` is the same `#1D1D1B`. An ink saved glyph
+      // would be the identical colour, leaving the outline-to-solid swap as
+      // the sole distinction. That is a real reduction, and it is the reason
+      // this went red rather than a preference for red.
+      expect(scheme.secondary, scheme.primary,
+          reason: 'Newspaper has one spot colour and this is it');
+      final ratio = _contrast(scheme.secondary, scheme.primaryContainer);
+      expect(ratio, greaterThanOrEqualTo(minimum),
+          reason: 'newspaper saved glyph is ${ratio.toStringAsFixed(2)}:1');
     });
   });
 }

@@ -133,6 +133,16 @@ void main() {
         expect(read.height, unread.height,
             reason: 'line height cannot move either');
         expect(read.fontSize, unread.fontSize);
+        // Anchored to a literal for the same reason the weight above is: two
+        // values from one source compare equal when both are null, so the
+        // line above passes for free if the style ever stops resolving a
+        // size. It does resolve one today — 14.0, `bodyMedium` — but reading
+        // that off `ThemeData.textTheme` reports null, because Quiet Ink
+        // leaves sizes to Material's ramp and the ramp is applied during
+        // localization. A size that changes on read reflows a wrapped title
+        // and reproduces the same mid-scroll jump the weight does.
+        expect(read.fontSize, 14.0,
+            reason: 'the title is bodyMedium at 14, read and unread alike');
       });
     });
   }

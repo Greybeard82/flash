@@ -786,25 +786,36 @@ class _ThumbnailWidget extends StatelessWidget {
 /// the app uses — and unlike the fixed pair, it resolves correctly in dark
 /// mode instead of staying stubbornly light.
 ///
-/// The save half is the same tint when the article is not saved, with a
-/// neutral `onSurfaceVariant` glyph so the two halves read as one control
-/// with two jobs. Saved, it fills with `secondary` under `onSecondary`.
+/// **The save half keeps that tint in both states.** The fill never changes;
+/// what changes is the glyph — `onSurfaceVariant` outline when unsaved,
+/// `secondary` solid when saved.
 ///
-/// **That last pair is a live design question, not a settled one.** Two rules
-/// are written into `app_theme.dart`: teal is the only interactive colour,
-/// and orange means unread and nothing else. A pressable orange breaks both.
-/// It is here because design 2a asks for it by name, and the reasoning given
-/// is that "a saved article is scannable down the column without adding a
-/// colour to the row's default state" — but that reasoning describes a feed
-/// with unread dots in it, and this card has none. `secondary` currently has
-/// two consumers in the whole app, both the swipe-reveal background, and
-/// `onSecondary` has none at all. So this button is the first thing to paint
-/// that pair, and in light mode it is 4.12:1, under the 4.5:1 the summary
-/// glyph is held to. `summary_button_contrast_test.dart` records the exact
-/// shortfall rather than lowering the bar to fit it.
+/// It used to fill with `secondary` under `onSecondary`, which design 2a
+/// asked for by name. The justification was that a saved article should be
+/// scannable down the column, and that does not survive contact with the app:
+/// scanning for saved articles is what the Bookmarks destination is for, and
+/// it is one tap away. So the feed was paying a solid orange block on every
+/// saved row for a job another screen already does — on the quietest screen
+/// in the app, and against two rules written into `app_theme.dart` (teal is
+/// the only interactive colour; orange means unread and nothing else).
 ///
-/// Pinned in that file against the roles it actually paints, so a later edit
-/// to either cannot quietly break a pair.
+/// A glyph settles the first of those and softens the second. It is small, it
+/// appears only when saved, and it is the same orange the unread dot uses —
+/// so an unread *and* saved row still carries two orange marks, which was
+/// true of the fill too and is the part that remains unresolved.
+///
+/// **The shape swap is now carrying half the signal, so it stays.**
+/// `bookmark_border_rounded` to `bookmark_rounded` was always there; with the
+/// fill gone it is no longer decoration on top of a colour change, it is one
+/// of the two things telling the states apart. Removing it would leave a
+/// colour-only distinction, which is the thing WCAG 1.4.1 exists about.
+///
+/// **Bar.** A glyph is a graphical object, so WCAG 1.4.11 applies at 3:1, not
+/// the 4.5:1 this file holds the summary glyph to. Measured: light is
+/// **3.36:1**, dark **6.88:1**, Newspaper **5.97:1**. Light clears the bar
+/// with roughly 12% to spare and is the one to watch — pinned to its measured
+/// value in `summary_button_contrast_test.dart` so a nudge in either
+/// direction fails rather than drifts.
 class _ActionRail extends StatelessWidget {
   final Article article;
   final VoidCallback onBookmark;
@@ -832,7 +843,6 @@ class _ActionRail extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final ink = theme.flashColors;
     final saved = article.isSaved;
 
     void open() => showModalBottomSheet<void>(
@@ -872,8 +882,10 @@ class _ActionRail extends StatelessWidget {
             touchHeight: saveTouchHeight,
             align: Alignment.bottomCenter,
             radius: const BorderRadius.vertical(bottom: _corner),
-            fill: saved ? ink.savedFill : scheme.primaryContainer,
-            glyph: saved ? ink.onSavedFill : scheme.onSurfaceVariant,
+            // Constant. The saved state is the glyph, not the block — see the
+            // class comment for why the fill went.
+            fill: scheme.primaryContainer,
+            glyph: saved ? scheme.secondary : scheme.onSurfaceVariant,
             icon:
                 saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
             onTap: onBookmark,
