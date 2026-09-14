@@ -1,6 +1,6 @@
 name: flash
 description: A fast, local-first RSS reader with AI-powered filtering.
-version: 0.7.0+20
+version: 0.7.1+21
 publish_to: none
 
 environment:
