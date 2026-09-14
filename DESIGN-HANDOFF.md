@@ -646,12 +646,55 @@ It is never declared and does not fall back to anything sensible. Nothing in
 for the standard hairline role will draw a hard black line on newsprint.
 Newspaper should declare it.
 
-### 7.3 5.2's threshold is the viewport top, not the midpoint
+### 7.3 The threshold is the row's midpoint against the viewport top
 
-`_onScroll` reads `final offset = _scrollController.offset`
-(`feed_screen.dart:1102`), and the code's own comment at `:1106` says "a
-guessed row puts the viewport top at the wrong article". The consequence 5.2
-describes is right; the threshold is not. See the answer block under 5.2.
+An earlier version of this note said "the viewport top, not the midpoint",
+which over-corrected. Both terms are in play and they belong to different
+things:
+
+```dart
+final offset = _scrollController.offset;   // the viewport TOP
+...
+if (cumulative + h / 2 < offset) {          // the ROW's midpoint
+```
+
+So a row is marked read once **its own midpoint** passes the **top of the
+viewport**. 5.2 put the midpoint on the viewport; the correction put it
+nowhere. This is the accurate statement.
+
+### 7.3b What `_onScroll` actually assumes about row heights — 5.2 downgraded
+
+Asked in pass 5 section 4, reported without changing anything.
+
+**It measures. It does not calculate.** Article rows go through a three-tier
+source, and `_rowHeight` uses the same one so the read walk, the retirement
+planner and the height cache agree by construction:
+
+| tier | source | when |
+|---|---|---|
+| 1 | `_cardKeys[id]` → `RenderBox.size.height` | the row is laid out; the result is cached |
+| 2 | `_measuredHeights[id]` | the row has scrolled out and has no live context |
+| 3 | the constant `120.0` | never measured — and this sets `extentsStable = false` |
+
+Day headers are the exception: they are **calculated**, `kDayHeaderHeight`, and
+`continue`d past so they contribute height without deciding the cutoff.
+
+**So the ad row's height is a non-problem, and 5.2 can be closed on its own
+terms.** A variable-height row participates honestly the moment it is
+measurable — give it a key, let tier 1 read its box, and the walk is correct
+without knowing what the row contains. It does not need 306 hard-coded
+anywhere, and it would not need re-tuning if a creative came back a different
+size.
+
+What survives from 5.2 is **not** the arithmetic. It is the type system: the
+four unguarded `as ArticleRow` casts throw before any of this machinery runs.
+The prerequisite block above stands; the height-walk warning does not.
+
+One caveat worth keeping. Tier 3's `120.0` fallback is roughly a card, and the
+ad is 306 — so a never-measured ad row would be understated by ~186dp rather
+than the ~30 an unmeasured card costs. `extentsStable` already goes false in
+that case, which is the existing safety valve, but the error it is absorbing
+would be six times larger.
 
 ### 7.4 1.6's site lists do not match the code
 

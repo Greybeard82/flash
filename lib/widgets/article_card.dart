@@ -23,17 +23,49 @@ import 'radial_menu.dart';
 /// has no backdrop term: an undecoded image stays transparent, and a decoded
 /// one becomes true greyscale.
 const List<double> kGreyscaleMatrix = <double>[
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0,      0,      0,      1, 0,
+  0.2126,
+  0.7152,
+  0.0722,
+  0,
+  0,
+  0.2126,
+  0.7152,
+  0.0722,
+  0,
+  0,
+  0.2126,
+  0.7152,
+  0.0722,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
 ];
 
 const List<double> _kIdentityMatrix = <double>[
-  1, 0, 0, 0, 0,
-  0, 1, 0, 0, 0,
-  0, 0, 1, 0, 0,
-  0, 0, 0, 1, 0,
+  1,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  0,
+  0,
+  1,
+  0,
 ];
 
 /// The AI-summary button's two colours, fixed rather than theme-derived.
@@ -73,6 +105,71 @@ List<double> _lerpGreyscaleMatrix(double t) {
 /// exactly the redecode that produced that flash. The wrapper layers are also
 /// kept in the tree at every value of `t`, including 0, so the image's
 /// position in the element tree never changes as the animation starts or ends.
+/// The unread mark, and the 12dp it holds open whether or not it paints.
+///
+/// **The reserved width is the feature; the dot is the decoration.** A 5dp
+/// circle with 7dp of air after it leads the meta line, and on read the circle
+/// fades to transparent while the box stays exactly where it was.
+///
+/// Releasing the space instead would shift the favicon, the source and the
+/// timestamp left the instant mark-read-on-scroll fired — under the thumb of
+/// someone who is mid-scroll and did not touch anything. That is the same
+/// failure this project already refused once when a read title dropped to
+/// w400 and reflowed a wrapped headline; this is the same bug wearing a
+/// different mechanism, a box going away rather than a glyph getting narrower.
+///
+/// So the [SizedBox] is unconditional and only the colour animates.
+/// `unread_dot_geometry_test.dart` measures the row at rest in both states and
+/// again at the halfway point of the fade, because a slot that collapses when
+/// the animation ends looks perfect to a before/after comparison.
+class _UnreadDot extends StatelessWidget {
+  final bool isRead;
+
+  const _UnreadDot({required this.isRead});
+
+  static const double diameter = 5;
+
+  /// Between the dot and the favicon.
+  static const double gap = 7;
+
+  /// What the row gives up for this, read or unread.
+  static const double reservedWidth = diameter + gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final secondary = Theme.of(context).colorScheme.secondary;
+
+    return SizedBox(
+      key: const ValueKey('unread_dot_slot'),
+      width: reservedWidth,
+      height: diameter,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: TweenAnimationBuilder<double>(
+          // begin == null, so a row that is already read when it scrolls into
+          // view renders with no dot on its first frame rather than fading one
+          // out in front of the reader.
+          tween: Tween<double>(end: isRead ? 0.0 : 1.0),
+          duration: kReadDimDuration,
+          curve: Curves.easeOut,
+          builder: (context, t, _) => Container(
+            key: const ValueKey('unread_dot'),
+            width: diameter,
+            height: diameter,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              // Lerped to transparent rather than wrapped in an Opacity: one
+              // fewer layer for a 5dp circle, and it keeps `secondary` exactly
+              // at rest instead of approximately.
+              color: Color.lerp(Colors.transparent, secondary, t),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DimTransition extends StatelessWidget {
   final bool dimmed;
   final Widget child;
@@ -167,6 +264,7 @@ class ArticleCard extends StatelessWidget {
                 // Source + timestamp row
                 Row(
                   children: [
+                    _UnreadDot(isRead: isRead),
                     _FaviconWidget(
                       faviconPath: article.feedFaviconPath,
                       feedTitle: article.feedTitle ?? '',
@@ -200,16 +298,27 @@ class ArticleCard extends StatelessWidget {
                     AnimatedDefaultTextStyle(
                       duration: kReadDimDuration,
                       curve: Curves.easeOut,
+                      // kNumeralTimestampStyle: 12.5px JetBrains Mono with
+                      // tabular figures, declared in pass 1 and wired to
+                      // nothing until now.
+                      //
+                      // Tabular is the reason, not the look. A proportional
+                      // "1" is narrower than a "4", so a relative timestamp
+                      // ticking from "1h ago" to "4h ago" would change width
+                      // and pull the meta line with it — the same reflow the
+                      // reserved dot slot exists to prevent, arriving on a
+                      // timer instead of on a gesture.
                       style: (theme.textTheme.labelSmall ?? const TextStyle())
+                          .merge(kNumeralTimestampStyle)
                           .copyWith(
-                        // One value, read or unread. The timestamp already
-                        // sits at the floor of the ink scale, so there is no
-                        // quieter level to move it to — and a third of the
-                        // row changing on read, when the title and source
-                        // already do, was more motion than the state change
-                        // is worth.
-                        color: theme.flashColors.onSurfaceMuted,
-                      ),
+                            // One value, read or unread. The timestamp already
+                            // sits at the floor of the ink scale, so there is no
+                            // quieter level to move it to — and a third of the
+                            // row changing on read, when the title and source
+                            // already do, was more motion than the state change
+                            // is worth.
+                            color: theme.flashColors.onSurfaceMuted,
+                          ),
                       child: Text(
                         formatRelativeTimestamp(
                             article.publishedAt, AppLocalizations.of(context)!),
@@ -470,7 +579,10 @@ class _FaviconWidget extends StatelessWidget {
   final String feedTitle;
   final bool dimmed;
 
-  const _FaviconWidget({required this.faviconPath, required this.feedTitle, this.dimmed = false});
+  const _FaviconWidget(
+      {required this.faviconPath,
+      required this.feedTitle,
+      this.dimmed = false});
 
   @override
   Widget build(BuildContext context) {
@@ -512,7 +624,8 @@ class _ThumbnailWidget extends StatelessWidget {
   final String feedTitle;
   final bool dimmed;
 
-  const _ThumbnailWidget({required this.article, required this.feedTitle, this.dimmed = false});
+  const _ThumbnailWidget(
+      {required this.article, required this.feedTitle, this.dimmed = false});
 
   @override
   Widget build(BuildContext context) {
@@ -520,11 +633,13 @@ class _ThumbnailWidget extends StatelessWidget {
 
     // Local cache first — no existsSync(), Image.file handles missing files via errorBuilder
     if (article.thumbnailPath != null) {
-      return _thumb(theme, Image.file(
-        File(article.thumbnailPath!),
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _placeholder(theme),
-      ));
+      return _thumb(
+          theme,
+          Image.file(
+            File(article.thumbnailPath!),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _placeholder(theme),
+          ));
     }
 
     // Remote URL
@@ -759,9 +874,8 @@ class _ActionRail extends StatelessWidget {
             radius: const BorderRadius.vertical(bottom: _corner),
             fill: saved ? ink.savedFill : scheme.primaryContainer,
             glyph: saved ? ink.onSavedFill : scheme.onSurfaceVariant,
-            icon: saved
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
+            icon:
+                saved ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
             onTap: onBookmark,
           ),
         ],
