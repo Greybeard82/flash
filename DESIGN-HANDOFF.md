@@ -2264,6 +2264,33 @@ would not be again before that work.
 Reported during a pass rather than changed, with the reason it was out of
 scope. Where a reason has since expired, it says so.
 
+**The unread notification cannot dismiss itself in a release build.** Found on
+the Pixel during pass 10's install, and the one entry here that is not cosmetic.
+`plugin.cancel()` throws
+`PlatformException(error, Missing type parameter., java.lang.RuntimeException)`
+every time `UnreadBadgeService._clear()` runs. **Release only** — R8 is on for
+`flutter build apk --release`, the app ships no ProGuard configuration, and
+`flutter_local_notifications` 18.0.1 ships no consumer rules either, while its
+cancel path runs through Gson and `RuntimeTypeAdapterFactory`. R8 strips the
+generic signatures Gson needs and Gson says so.
+
+**Not a regression from this redesign.** The call traces to `f95bb51`; pass 9
+only added `color:` to the *post* path, and posting works — the accent is live
+in the shade on both devices.
+
+**What it costs a reader:** reading everything leaves the last count sitting in
+the shade ("2 unread articles" on the Pixel right now) instead of clearing, and
+turning the notification setting off does not remove it either. Both need a
+manual swipe. `_cleared` and `_postedCount` are never updated because the
+exception aborts `_clear` before them. It also throws once on most cold
+launches, where the count is briefly zero before the database resolves.
+
+**Left because it is build configuration, not design** — the likely fix is a
+`proguard-rules.pro` keeping `Signature` and `com.dexterous.**` wired into the
+release block, which changes how the whole app is shrunk and needs verifying
+across every notification path rather than slipped in at the end of a pass.
+**Unverified: no fix has been tried.** David rules on it.
+
 **Alerts snapshots have no saved state of their own, by design.** Fixed in
 pass 9 for the glyph, but the underlying shape remains: `AlertEntry` mirrors an
 article and `is_saved` lives on `articles`. Every consumer must resolve
