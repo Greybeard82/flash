@@ -1,13 +1,21 @@
-// The reader's bar lost its title line and gained three buttons.
+// The reader's bar lost its title line, gained three buttons, and kept its
+// second line.
+//
+// The two lines are the source at `titleSmall` and the date at `labelSmall`.
+// They were briefly joined into one `publisher · date` line, and the date was
+// cut on every article — four buttons leave the text about 160dp, which is
+// enough for "Sky Sports · Sep 15, 2026 9:44 …" and no more. Dropping the
+// *title* was right for a different reason and stands: 160dp of headline is a
+// stub, 160dp of source name is a whole name.
 //
 // **The height is the assertion that matters most, and it is the least
 // obvious.** On the tablet this pane holds a platform view: a bar that changed
 // height would resize the WebView mid-read, reflowing the page and throwing
 // away the reader's scroll position. The four IconButtons set a 48dp floor and
-// the 4dp vertical padding takes it to 56 — which is exactly what the
-// two-line title column measured before, so nothing moves. That is a
-// coincidence of Material's defaults rather than a guarantee, which is why it
-// is pinned as a number rather than trusted.
+// the 4dp vertical padding takes it to 56 — which is what the column measured
+// with a title and a date, then with a source alone, and now with a source and
+// a date. That is a coincidence of Material's defaults rather than a
+// guarantee, which is why it is pinned as a number rather than trusted.
 //
 // The pane needs a WebView it cannot have in a test, so every case here goes
 // through `webViewOverrideForTesting` — the seam that already exists for
@@ -126,7 +134,8 @@ void main() {
             reason: '$name: the title line came back');
       });
 
-      testWidgets('the source is the only line, at titleSmall', (tester) async {
+      testWidgets('the source is line 1, titleSmall in the full ink',
+          (tester) async {
         await _pump(tester, theme: theme);
         final text = tester.widget<Text>(
             find.textContaining('The Guardian (World)').first);
@@ -138,12 +147,32 @@ void main() {
         // code; it did, first time. Handoff 11.1 records the trap.
         expect(text.style?.fontSize, 14.0,
             reason: '$name: titleSmall is 14 in the M3 ramp');
-        expect(text.style?.fontSize, isNot(11.0),
-            reason: '$name: 11 is labelSmall, which is where this line used '
-                'to be. Promoting it is the change — it is no longer a '
-                'caption under a title, it is what the bar says.');
+        expect(text.style?.color, theme.colorScheme.onSurface,
+            reason: '$name: the source is the headline text of the bar');
         expect(text.maxLines, 1);
         expect(text.overflow, TextOverflow.ellipsis);
+      });
+
+      testWidgets('the date is line 2, labelSmall in muted ink',
+          (tester) async {
+        // **The line that came back, and the reason it did.** Joined onto the
+        // source as `publisher · date`, it was the half that got cut — on
+        // every article, because four buttons leave the text about 160dp.
+        await _pump(tester, theme: theme);
+        final date = tester.widget<Text>(find.textContaining('2026').first);
+
+        expect(date.style?.fontSize, 11.0,
+            reason: '$name: labelSmall is 11 in the M3 ramp');
+        expect(date.style?.color, theme.flashColors.onSurfaceMuted,
+            reason: '$name: the date recedes behind the source above it');
+      });
+
+      testWidgets('both lines are present together', (tester) async {
+        // The assertion the two above cannot make separately: a bar showing
+        // only one of them would satisfy whichever test matched.
+        await _pump(tester, theme: theme);
+        expect(find.textContaining('The Guardian (World)'), findsOneWidget);
+        expect(find.textContaining('2026'), findsOneWidget);
       });
 
       testWidgets('all four actions are present', (tester) async {
@@ -210,14 +239,137 @@ void main() {
       expect(find.text('example.com'), findsOneWidget);
     });
 
-    testWidgets('the date survives when there is no publisher',
+    testWidgets('the host takes line 1 and the date keeps line 2',
         (tester) async {
-      // Play policy wants source and date. Only the join being wholly empty
-      // reaches the fallback.
+      // Changed deliberately in 8c. While the two were joined, an article
+      // with a date and no publisher showed the date alone and never reached
+      // the fallback. Split, line 1 is the source slot and an article with no
+      // publisher has a host to put in it — which is more useful than a
+      // date floating on its own.
       await _pump(tester,
-          theme: theme, article: _article(feedTitle: null));
-      expect(find.text('example.com'), findsNothing);
+          theme: theme,
+          article: _article(
+              feedTitle: null, url: 'https://www.example.com/x'));
+      expect(find.text('example.com'), findsOneWidget);
       expect(find.textContaining('2026'), findsOneWidget);
+    });
+  });
+
+  group('what truncates, and what survives', () {
+    // **The fix this pass exists for.** Joined as `publisher \u00b7 date`, the
+    // text had about 160dp on a 360dp phone with four buttons, and the date
+    // was the half that got cut \u2014 on every article, not just long ones.
+    // Split onto two lines, the truncation falls on the source, which is where
+    // it can be afforded, and it falls at the end of the name rather than
+    // taking the date with it.
+    //
+    // Measured with `TextPainter` at the width the bar actually gives the
+    // column. `flutter_test` substitutes a font whose every glyph is a full
+    // em, so text measures roughly twice as wide here as in Instrument Sans —
+    // and **that cuts one way and not the other**, which is worth saying
+    // plainly because it is easy to claim more than it supports:
+    //
+    //   * "this FITS under the stub" ⟹ it fits on a device. Sound. Every
+    //     assertion this group actually relies on is of that shape.
+    //   * "this OVERFLOWS under the stub" ⟹ nothing about a device. The one
+    //     assertion below of that shape exists only to prove the ellipsis
+    //     path is being exercised rather than passing because everything
+    //     fits. The evidence that a real bar truncates is a screenshot from
+    //     the M51, not this.
+
+    final theme = flashQuietInkTheme(brightness: Brightness.light);
+
+    /// The width the bar hands its text column, read off the render tree
+    /// rather than assumed.
+    double columnWidth(WidgetTester tester) =>
+        tester.getSize(find.byType(Column).first).width;
+
+    double widthOf(String text, TextStyle style) {
+      final painter = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout();
+      return painter.width;
+    }
+
+    testWidgets('the longest starter-pack source keeps its masthead',
+        (tester) async {
+      // "The New York Times (World)" is the longest title in the starter pack
+      // at 26 characters. What has to survive is the newspaper, not the
+      // parenthetical \u2014 so the assertion names the string that must fit,
+      // rather than checking that something did.
+      await _pump(tester,
+          theme: theme,
+          article: _article(feedTitle: 'The New York Times (World)'));
+
+      final rendered =
+          tester.widget<Text>(find.text('The New York Times (World)'));
+      final style = rendered.style!;
+      final available = columnWidth(tester);
+
+      expect(widthOf('The New York Times', style), lessThanOrEqualTo(available),
+          reason: 'the masthead itself must fit. If this fails the bar is '
+              'showing "The New York Ti\u2026" and naming nothing.');
+
+      // And the full string genuinely does not fit, so this test is measuring
+      // a real truncation rather than passing because everything fits.
+      expect(widthOf('The New York Times (World)', style),
+          greaterThan(available),
+          reason: 'if the whole name fits, the ellipsis is doing nothing and '
+              'the assertion above is not being tested');
+
+      expect(rendered.overflow, TextOverflow.ellipsis);
+      expect(rendered.maxLines, 1);
+    });
+
+    testWidgets('the date never truncates, in any locale', (tester) async {
+      // Scanned across all five rather than assuming which is longest \u2014 and
+      // the assumption would have been wrong. German has longer month names
+      // but a 24-hour clock, so it comes out at 20 characters where **English**
+      // reaches 21 with its " PM".
+      await _pump(tester, theme: theme);
+      final style = tester.widget<Text>(find.textContaining('2026')).style!;
+      final available = columnWidth(tester);
+
+      // The worst case each locale can produce: a long month, a two-digit day
+      // and a two-digit hour.
+      const candidates = <String>[
+        'Sep 25, 2026 10:48 PM', // en, 21
+        'Dec 28, 2026 11:59 PM', // en
+        '25. Sept. 2026 22:48', // de, 20
+        '25 sept. 2026 22:48', // fr, 19
+        '25 sept 2026 22:48', // es, 18
+        '25 set 2026 22:48', // it, 17
+      ];
+
+      for (final date in candidates) {
+        expect(widthOf(date, style), lessThanOrEqualTo(available),
+            reason: '"$date" does not fit the ${available.toStringAsFixed(1)}dp '
+                'the bar gives the date. It is on its own line precisely so '
+                'that it does not have to compete with the source.');
+      }
+    });
+
+    testWidgets('and the date fits even beside the longest source',
+        (tester) async {
+      // The two lines are independent, so a long source cannot squeeze the
+      // date \u2014 but that is exactly the kind of thing that stops being true
+      // when someone puts them back in a Row.
+      await _pump(tester,
+          theme: theme,
+          article: _article(feedTitle: 'The New York Times (World)'));
+
+      final date = tester.widget<Text>(find.textContaining('2026'));
+      final painter = TextPainter(
+        text: TextSpan(text: date.data, style: date.style),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: columnWidth(tester));
+
+      expect(painter.didExceedMaxLines, isFalse,
+          reason: 'the date was clipped next to a long source, which means '
+              'the two lines are sharing a width again');
     });
   });
 

@@ -224,19 +224,23 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
   ///
   /// `www.` is stripped for the same reason Chrome strips it: it is four
   /// characters of nothing, and a bar this narrow has none to spare.
-  String _attributionFor(BuildContext context) {
-    final joined = [
-      widget.article.feedTitle?.trim() ?? '',
-      formatPublishedDate(
-        widget.article.publishedAt,
-        Localizations.localeOf(context).toLanguageTag(),
-      ),
-    ].where((part) => part.isNotEmpty).join(' · ');
-    if (joined.isNotEmpty) return joined;
+  String _sourceFor(BuildContext context) {
+    final publisher = widget.article.feedTitle?.trim() ?? '';
+    if (publisher.isNotEmpty) return publisher;
 
+    // `feedTitle` is nullable, and this is the bar's headline text now, so it
+    // cannot be allowed to come out empty. The host is always available — it
+    // is what was opened — it is true, and it is what Chrome shows in the same
+    // position. `www.` is stripped for the same reason Chrome strips it: four
+    // characters of nothing in a line that has about 160dp.
     final host = Uri.tryParse(widget.article.url)?.host ?? '';
     return host.startsWith('www.') ? host.substring(4) : host;
   }
+
+  String _dateFor(BuildContext context) => formatPublishedDate(
+        widget.article.publishedAt,
+        Localizations.localeOf(context).toLanguageTag(),
+      );
 
   @override
   void didUpdateWidget(ArticleDetailPane oldWidget) {
@@ -348,7 +352,8 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
           // leave a bar with four buttons and nothing saying where you are.
           // The host is the fallback: truthful, always available since the URL
           // is what was opened, and what Chrome shows in the same position.
-          attribution: _attributionFor(context),
+          source: _sourceFor(context),
+          date: _dateFor(context),
           onClose: widget.onClose,
           onOpenInBrowser: _openInBrowser,
           openInBrowserTooltip: l10n.openInBrowser,
@@ -522,21 +527,36 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
 /// is for is saying where you are and how to leave; Chrome's custom tabs show
 /// the domain for the same reason.
 ///
-/// So the attribution is promoted from a `labelSmall` second line to the only
-/// line, at `titleSmall`. It still carries publisher **and** date, which Play
-/// policy requires a news app to show for every article.
+/// So the source is promoted to `titleSmall` in the full ink, and the date
+/// keeps the `labelSmall` second line it always had — publisher **and** date,
+/// which Play policy requires a news app to show for every article.
+///
+/// **The two were briefly one line, and that is why the second one is back.**
+/// Joined as `publisher · date` on a 360dp phone with four buttons, the text
+/// has about 160dp: enough for "Sky Sports · Sep 15, 2026 9:44 …" and no more,
+/// so the date was cut on every article. Dropping the *title* was right for a
+/// different reason — 160dp of headline is a stub — and 160dp of source name
+/// is a whole name. The second line was never the thing short of room.
 ///
 /// **The bar's height does not change, and that is load-bearing.** The four
 /// `IconButton`s set a 48dp floor and the 4dp vertical padding takes it to 56,
-/// which is exactly what the two-line column measured before. A bar that
-/// shrank would resize the platform view mid-read on the tablet, reflowing the
-/// page and losing the scroll position. Pinned as a number in
+/// which is what the column measured with a title and a date, then with a
+/// source alone, and now with a source and a date. A bar that shrank would
+/// resize the platform view mid-read on the tablet, reflowing the page and
+/// losing the scroll position. Pinned as a number in
 /// `reader_action_bar_test.dart`.
 class _PaneTopBar extends StatelessWidget {
-  /// "Publisher · date", already joined and already localised, with a fallback
-  /// to the URL's host when the article carries neither. Never empty — see the
-  /// construction site for why the fallback is resolved there.
-  final String attribution;
+  /// The publisher, or the URL's host when the article carries no feed title.
+  ///
+  /// **Never empty** — this is the bar's headline text now, so the fallback is
+  /// not optional. It is resolved at the construction site rather than here,
+  /// keeping this widget free of context-dependent work.
+  final String source;
+
+  /// The published date, already localised. Empty when the article carries no
+  /// timestamp, in which case no second line is drawn and the source sits on
+  /// its own.
+  final String date;
 
   final VoidCallback? onClose;
   final VoidCallback onOpenInBrowser;
@@ -556,7 +576,8 @@ class _PaneTopBar extends StatelessWidget {
   final String shareTooltip;
 
   const _PaneTopBar({
-    required this.attribution,
+    required this.source,
+    required this.date,
     required this.onClose,
     required this.onOpenInBrowser,
     required this.openInBrowserTooltip,
@@ -587,21 +608,37 @@ class _PaneTopBar extends StatelessWidget {
               else
                 const SizedBox(width: 8),
               Expanded(
-                // One line now, promoted from `labelSmall` to `titleSmall` in
-                // the full ink: it is no longer a caption under a title, it is
-                // the only thing the bar says.
-                //
-                // Still ellipsised, and still the right answer for a long
-                // source. The longest name in the starter pack is "The New
-                // York Times (World)" at 26 characters, which fits; a
-                // publisher long enough to truncate loses the tail of its own
-                // name rather than the date, because the date is joined after
-                // it.
-                child: Text(
-                  attribution,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Line 1. Promoted to `titleSmall` in the full ink when
+                    // the article title left: this is what the bar is for,
+                    // saying where you are.
+                    //
+                    // Ellipsised, and the truncation falls in the right place
+                    // because the date is no longer joined on the end of it.
+                    // The longest starter-pack source, "The New York Times
+                    // (World)", loses its qualifier and keeps the masthead.
+                    Text(
+                      source,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(color: theme.colorScheme.onSurface),
+                    ),
+                    // Line 2. Its own line rather than joined with a separator,
+                    // which is the whole of this fix: joined, it was the half
+                    // that got cut, on every article.
+                    if (date.isNotEmpty)
+                      Text(
+                        date,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: theme.flashColors.onSurfaceMuted),
+                      ),
+                  ],
                 ),
               ),
               IconButton(

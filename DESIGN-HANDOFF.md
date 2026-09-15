@@ -1852,3 +1852,123 @@ Two details worth having, since neither is what the shorthand implies:
 `heroTag: 'clean_mode_toggle'` is load-bearing: on the tablet the middle
 column's screens and this pane share one Navigator, and 'refresh', 'search' and
 'mark_all_read' are already taken.
+
+---
+
+## 13. Pass 8c: the bar's second line, and two things found on the way
+
+### 13.1 The date has its own line again
+
+Source on line 1 at `titleSmall` in `onSurface`; date on line 2 at
+`labelSmall` in `onSurfaceMuted`.
+
+**Not a reversal of dropping the article title.** The title went because 160dp
+of *headline* is a stub; 160dp of *source name* is a whole name. The second
+line was never the thing short of room — joining the two into
+`publisher · date` is what made the date the half that got cut, and it got cut
+on every article rather than on long ones: `Sky Sports · Sep 15, 2026 9:44 ...`
+is a ten-character publisher already overflowing.
+
+**Height is still 56dp**, pinned in all three themes plus the no-bookmark and
+no-attribution layouts. The four `IconButton`s set the 48dp floor and the 4dp
+padding takes it to 56, which is what the column measured with a title and a
+date, then with a source alone, and now with a source and a date.
+
+One behaviour changed with the split and is worth recording, because a test
+changed with it: while the two were joined, an article with a date and **no
+publisher** showed the date alone and never reached the host fallback. Split,
+line 1 is the source slot, so that article now shows its host there and keeps
+the date below — which is more useful than a date floating on its own.
+
+### 13.2 English is the longest date, not German
+
+The assumption going in was that German dates are longest. They are not, and
+the reason is worth keeping:
+
+| locale | worst case | chars |
+|---|---|---|
+| **en** | `Sep 25, 2026 10:48 PM` | **21** |
+| de | `25. Sept. 2026 22:48` | 20 |
+| fr | `25 sept. 2026 22:48` | 19 |
+| es | `25 sept 2026 22:48` | 18 |
+| it | `25 set 2026 22:48` | 17 |
+
+German has the longer month names and loses it all again on the clock: a
+24-hour time costs nothing where English pays for " PM". The test scans all
+five rather than hardcoding a winner, so the next locale added cannot quietly
+become the longest.
+
+### 13.3 What truncates, and what survives
+
+The longest starter-pack source is `The New York Times (World)` at 26
+characters, and it **does** truncate at 360dp. What survives is the masthead:
+the assertion measures `The New York Times` against the width the bar actually
+gives the column, so the test says what is kept rather than that something was.
+
+Worth knowing about how those measurements are read, because it is easy to
+claim more than they support. `flutter_test` substitutes a font whose every
+glyph is a full em, so text measures roughly twice as wide there as in
+Instrument Sans. That cuts one way only:
+
+- *fits under the stub* implies *fits on a device*. Sound, and every assertion
+  the group relies on has that shape.
+- *overflows under the stub* implies nothing about a device. The one assertion
+  of that shape exists solely to prove the ellipsis path is exercised. The
+  evidence that a real bar truncates is a screenshot from the M51.
+
+### 13.4 An Alerts article CAN be bookmarked from the radial menu, and cannot
+### from the reader
+
+Reported, not fixed.
+
+**The radial menu can.** `alerts_screen.dart:236` does not touch the snapshot's
+id at all:
+
+```dart
+final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
+if (row?.id == null) { ...alertsArticleGone banner...; return; }
+await _articleRepo.setSaved(row!.id!, saved: !row.isSaved);
+```
+
+It resolves (feedId, guid) to the real `articles` row, writes against that id,
+and shows `alertsArticleGone` when the row has been retired. Exactly the
+tolerant lookup `alert_entry.dart:55-63` prescribes.
+
+**The reader cannot.** `article_detail_pane` checks `article.id == null`
+directly and omits the button. Correct as far as it goes — absent beats inert
+— but it is the *snapshot's* id, and the snapshot never has one.
+
+**So the two disagree, and the reader is the poorer of the two.** The fix is
+known and is the one Alerts already uses: resolve by (feedId, guid) rather than
+trusting `article.id`, and fall back to hiding the button only when the lookup
+comes back empty. That is a behaviour change with a database read in it, so it
+is logged rather than slipped into a layout pass.
+
+**A second finding inside the first.** `AlertEntry.toArticle()`
+(`alert_entry.dart:64-80`) sets `id: null` deliberately and **never sets
+`isSaved` at all**, so it defaults to `false`. The radial menu takes its glyph
+from `widget.article.isSaved`, which means an already-saved article opened from
+Alerts shows an *unsaved* bookmark. The write is still right — `_toggleSaved`
+reads `row.isSaved` from the real row — so the glyph lies while the action
+behaves. Same class as the reader bookmark this pass was built around: a
+control that misreports state.
+
+### 13.5 For Design: two timestamp formats, neither chosen
+
+Log only, nothing done.
+
+The feed list shows **relative** timestamps — "2h ago", tabular mono, tuned so
+the meta line does not shift as they tick. The reader now shows an **absolute**
+date on its own line, "Sep 15, 2026 9:44 PM".
+
+Both are defensible and the split even has a rationale available: a list is
+scanned, where "2h ago" answers the question being asked, and a reader is
+committed, where the exact time is what you want if you are deciding whether a
+story is stale. But **nobody chose it.** The relative format arrived with the
+feed row and the absolute one with the reader's Play-policy attribution, and
+they have never been looked at together.
+
+Flagging rather than resolving, because picking one is a product decision and
+changing either has consequences the other does not: the relative format is
+load-bearing for the feed's layout stability, and the absolute one is what
+satisfies the "show a publication date" requirement.
