@@ -1182,7 +1182,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                   child: TextField(
                     controller: _categoryController,
                     focusNode: _categoryFocus,
-                    textCapitalization: TextCapitalization.sentences,
+                    textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _createCategory(),
                     decoration: InputDecoration(
@@ -1334,7 +1334,7 @@ class _FolderNameSheetState extends State<_FolderNameSheet> {
           TextField(
             controller: _controller,
             autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: l10n.categoryName,
               border: const OutlineInputBorder(),
@@ -1408,7 +1408,7 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: l10n.feedName,
               border: const OutlineInputBorder(),
