@@ -73,7 +73,7 @@
           app/proguard-rules.pro now carries an explicit -keep for the same
           class, so this is the second of two belts rather than the only one.
           Both are intentional. Removing this line will not break anything
-          today -- and that is precisely why it is easy to remove by mistake.
+          today, and that is precisely why it is easy to remove by mistake.
         -->
         <service
             android:name="dev.fluttercommunity.workmanager.BackgroundWorker"
