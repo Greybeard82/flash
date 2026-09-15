@@ -15,19 +15,23 @@ QA. **Nothing in the QA section was fixed** except where noted.
 
 | # | finding | class | one line |
 |---|---|---|---|
-| 1 | **Emulators cannot render Flash on this machine** | **FIX BEFORE LAUNCH** *(investigate)* | System UI renders, Flash does not; 2400 `bad color buffer handle`. Blocks all disposable-data testing. |
-| 2 | Backup does not contain bookmarks or read state | **DECISION NEEDED** | By design and asserted in tests, but a tester who restores loses both. |
-| 3 | An XML comment broke the release build | **FIXED** | `--` is illegal in an XML comment. Caught only by building. |
-| 4 | Impeller opt-out is deprecated upstream | **POST-LAUNCH** | Flutter warns it is being removed; likely related to #1. |
-| 5 | Widget "999+" never rendered on a device | **VERIFY ON DEVICE** | No widget placed on any of the three; Samsung's 2153 unread is the case. |
-| 6 | `article_detail_pane_clean_mode_test` is flaky | **POST-LAUNCH** | Fails under full-suite parallelism, passes alone. Test-only. |
-| 7 | Newspaper inherits Material's `surfaceContainer` | **SHIPS AS IS** | Unauthored, now only reachable in the hued path. Loose end, not a defect. |
-| 8 | Upgrade keeps everything | **SHIPS AS IS** | Verified — see §A. |
-| 9 | Flash's own code has no R8 by-name exposure | **SHIPS AS IS** | Verified — see §B. |
-| 10 | Flash has no incoming deep-link surface | **SHIPS AS IS** | No `VIEW` filter declared. Nothing to test. |
-| 11 | Foldables | **WON'T FIX for launch** | Parked. Nobody in the closed test has one. |
-
----
+| 1 | **Impeller opt-out has no recorded reason** | **DECISION NEEDED** | Undocumented renderer pin, deprecated upstream, and the likely cause of #2. |
+| 2 | Emulators cannot render Flash on this machine | **POST-LAUNCH** | Blocks disposable-data testing here; unblocked for now by clearing the Samsung. |
+| 3 | Backup carried neither bookmarks nor read state | **FIXED** | Bookmarks now in, by value. Read state recommended against, with the number. |
+| 4 | Banner was invisible at ~1.10:1 | **FIXED** | Icon and a 3:1 border now carry it; verified at arm's length on device. |
+| 5 | `outlineVariant` cannot carry a component edge | **FIXED** | 1.08 / 1.19 against fill / page. New `bannerBorder` role. |
+| 6 | An XML comment broke the release build | **FIXED** | `--` is illegal in an XML comment. Caught only by building. |
+| 7 | `RssService` has no injectable client | **POST-LAUNCH** | `fetchAndStore` calls top-level `http.get`; error paths were untestable. |
+| 8 | Suite flakes under full-run parallelism | **POST-LAUNCH** | Two different files now: a clean-mode test and a `!timersPending` leak. |
+| 9 | Contrast tests on translucent tokens are invalid | **SHIPS AS IS** | `computeLuminance()` ignores alpha. No existing test makes the mistake. |
+| 10 | Widget "999+" still never rendered | **VERIFY ON DEVICE** | No widget placed on any home screen; Samsung's backlog is the case. |
+| 11 | Newspaper inherits Material's `surfaceContainer` | **SHIPS AS IS** | Unauthored; no longer reachable for chips. |
+| 12 | Upgrade keeps everything | **SHIPS AS IS** | Verified end to end — §A. |
+| 13 | Flash's own code has no R8 by-name exposure | **SHIPS AS IS** | Verified — §B. |
+| 14 | No incoming deep-link surface | **SHIPS AS IS** | No `VIEW` filter declared. |
+| 15 | Feed failures are recorded, not thrown | **SHIPS AS IS** | One dead URL cannot abort a refresh. Dead at 7, resets on success. |
+| 16 | The list never moves under the reader | **SHIPS AS IS** | Now asserted across the full state matrix in three themes — §D. |
+| 17 | Foldables | **WON'T FIX for launch** | Parked. |
 
 ## 1. The five changes
 
@@ -216,3 +220,91 @@ Cyrillic/Greek fallback.
 it, neither is visible to the analyzer or the suite, and both were found by
 running a release build rather than by testing behaviour. It is a different
 class from B: B is *release-only runtime*, this is *release-only build*.
+
+---
+
+# Part two
+
+## The Samsung, cleared
+
+David approved clearing Flash's data on the Samsung only. Done — **Flash's own
+data, on that device only**, nothing on the Pixel or Lenovo and nothing on the
+Samsung beyond Flash. It unblocks fresh install, uninstall-reinstall and
+mark-all-read on hardware, and takes the emulator off the critical path.
+
+It also cost the one thing that device was still carrying: the 2153-unread
+backlog that made it the right device for the "999+" widget check. That check
+now needs the backlog to rebuild, or another device.
+
+## C · Error and empty paths
+
+`qa_c_error_paths_test.dart`, 15 tests. **Network failure is produced with
+`runWithClient` + `MockClient`, never by touching connectivity.**
+
+Covered: 404, 500, redirect, malformed XML, valid-XML-that-is-not-RSS, a valid
+but empty feed, an empty body, a 500-item feed, a 5 MB body, and articles
+missing link, guid, title or date.
+
+**The correction worth reading.** I asserted a 404 would throw. It does not,
+and should not: `RssService` catches it, counts it on the feed row and returns,
+so one dead URL among thirty does not mean no news at all. The real contract is
+now pinned — `last_fetch_error` carries the reason, `consecutiveFailures`
+increments, a feed is dead only at **7**, and a success resets the count.
+
+**Finding 7, recorded not fixed:** `fetchAndStore` calls the top-level
+`http.get`. There is no client to inject, so none of this was reachable from an
+ordinary unit test before. `runWithClient` is a way around that, not a
+substitute for a seam.
+
+**Not done:** "a refresh that starts and never completes" (the 20-second
+timeout is real, and a test that waits it out is a test nobody runs), and the
+no-feeds / all-read / empty-category screens, which are UI states needing a
+driven device.
+
+## D · Combination states
+
+`qa_d_combination_states_test.dart`, 17 tests, against the invariant the whole
+redesign rests on: **the list never moves under the reader.**
+
+Read, saved, read+saved, missing thumbnail and a wrapping long title all leave
+the card's height untouched, in all three themes. A long title that reflowed on
+read would move every card below it by a whole line, which is the worst case of
+the bug the rule exists to prevent.
+
+Also: all five locales give the same card height — a timestamp that wrapped in
+one language would move every row at once — and Quiet Ink light and dark are
+layout-identical. Newspaper is excluded from that one deliberately; it changes
+font family, so a different height there is correct.
+
+**Not done:** switching theme or locale *with a reader open*, mark-read-on-
+scroll during a refresh, and long-press mid-scroll. All need a driven device
+with disposable data; the Samsung now qualifies but is locked.
+
+## E · Known-untested
+
+- **Literata's non-Latin fallback: still not looked at.** It needs a Cyrillic
+  or Greek feed added to a real library, and the only unlocked device holds
+  David's.
+- **The widget: still not placed.** Placing one is a launcher interaction, not
+  an app operation.
+- **Boot-completed: not tested, and deliberately not.** It needs a reboot,
+  which the standing rules forbid.
+
+## Finding 1 — why Impeller is off: nobody wrote it down
+
+Asked for as a report, and the answer is the finding.
+
+`AndroidManifest.xml` sets `io.flutter.embedding.android.EnableImpeller` to
+`false`. It arrived in `3d5e449`, a six-bullet omnibus commit
+("Add full feature set: reader, search, bookmarks, onboarding, i18n, Gemini
+Nano, Drive backup, keyword alerts") that **does not mention it**. There is no
+comment beside it, no PRD line, and no mention anywhere else in the repo.
+
+So: **an undocumented renderer opt-out**, which is its own finding. It matters
+beyond the emulator, because Impeller is the default on Android, the legacy
+Skia path is on its way out, and Flutter already logs that the opt-out itself
+is going away. An app pinned to it is accruing a liability nobody can currently
+justify, because nobody recorded why.
+
+Not flipped, as instructed. One build with it set to `true` would also settle
+whether it explains finding 2.
