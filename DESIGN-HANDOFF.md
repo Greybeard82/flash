@@ -1452,7 +1452,7 @@ when a test is deleted without a note.
 
 ## 10. Standing rules for tests in this repo
 
-Both of these were bought with an incident. Neither is a style preference.
+All of these were bought with an incident. None is a style preference.
 
 ### 10.1 Assert the mutation landed before running the test
 
@@ -1499,6 +1499,45 @@ the guard's regex could not see; `find.byType(Image)` finding nothing on a card
 that renders no Image, so the finder was empty exactly when it mattered; and
 22 nav tests pumping into a `Scaffold` with no `body:`, which is how a total
 render failure reached a device.
+
+### 10.3 The test font's measurements cut one way only
+
+`flutter_test` substitutes a font whose every glyph is a full em, so text
+measures roughly twice as wide there as in a real proportional face. That
+asymmetry is easy to flatten into "the test proves it", and it does not:
+
+- **fits under the stub** implies **fits on a device**. Sound. Lean on this.
+- **overflows under the stub** implies **nothing** about a device.
+
+An assertion of the second shape can still earn its place — proving that an
+ellipsis path is exercised rather than passing because everything fits — but
+it is evidence about the test, not about the product. When a truncation claim
+matters, the evidence is a screenshot.
+
+Bought in pass 8c, measuring whether a source name truncates in the reader's
+bar.
+
+### 10.4 A check that reads source must strip comments as blocks
+
+Three separate assertions in pass 9 failed on correct code because they matched
+prose in a comment rather than behaviour in a line:
+
+- "the keyword path must not post to the unread channel" matched the summary's
+  own doc comment, which names both channels while explaining the lazy-creation
+  hazard.
+- "none of the palette-era widget colours survives" matched the comment
+  directly above the new colours, which names the hexes it replaced.
+- "no assertion here renders a RemoteView" matched the string `testWidgets(`
+  inside its own `reason:`.
+
+A line-prefix filter is not enough: an XML or Kotlin block comment opens on one
+line and continues on lines that begin with nothing in particular. Strip
+`<!--...-->` and `/*...*/` as blocks, drop `//` lines, and anchor a
+self-referential search to the start of a line.
+
+The same rule already applies to the six-term scroll grep, where prose hits are
+reported and not counted. It is the same mistake with a different subject.
+
 
 ---
 
@@ -1972,3 +2011,165 @@ Flagging rather than resolving, because picking one is a product decision and
 changing either has consequences the other does not: the relative format is
 load-bearing for the feed's layout stability, and the absolute one is what
 satisfies the "show a publication date" requirement.
+
+---
+
+## 14. Pass 9: alerts, notifications, the widget
+
+### 14.1 The Alerts glyph lied, and the lie destroyed bookmarks
+
+A live data-loss bug predating this redesign, shipped to 25 testers.
+
+`AlertEntry.toArticle()` never set `isSaved`, so it defaulted to `false` and
+every card in Alerts drew an **unsaved** bookmark. `_toggleSaved` did not read
+the snapshot: it resolved the real `articles` row by (feedId, guid) and flipped
+**that**. A user who had saved an article, met it again in Alerts and tapped
+what looked like "save this" ran a toggle that found the row saved and unsaved
+it. The bookmark was gone and nothing said so.
+
+**The invariant: the glyph and the write read the same source, and that source
+is the real row.** A snapshot cannot know its own saved state — `is_saved` is a
+column on `articles`, which is exactly what a snapshot does not have.
+
+**Resolved once for the visible set, not per row.**
+`ArticleRepository.savedArticleKeys()` is one query returning the
+(feedId, guid) of every saved article; the `itemBuilder` does a set lookup.
+Deliberately not a `WHERE ... IN` over the visible guids: SQLite caps bound
+variables at 999 and an alerts list can pass that, while saved articles are the
+user's own bookmarks and are inherently few.
+
+**Query count, measured rather than reasoned.** The test wraps the factory in
+`SqfliteDatabaseFactoryLogger` and tallies every statement: **two for the whole
+screen** — the entries and the saved keys — identical for 1 entry and for 12.
+The build itself issues none.
+
+Alerts also listens to `SavedStateNotifier` now, so saving from the reader
+opened out of that list updates the list behind it. It re-reads the one query
+rather than translating an `articleId` it has no id to compare against.
+
+### 14.2 The reader had the mirror bug
+
+It hid the bookmark whenever `article.id` was null — which is every article
+opened from the Alerts tab — while the Alerts list bookmarked the same article
+successfully. **"Absent beats inert" was the right principle on a wrong
+premise:** the action was available and the id was merely somewhere else.
+
+The pane resolves by (feedId, guid) on open, one indexed read, and only when
+the id is missing. `isSaved` is taken from the resolved row rather than the
+snapshot, which matters because the pane can also be reached from a
+notification, where nothing resolved anything.
+
+Absence now means the row genuinely is not there, which is still right.
+
+One consequence worth knowing: the button arrives a frame late for an
+Alerts-sourced article, because the lookup is async. Drawn optimistically and
+withdrawn on failure would be worse — a button that vanishes is a worse answer
+than one that arrives.
+
+### 14.3 B7: the group summary
+
+Shared `groupKey` plus a summary carrying `alertNotificationSummary`, the key
+pass 6 added and correctly called unreachable.
+
+**Per-notification ids stay minted from the sorted keyword set.** That is the
+fix this must not undo — it is what stops two different keyword sets collapsing
+into each other. The summary takes a fixed id of its own,
+`kAlertSummaryNotificationId = 3`, outside the minted range: 1 is the unread
+badge and 2 was the old hardcoded keyword id that every alert collided on, so
+leaving it empty means an upgrade cannot land a summary on a stale alert.
+
+**The channel is created explicitly at the summary, and that is the ordering
+hazard from pass 8 recon closed.** `flutter_local_notifications` creates a
+channel lazily, on the first `show()` naming it — verified on the Lenovo, which
+holds `flash_unread_count` and **not** `flash_keyword_alerts`, because no
+keyword alert has ever fired there. A summary inheriting the channel's
+existence from a child would depend on a child having fired on that device,
+ever. Creating a channel that already exists is a no-op, and an existing
+channel's importance cannot be raised in code, so this cannot disturb a channel
+a user has tuned.
+
+**Nothing is summarised below two alerts.** Android hides a single-child
+summary on some versions and shows a redundant card on others; either way one
+alert plus "1 keyword alert" is two notifications for one event.
+
+### 14.4 B8 is CLOSED, and was already done
+
+`flash_keyword_alerts` at `Importance.defaultImportance` (3) and
+`flash_unread_count` at `Importance.low` (2), already separate, verified live
+on the Lenovo in pass 8 (`mImportance=2`, `mOriginalImp=2`,
+`mUserLockedFields=0`). **There is nothing to migrate**, which matters because
+a channel's importance cannot be changed in code once it exists — a migration
+would mean a new id plus deleting the old one, and every tester who had tuned
+the old channel would silently lose it.
+
+Pinned in `notification_accent_and_summary_test.dart` so B8 stops reading as
+outstanding work.
+
+### 14.5 §1.3's accent has a consumer, and §5.1 is CLOSED
+
+`Notification.color` is set to `#15868E` on both notifications, from one
+constant. `ic_stat_flash.xml` ships unchanged.
+
+**Measured independently and it agrees with 1.3 to the digit:**
+
+| surface | ratio |
+|---|---|
+| `#FFFFFF` light shade | **4.35:1** |
+| `#1B1B1B` dark shade | **3.96:1** |
+| `#1F2223` shade card | **3.69:1** |
+
+`#12787F` measures 5.23 / 3.30 / **3.06**, which confirms the rejection: it
+buys 0.88 on a light shade and gives back 0.66 and 0.63 on the two dark ones,
+landing at a 0.06 margin against a surface nobody controls.
+
+**5.1, closed.** `minSdkVersion` is 24, so the API<=30 window where
+`Notification.color` also tinted the ~12sp app-name label **is live**, and this
+constant gives 3.96 and 3.69 there against a 4.5 bar. **The answer is that old
+shades get a slightly quiet app name, not that the token changes.** The tinted
+small icon itself is a graphical object at 3:1, which all three clear. Both
+facts are pinned, including the shortfall, so the 3:1 test cannot be misread as
+a clean pass.
+
+### 14.6 B9: the clamp and the autosize only work together
+
+The clamp moves from **99 to 999**. The 99 was borrowed from `kMaxBadgeCount`,
+which caps a small circle the OS draws over an icon; this is a TextView we draw
+in a 1x1 cell and three digits fit. At 99 it told a reader with 400 unread the
+same thing it told one with 100.
+
+`autoSizeTextType="uniform"`, 18sp to 28sp. **Without it the clamp alone
+ellipsises** — "999+" at a fixed 28sp overflows 64dp of usable width, so the
+widget would read "99" while meaning "999+", which is worse than either number.
+
+**Not in conflict with 1.5.** 1.5 says the count stays 28sp bold and no layout
+edit is needed *for the colour change*. Autosize makes 28 a maximum rather than
+a fixed size, so one to three digits still render at exactly 28sp. Both are
+asserted in the same test so they cannot later read as contradicting.
+
+The zero state stays as shipped: `android:text="0"` is the widget-picker
+preview and the pre-first-update value, a real default rather than placeholder
+text.
+
+### 14.7 B10 is a decision. Do not "fix" it.
+
+`RemoteViews` resolves `values-night/` against the **system** uiMode, so a
+reader running Flash in Dark on a Light OS gets a light tile.
+
+That is correct. The tile lives on the launcher and should match the launcher,
+and it is the same reason someone in Newspaper mode does not get newsprint on
+their wallpaper. **Do not add app-theme plumbing to the widget.** Recorded in
+the `values-night/` file itself, where the next person to wonder will be.
+
+### 14.8 What the host suite proves about the widget, and what it does not
+
+Stated because it would otherwise be assumed.
+
+**Real:** the four colour values in both directories, the autosize attributes
+and their bounds, the clamp threshold and its "+" form, that the layout reads
+resources rather than literals, that the radius is untouched at 16dp.
+
+**Device only:** whether "999+" actually fits and at what size it settles,
+whether the tile reads correctly beside the app on a home screen, and whether
+`values-night/` resolves the way 14.7 describes. All three are on the morning
+list, and `widget_resources_test.dart` carries a test asserting it contains no
+`testWidgets` — so a future rendering assertion has to argue with that first.

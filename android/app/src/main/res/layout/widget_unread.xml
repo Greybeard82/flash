@@ -12,7 +12,16 @@
 
     <!-- android:text is the value the OS shows before the first onUpdate and
          in the widget picker's preview, so it is a real default rather than
-         placeholder text. -->
+         placeholder text. **The zero state stays as shipped** for exactly that
+         reason: it is not a placeholder to be cleaned up.
+
+         autoSize turns 28sp from a fixed size into a MAXIMUM. That is not in
+         conflict with 1.5's "the count stays 28sp bold and no layout edit is
+         needed— " that line is about the colour change, and one to three
+         digits still render at 28sp. It is "999+" that needs the room, and it
+         settles near 20sp in 64dp of usable width. Without the autosize the
+         clamp alone just ellipsises, which is how you get "99" on a widget
+         that meant to say "999+". -->
     <TextView
         android:id="@+id/widget_unread_count"
         android:layout_width="wrap_content"
@@ -23,6 +32,10 @@
         android:textSize="28sp"
         android:textStyle="bold"
         android:maxLines="1"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="18sp"
+        android:autoSizeMaxTextSize="28sp"
+        android:autoSizeStepGranularity="1sp"
         android:includeFontPadding="false"
         tools:ignore="HardcodedText" />
 </FrameLayout>

@@ -231,6 +231,7 @@ class _NotificationBadgeSink implements UnreadBadgeSink {
 // Without this the shade had a grouped keyword alert next to an
           // ungrouped count and could stack neither.
           groupKey: kFlashNotificationGroupKey,
+          color: kFlashNotificationAccent,
           // What the launcher actually reads.
           number: badgeNumber,
           channelShowBadge: true,

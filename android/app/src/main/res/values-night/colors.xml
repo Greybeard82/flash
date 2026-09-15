@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark pair for the 1x1 unread-count widget. Ink background and warm
-         paper text, mirroring `_npInk` and the light theme's cream in
-         lib/theme/app_theme.dart. -->
-    <color name="widget_unread_bg">#1D1D1B</color>
-    <color name="widget_unread_text">#F2E9DC</color>
+    <!-- Dark pair for the 1x1 unread-count widget: Quiet Ink's
+         `surfaceContainer` under its dark `onSurface`, from
+         lib/theme/app_theme.dart. A tile one step up from the app's own
+         surface, because it sits on a wallpaper rather than in a scaffold.
+
+         It was `_npInk` under the light theme's cream — Newspaper's values on
+         a widget that has nothing to do with Newspaper.
+
+         **B10, and it is a decision rather than a defect.** RemoteViews
+         resolves this directory against the SYSTEM uiMode, so a reader running
+         Flash in Dark on a Light OS gets the light tile. That is correct: the
+         tile lives on the launcher and should match the launcher. It is also
+         why someone in Newspaper mode does not get newsprint on their
+         wallpaper. Do not add app-theme plumbing to the widget to "fix" this. -->
+    <color name="widget_unread_bg">#161D1C</color>
+    <color name="widget_unread_text">#E7EBEA</color>
 </resources>
