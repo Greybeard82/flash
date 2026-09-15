@@ -1576,6 +1576,34 @@ self-referential search to the start of a line.
 The same rule already applies to the six-term scroll grep, where prose hits are
 reported and not counted. It is the same mistake with a different subject.
 
+### 10.6 Verify a control against a rendered call site, never against the theme
+
+A theme entry is a request, not a result. Between the two sits a widget that
+may read the value, transform it, or ignore it — and the three outcomes look
+identical from the theme object.
+
+`SegmentedButton` does all three at once, which is why this rule is written
+here rather than somewhere gentler. The group's outer shape resolves
+`widget ?? theme ?? default` and honours the theme's radius 9. Each segment's
+shape does not: `segmentStyleFor` hardcodes
+`shape: WidgetStatePropertyAll(RoundedRectangleBorder())` and drops
+`style?.shape` on the floor, so segments are square whatever the theme says.
+One `SegmentedButtonThemeData.style.shape`, two unrelated fates.
+
+A test that asserts the theme holds radius 9 passes in both worlds. So does one
+that asserts the segments render square. Neither tells you what the control
+looks like, and reading either alone leads to the opposite of the truth.
+
+**What to do instead.** Pump the real call site, or screenshot it on a device,
+and assert against what came out. Keep the theme-value assertion only as a
+statement about the number Design specified — labelled as that, not as proof of
+a render. `test/segmented_shape_probe_test.dart` is the worked example: it
+holds all three assertions and says which is which.
+
+The same shape has now appeared three times on this control — `showSelectedIcon`,
+the `secondary` colour trap, and this. When a theme "does nothing", the call
+site and the widget source are the first two places to look, not the last.
+
 
 ---
 
