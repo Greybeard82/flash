@@ -2722,3 +2722,65 @@ that forgets the extension keeps its hues rather than silently losing them.
 Material's derived value. It is only reachable in the hued path now, so it no
 longer affects Newspaper, but `surfaceContainer` being unauthored there is a
 loose end somebody will meet again.
+
+### 17.3 The banner has a role of its own
+
+It painted `inverseSurface`. **That was semantically correct, which is exactly
+why this is a new role and not a substitution** — `inverseSurface` means a full
+inversion, the banner is no longer asking for one, and borrowing a role you do
+not mean is how the next person inherits a wrong answer that tests green.
+
+`FlashColors.bannerSurface`, one step above `surface` and nowhere near
+`inverseSurface`:
+
+| theme | fill | source | text on it |
+|---|---|---|---|
+| Quiet Ink light | `#F1F5F5` | `surfaceContainer` | `onSurface`, **16.92:1** |
+| Quiet Ink dark | `#161D1C` | `surfaceContainer` | `onSurface`, **14.24:1** |
+| Newspaper | `#E7E7E3` | `_npSurface2` | `onSurface`, **13.62:1** |
+
+**No new hex anywhere.** Each is the tone that theme already authors as
+one-step-off-the-page. Newspaper is pinned explicitly rather than read from
+`surfaceContainer`, which it never authors — see the loose end in 17.2.
+
+**It is deliberately quiet: about 1.10:1 against the page.** A banner *slides
+in*, and motion is what catches the eye; something that moves does not need
+contrast shock as well. The 1dp `outlineVariant` hairline underneath is what
+keeps the edge legible once it has settled, and it is load-bearing — at this
+fill weight, removing it leaves the strip with no edge against the list.
+
+Dark stays the paler of the two, which the old treatment also got right: a
+dark strip on a near-black page vanishes into it.
+
+**It appears in eight places**, not one: the feed, Alerts, Feeds, Settings, the
+summary sheet, the reading pane, and both keyword panels.
+
+### 17.4 The open question this raised: one banner, two meanings
+
+**Reported, not built.** `NotificationBanner` carries **18 distinct messages,
+and they split almost evenly between confirmation and failure**:
+
+- **Confirmations (10):** `allMarkedRead`, `backupSuccess`, `restoreSuccess`,
+  `feedRemoved`, `keywordRemoved`, `opmlImportedBanner`,
+  `starterPackAddedBanner`, `summaryCopied`, `alertsMarkAllReadBanner`,
+  `alertsRemovedBanner`
+- **Failures and refusals (8):** `refreshFailed`, `opmlImportFailed`,
+  `invalidBackupFile`, `moveFeedFailed`, `cleanModeUnavailable`,
+  `alertsArticleGone`, `alertKeywordExists`, `opmlExportEmpty`
+
+So `backupSuccess` and `invalidBackupFile` are the same strip in the same
+colour, and the only difference is whether you read it before it slides away
+after four seconds. That is not a near-miss case — it is half the widget's
+traffic.
+
+**Why it is not fixed here.** Two variants is a design decision with real
+consequences: an error variant that borrows `error` puts red into Quiet Ink,
+where red currently means exactly one thing (broken), and into Newspaper,
+where red is already the spot colour doing four other jobs. A quieter
+differentiator — an icon, a weight, a leading rule — is a different answer with
+a different cost. Both are David's call, and 1.5's brief was a weight change,
+not a semantics change.
+
+**One thing worth knowing if it is taken up:** the fill is now quiet enough
+that a variant does not have to shout. The old `inverseSurface` treatment had
+no headroom to add emphasis to; this one does.

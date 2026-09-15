@@ -290,6 +290,26 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
 
+  /// The fill behind a transient message strip.
+  ///
+  /// The banner used to paint `inverseSurface`, which is semantically correct
+  /// for what a full inversion means and produced the heaviest block of colour
+  /// anywhere in a light, papery theme for what is usually a one-line
+  /// confirmation. So this is a new role rather than a substitution:
+  /// `inverseSurface` keeps its meaning and stops being borrowed.
+  ///
+  /// **It sits one step above `surface` and far below `inverseSurface`.** That
+  /// is deliberately subtle -- about 1.10:1 against the page in both
+  /// brightnesses -- because a banner *slides in*, and motion is what catches
+  /// the eye. Something that moves does not also need contrast shock. The
+  /// hairline under it is what makes the edge legible once it has settled.
+  ///
+  /// Not a new hex anywhere: it is the theme's own `surfaceContainer` in Quiet
+  /// Ink and `_npSurface2` in Newspaper, both already authored as the
+  /// one-step-off-the-page tone. Text on it is `onSurface`, which measures
+  /// 16.92:1 light, 14.24:1 dark and 13.62:1 in Newspaper.
+  final Color bannerSurface;
+
   /// Whether categories are drawn without hue.
   ///
   /// Newspaper only. A newspaper identifies its sections by name, not by
@@ -313,6 +333,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.illustration,
     required this.inert,
     required this.brightness,
+    required this.bannerSurface,
     this.monochromeCategories = false,
   });
 
@@ -329,9 +350,11 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? illustration,
     Color? inert,
     Brightness? brightness,
+    Color? bannerSurface,
     bool? monochromeCategories,
   }) {
     return FlashColors(
+      bannerSurface: bannerSurface ?? this.bannerSurface,
       monochromeCategories:
           monochromeCategories ?? this.monochromeCategories,
       onSurfaceMuted: onSurfaceMuted ?? this.onSurfaceMuted,
@@ -362,6 +385,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       navPill: Color.lerp(navPill, other.navPill, t)!,
       illustration: Color.lerp(illustration, other.illustration, t)!,
       inert: Color.lerp(inert, other.inert, t)!,
+      bannerSurface: Color.lerp(bannerSurface, other.bannerSurface, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
       // A half-hued chip is not a thing, so this snaps with brightness.
       monochromeCategories:
@@ -380,11 +404,13 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.illustration == illustration &&
           other.inert == inert &&
           other.brightness == brightness &&
+          other.bannerSurface == bannerSurface &&
           other.monochromeCategories == monochromeCategories;
 
   @override
   int get hashCode => Object.hash(onSurfaceMuted, onSurfaceRead, placeholder,
-      navPill, illustration, inert, brightness, monochromeCategories);
+      navPill, illustration, inert, brightness, bannerSurface,
+      monochromeCategories);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -413,6 +439,8 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     illustration: mix(0.78),
     inert: mix(0.78),
     brightness: scheme.brightness,
+    // One step off the page, matching what the real themes do.
+    bannerSurface: mix(0.94),
   );
 }
 
@@ -434,6 +462,7 @@ const FlashColors _flashColorsLight = FlashColors(
   illustration: _qiIllustrationLight,
   inert: _qiInertLight,
   brightness: Brightness.light,
+  bannerSurface: _qiSurfaceContainerLight,
 );
 
 const FlashColors _flashColorsDark = FlashColors(
@@ -444,6 +473,7 @@ const FlashColors _flashColorsDark = FlashColors(
   illustration: _qiIllustrationDark,
   inert: _qiInertDark,
   brightness: Brightness.dark,
+  bannerSurface: _qiSurfaceContainerDark,
 );
 
 /// Roles the spec does not name are set from roles it does, never invented:
@@ -794,6 +824,10 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // that were never going to arrive, because the right answer was that there
   // should not be any. See FlashColors.monochromeCategories.
   monochromeCategories: true,
+  // The same one-step-off-the-page tone Newspaper already uses for its nav
+  // and secondary surfaces. Newspaper never authors surfaceContainer, so the
+  // role is pinned here rather than read off the scheme.
+  bannerSurface: _npSurface2,
   placeholder: _npSurface2,
   // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
   // the nav selection, the FAB, the switch and the masthead tint — so a red

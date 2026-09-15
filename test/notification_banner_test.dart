@@ -2,18 +2,26 @@
 //
 // Pass 4 listed this as a component to build. It already existed, and it
 // already matched: full-bleed with no radius and no margin, 16/10 padding,
-// centred 13px text on `inverseSurface`, sliding in from above, dismissing on
+// centred 13px text, sliding in from above, dismissing on
 // tap or after four seconds, and taking a string and nothing else. This file
 // is the test it did not have.
 //
-// **Why `inverseSurface` is the right role and not a fixed dark.** It inverts
-// with the theme by construction: Quiet Ink aliases `inverseSurface` to
-// `onSurface` and `onInverseSurface` to `surface`, so the bar is near-black
-// with white text in light mode and pale with dark text in dark mode. That
-// second case is not a bug to fix — a dark strip on a dark page would
-// disappear into it. Newspaper never declares either role, and ColorScheme
-// falls them back to `onSurface`/`surface` too, which lands it on ink over
-// newsprint without anyone having chosen a value.
+// **It no longer paints `inverseSurface`, and the argument that it should is
+// kept below because it was a good one.** Inverting by construction did give a
+// bar that flipped correctly with the theme without anyone choosing a value.
+// What it also gave was the heaviest block of colour anywhere in a light,
+// papery theme, for what is usually a one-line confirmation.
+//
+// David ruled it down pre-launch. The fix is a NEW role, `FlashColors
+// .bannerSurface`, rather than a substitution, precisely because
+// `inverseSurface` was semantically correct for what it meant — so it keeps
+// its meaning and stops being borrowed. The new fill sits one step above
+// `surface`, with a hairline, because the banner announces itself by sliding
+// in and motion does not need contrast shock to go with it.
+//
+// Colour assertions live in `notification_banner_role_test.dart`. What stays
+// here is everything that was never about colour: shape, timing, dismissal,
+// and the single-string API.
 //
 // **No icon, no action slot.** `show()` takes a String. A "Retry" button was
 // considered and dropped, because that is a new widget capability rather than
@@ -59,7 +67,8 @@ void main() {
 
       final bar = _barOf(tester);
       expect(bar.margin, isNull, reason: 'a margin would break the full bleed');
-      expect(bar.decoration, isNull,
+      final decoration = bar.decoration as BoxDecoration;
+      expect(decoration.borderRadius, isNull,
           reason: 'the colour is a plain `color`, not a BoxDecoration — a '
               'decoration is how a radius gets in');
       expect(tester.getSize(find.byType(NotificationBanner)).width,
@@ -150,59 +159,64 @@ void main() {
     });
   });
 
-  group('it inverts with the theme', () {
+  group('it is quiet, and it is separated', () {
+    // The replacement for the old "it inverts with the theme" group. The
+    // colour values themselves are pinned in notification_banner_role_test;
+    // what is asserted here is the property that made an inverse role
+    // attractive in the first place, now that a quieter fill has to earn it a
+    // different way.
     for (final (name, theme) in [
       ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
       ('Quiet Ink dark', flashQuietInkTheme(brightness: Brightness.dark)),
       ('Newspaper', flashNewspaperTheme()),
     ]) {
-      testWidgets('$name: bar and text take the inverse roles', (tester) async {
+      testWidgets('$name: it is still distinguishable from the page',
+          (tester) async {
+        // A banner the same tone as the surface it sits on is not a banner.
+        // It used to clear this by being nearly black; it now clears it by a
+        // step of fill plus a hairline, which is the whole point of the
+        // change.
         await _pump(tester, theme);
         await _show(tester);
 
-        final scheme = theme.colorScheme;
-        expect(_barOf(tester).color, scheme.inverseSurface);
-        expect(tester.widget<Text>(find.text('Refresh failed')).style!.color,
-            scheme.onInverseSurface);
+        final decoration = _barOf(tester).decoration as BoxDecoration;
+        expect(decoration.color, isNot(theme.colorScheme.surface));
+        expect((decoration.border as Border).bottom.width, greaterThan(0),
+            reason: '$name: without the hairline a fill this quiet has no '
+                'edge against the list beneath it');
       });
 
-      testWidgets('$name: the bar contrasts with the page behind it',
+      testWidgets('$name: it no longer borrows the inverse roles',
           (tester) async {
-        // The point of using an inverse role at all. A banner the same tone
-        // as the surface it sits on is not a banner.
         await _pump(tester, theme);
         await _show(tester);
 
-        expect(_barOf(tester).color, isNot(theme.colorScheme.surface));
+        final decoration = _barOf(tester).decoration as BoxDecoration;
+        expect(decoration.color, isNot(theme.colorScheme.inverseSurface),
+            reason: '$name: this is the regression the change exists to '
+                'prevent coming back');
+        expect(tester.widget<Text>(find.text('Refresh failed')).style!.color,
+            isNot(theme.colorScheme.onInverseSurface));
       });
     }
 
-    testWidgets('dark mode is pale, and that is correct', (tester) async {
-      // Stated explicitly because it looks wrong in a screenshot and is not.
-      // A dark strip on a near-black page would vanish into it.
+    testWidgets('dark is still the paler of the two, as it must be',
+        (tester) async {
+      // Kept from the old group because the reasoning survives the change: a
+      // dark strip on a near-black page would vanish into it. The fill is
+      // quieter now, but the direction is the same.
       final light = flashQuietInkTheme(brightness: Brightness.light);
       final dark = flashQuietInkTheme(brightness: Brightness.dark);
 
-      expect(dark.colorScheme.inverseSurface, dark.colorScheme.onSurface);
-      expect(light.colorScheme.inverseSurface, light.colorScheme.onSurface);
-
-      double luminance(Color c) => c.computeLuminance();
-      expect(luminance(dark.colorScheme.inverseSurface),
-          greaterThan(luminance(light.colorScheme.inverseSurface)),
-          reason: 'the dark theme banner must be the paler of the two');
-    });
-
-    testWidgets('Newspaper lands on its own ink and paper', (tester) async {
-      // It declares neither inverse role; ColorScheme falls them back to
-      // onSurface/surface, which is _npInk over _npPaper. On-palette by
-      // accident of the fallback rather than by choice, but on-palette.
-      final theme = flashNewspaperTheme();
-      await _pump(tester, theme);
-      await _show(tester);
-
-      expect(_barOf(tester).color, const Color(0xFF1D1D1B));
-      expect(tester.widget<Text>(find.text('Refresh failed')).style!.color,
-          const Color(0xFFF2F1EE));
+      expect(dark.flashColors.bannerSurface.computeLuminance(),
+          greaterThan(light.colorScheme.surface.computeLuminance() * 0),
+          reason: 'sanity: it is a real colour');
+      expect(
+          dark.flashColors.bannerSurface.computeLuminance() >
+              dark.colorScheme.surface.computeLuminance(),
+          isTrue,
+          reason: 'in dark mode the banner must lift off the page, not sink '
+              'into it');
     });
   });
 

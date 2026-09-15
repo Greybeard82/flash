@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// A non-blocking banner that slides in below the app bar.
 /// Only one banner is shown at a time; a new message replaces the current one.
 /// Persistent banners (e.g. "Fetching…") stay until explicitly dismissed.
@@ -79,11 +81,24 @@ class NotificationBannerState extends State<NotificationBanner>
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          color: theme.colorScheme.inverseSurface,
+          decoration: BoxDecoration(
+            // Was `inverseSurface`, which is semantically right for a full
+            // inversion and was the heaviest block of colour in the whole
+            // light theme for what is usually a one-line confirmation. This
+            // is its own role now, so `inverseSurface` keeps its meaning
+            // instead of being borrowed.
+            color: theme.flashColors.bannerSurface,
+            // The fill sits about 1.10:1 off the page, which is deliberate —
+            // the banner slides in, and motion is what catches the eye. The
+            // hairline is what keeps the edge legible once it has settled.
+            border: Border(
+              bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+            ),
+          ),
           child: Text(
             _message ?? '',
             style: TextStyle(
-              color: theme.colorScheme.onInverseSurface,
+              color: theme.colorScheme.onSurface,
               fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
