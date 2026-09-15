@@ -403,11 +403,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+            // The glyph this state was missing. Every other empty state in
+            // the app pairs one with its copy, and a bare line of text in the
+            // middle of a screen reads as a list that failed to load rather
+            // than as a list with nothing in it.
+            //
+            // The Alerts destination's own bell, at `illustration`, 48dp,
+            // 12dp clear of the copy — the same three numbers Bookmarks and
+            // the keyword panels use. Matching an existing pattern; not
+            // inventing one.
+            Icon(Icons.notifications_none_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 12),
             Text(
               l10n.alertsTabEmpty,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context).flashColors.onSurfaceMuted,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],

@@ -225,10 +225,16 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       Icon(Icons.bookmark_border_rounded,
                           size: 48, color: theme.flashColors.illustration),
                       const SizedBox(height: 12),
+                      // `onSurfaceVariant`, not `onSurfaceMuted`. When a
+                      // screen is empty this copy is the only content on it,
+                      // so it is not supporting text and the most recessive
+                      // role is the wrong one. One piece of copy takes the
+                      // first role; the second role exists for a second
+                      // piece, which this state does not have.
                       Text(
                         l10n.noBookmarks,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.flashColors.onSurfaceMuted,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],

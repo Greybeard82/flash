@@ -77,6 +77,23 @@ Tints the small icon only (`ic_stat_flash.xml`, shipped, unchanged). On Android
 12+ the shade's app-name label takes the system's ink, not this constant, which
 is why 3:1 is the applicable bar. See task 5.1.
 
+> **Both halves of 5.1, recorded together because either alone misleads.**
+>
+> 1. `flutter.minSdkVersion` resolves to **24**, so the API<=30 window
+>    where `Notification.color` also tints the app name **is live**. The
+>    app installs on Android 7.0 through 11.
+> 2. **Nothing sets `Notification.color` anywhere.** Neither
+>    `AndroidNotificationDetails` passes a `color:`, and `#15868E` appears
+>    in no file under `lib/` or `android/`. The constant is orphaned, not
+>    at risk.
+>
+> Reading (1) alone says there is a contrast problem on old shades; reading
+> (2) alone says the question is closed. Together: the question is real and
+> unarrived. **Pass 9 is where it gets a consumer**, and that is the moment
+> the 4.5:1 on a ~12sp app name stops being hypothetical. The answer then
+> is that old shades get a slightly quiet app name, not that the token
+> moves.
+
 ### 1.4 Newspaper's ink levels, authored
 
 | role | value | was |
@@ -233,6 +250,29 @@ Height **40**, radius **9** outer / **0** between, 1dp `outlineVariant` border
 and divider, selected `primaryContainer` under `onPrimaryContainer` at 13/w600,
 unselected `onSurfaceVariant` at 13/w500, `showSelectedIcon: false`. One theme
 entry, three surfaces fixed, no widget changes.
+
+> **SUPERSEDED for the height. It stays at 48.** The rest of the row is
+> shipped as written; the line is kept as the record of what was asked
+> for.
+>
+> **A decision reversed on the spec, not a miss.** 1.7 names a visual
+> height and does not address touch targets, and on this widget the two
+> are the same number: the segment paints at 48 rather than wearing a
+> 40dp body inside a tap halo, because `_SegmentedButtonRenderObject`
+> lays every segment out at a uniform tight height and Material’s tap
+> padding ends up inside the paint. Reaching 40 means `tapTargetSize:
+> shrinkWrap` or a negative `visualDensity`, and both take the target
+> down with the paint.
+>
+> This app has gone under 48 exactly twice — the 36dp folder chip and
+> the 36dp rail halves — each with an explicit sign-off and each time
+> because the shape itself was the design. Here the 40 is a number on a
+> low-frequency control in Settings and a bubble. It does not earn a
+> third exception.
+>
+> Pinned at the real 48 in `segmented_button_theme_test.dart` so the gap
+> is visible rather than implied, and so applying it later has to be a
+> deliberate edit there.
 
 ---
 
@@ -507,6 +547,18 @@ Nothing in sections 1–3 is in this list.
   Proposed: `onSurfaceVariant` on a neutral `surfaceContainerHighest` circle, no
   tint. Delete, in Alerts only, keeps `error`. Not in the locked set, but not
   ruled on either.
+
+  > **Clarified, because that sentence reads two ways.** "Delete, in Alerts
+  > only, keeps `error`" is about **the radial menu's Delete** — the
+  > subject of the bullet it sits in, and the only Delete `app_theme.dart`
+  > blesses by name among error's three jobs. "In Alerts only" describes
+  > when that button exists, not a scope being introduced.
+  >
+  > It does **not** reach an `IconButton` in a panel. Pass 7 moved the
+  > keyword alerts and blocklist bins to `onSurfaceVariant` on that reading,
+  > matching the Categories header restyle in section 3, and
+  > `pass7_sweep_test.dart` guards it with the radial menu as the one named
+  > exemption. Recorded so the next person does not re-red a bin.
 - **PROPOSAL · The ad's dark media well, `#1E2524` — a new value** I would
   rather not add. It exists only so a creative with a dark background still has
   a visible edge. To hold the line at zero new surface values, use `placeholder`
@@ -940,6 +992,21 @@ articles being marked read that nobody saw.
   buttons) and `settings_screen.dart:160` (a red `backgroundColor`). The last
   is a button background and worth a look against "never a confirmation
   button".
+
+> **Three of these four are closed. Marked rather than deleted, so the list
+> stays readable as a record of what 1.6 claimed against what shipped.**
+>
+> - The unread dot **exists** — B1 shipped in pass 5, with
+>   `unread_dot_geometry_test.dart` pinning the reserved 12dp.
+> - The Alerts badge **is the orange** — a `badgeTheme` entry landed in batch 4.
+> - `error`'s scope **is now the three named items** — pass 7 moved both delete
+>   bins to `onSurfaceVariant` and took the red off the restore-backup confirm.
+>   `pass7_sweep_test.dart` guards all three.
+> - **The reader's filled bookmark glyph still does not exist**, and pass 8
+>   confirmed it: `article_detail_pane.dart` carries a close button and an
+>   open-in-browser button and nothing else. Section 4's proposal is what would
+>   add it, and it is deliberately still out — see 11.7 for the recommendation
+>   it is waiting on.
 
 ### 7.5 1.7's "only capsules left beside r9 chips and r9 nav pills"
 
@@ -1380,3 +1447,231 @@ for a GLYPH by measurement, not by this deletion: Newspaper’s
 ink saved glyph would be pixel-identical to an unsaved one. The claim that test
 made is now true in reverse, which is exactly the kind of thing that gets lost
 when a test is deleted without a note.
+
+---
+
+## 10. Standing rules for tests in this repo
+
+Both of these were bought with an incident. Neither is a style preference.
+
+### 10.1 Assert the mutation landed before running the test
+
+A mutation test is only evidence if the mutation happened. Change the code,
+**assert the change is in the file**, and only then run the suite.
+
+Bought by a mutation that silently did nothing: a `str.replace` targeting
+`
+
+` against text that Python had already normalised to `
+`. It matched
+zero times, the file was untouched, the test passed, and that was read as "the
+parity gate does not catch a missing key— " a conclusion about a gate that was
+in fact working perfectly. Every mutation in passes 6 to 8 prints a VERIFIED
+line before the test runs.
+
+### 10.2 A test that constructs its own subject proves a fact about the test
+
+If the app never builds the widget that way, the coverage is shaped like
+coverage and covers nothing. **Assert against the call sites, or assert that
+the call sites pass what you think they pass.**
+
+Bought by `showSelectedIcon`. Handoff 1.7 asks for `showSelectedIcon: false`,
+`SegmentedButtonThemeData` has no such field, and that was written up as an
+unclosable gap — with a test asserting the selected checkmark **is** shown, to
+pin the gap. The test built its own `SegmentedButton`, which of course inherits
+the framework default of `true`. Every SegmentedButton in the app already
+passed `false`. The assertion was true of the widget in the test and false of
+all three that ship.
+
+**A screenshot caught it, not the suite.** The filter bubble rendered with no
+checkmark, which is what sent me to the call sites. Worth recording plainly:
+the suite was green, and green was wrong.
+
+The replacement reads `lib/` — the count of SegmentedButtons is three, every
+one carries the flag — plus a tripwire confirming the framework default really
+is the checkmark, so the guard deletes itself rather than lingering as
+protection if Material ever flips it.
+
+This is the fifth harness-blindness incident in the project and the first of
+this exact shape. The others, for pattern-matching: the alpha-ink allowlist
+reported empty while two aliased sites sat in the file; a wrapped call chain
+the guard's regex could not see; `find.byType(Image)` finding nothing on a card
+that renders no Image, so the finder was empty exactly when it mattered; and
+22 nav tests pumping into a `Scaffold` with no `body:`, which is how a total
+render failure reached a device.
+
+---
+
+## 11. Pass 8: the reading surfaces
+
+Deliberately small. Most of these took their ink roles in passes 2 and 4 and
+Design never mocked them in detail, so this is one type change, verification,
+and two consistency items.
+
+### 11.1 The clean view reads in Literata now
+
+Body, quotes, list items and list markers at **17 / 1.62**; h3 off the sans
+`titleMedium` onto the reading face at 17 / w700; captions unchanged. h1 and h2
+were already serif and did not move.
+
+**The family is taken from `titleLarge`, not from `kSerifFamily`.** Both themes
+put their reading serif there — Literata in Quiet Ink, PT Serif in Newspaper —
+while `bodyLarge` is the *operating* face in Quiet Ink. Hardcoding the constant
+would have put Literata into Newspaper, which has its own type system.
+
+Worth knowing for anyone touching headings: **Newspaper has two serifs.**
+Playfair Display for display and headline, PT Serif for title and body. A test
+asserting h1 matches the reading face would demand Newspaper give that up; the
+assertions are each against their own theme entry instead.
+
+`kCleanBodySize` and `kCleanBodyHeight` live in `app_theme.dart`, and
+`clean_view_type_test.dart` pins 1.62 with an explicit `isNot(1.6)` — it is a
+value that looks like a rounding artefact and is not one.
+
+### 11.2 Literata's subset, and what can fall outside it
+
+The subset is documented in `pubspec.yaml`: **Latin-1, Latin Extended-A and
+Extended-B, general punctuation, currency, plus U+2122 and U+2212**. No
+Cyrillic, Greek, Vietnamese, CJK, Arabic, Hebrew, or emoji.
+
+**Yes, content can reach it outside that range, and the path is the obvious
+one:** the clean view renders article bodies from whatever RSS feed the user
+adds, and nothing restricts a feed's language. Emoji in body text and headlines
+are ordinary in feeds. This is not a hypothetical about an unusual locale — it
+is any user who subscribes to a Russian, Greek or Japanese source.
+
+What happens is fallback rather than tofu: Flutter consults the platform's
+fallback fonts for a codepoint the family does not carry. So the failure is not
+missing glyphs, it is **a reading view that silently stops being Literata** for
+those feeds, with a line height tuned for one face applied to another. Smaller
+than tofu, and real.
+
+**Not verified on device in this pass.** The fallback claim is Flutter's
+documented behaviour; confirming it needs a non-Latin article in a real feed,
+and `flutter_test` substitutes its own font so the host suite cannot see it.
+Worth ten seconds with a Russian feed before the ads pass.
+
+### 11.3 Verification results
+
+| surface / state | verdict |
+|---|---|
+| Reader app bar: `surface`, `titleSmall`, `onSurfaceVariant` attribution | **correct** |
+| Reader action ink (close, open-in-browser) | **correct** — inherits, no overrides |
+| Reader bookmark glyph, filled, in `secondary` | **does not exist**, see 7.4 |
+| Summary: reading / writing status line | **correct**, `onSurfaceMuted` |
+| Summary: the result | **correct** |
+| Summary: unavailable | **correct**, muted glyph + variant message |
+| Summary: show / hide details | **correct**, `onSurfaceVariant` |
+| Summary: copy | **correct** |
+| Summary: on-device disclaimer | **correct**, muted + italic |
+| Summary: teaser-only | **correct** by reading; shares the disclaimer's style |
+| Summary: failed (cloud) | **unreachable from a test** |
+| Summary: cloud disclaimer | **unreachable from a test** |
+| Clean view: offered / active / unavailable / extracting | **correct**, covered by `article_detail_pane_clean_mode_test.dart` |
+
+The two unreachable states both hang off `useCloud`, which the sheet resolves
+internally from the summary tier and exposes no seam for. Adding one would be a
+production change made for a test's convenience, which this project has turned
+down before. Both were verified by reading: each is the other half of a ternary
+whose on-device branch is now pinned, so a drift would have to be written
+deliberately into a line whose twin fails.
+
+**One finding worth acting on eventually.**
+`article_summary_sheet.dart:449` reads
+`final secondary = theme.colorScheme.onSurfaceVariant;` — a local named
+`secondary` that is **not** `colorScheme.secondary`, in an app where 1.6
+reserves that role for unread and saved. The value is correct; the name is a
+trap, and "fixing" it to `theme.colorScheme.secondary` would turn the control
+orange while looking like a tidy-up. Not renamed, because this was a
+verification pass — but the resolved colour is now pinned, so that edit fails
+rather than ships.
+
+### 11.4 Empty states: the structure, and the one exclusion
+
+The split was not 2—2, it was three shapes:
+
+| site | copy | was | now |
+|---|---|---|---|
+| Categories, no feeds | one piece | `onSurfaceVariant` | unchanged |
+| Feed, caught up | one piece | `onSurfaceVariant` | unchanged |
+| Bookmarks | one piece | `onSurfaceMuted` | **`onSurfaceVariant`** |
+| Alerts | one piece, no glyph | `onSurfaceMuted` | **`onSurfaceVariant`** + glyph |
+| Keyword alerts panel | two pieces | muted + muted | **variant** + muted |
+| Keyword blocklist panel | two pieces | variant + muted | unchanged |
+
+Note the newline trap: Bookmarks and Alerts each render **two lines** from one
+string. The rule is about pieces of copy, not rendered lines — you cannot give
+two roles to halves of one `Text` without splitting it, which would be a
+structural change nobody asked for.
+
+**`empty_state.dart` is exempt from the shape, not the rule.** It is the
+first-run state: an 80dp brand mark, a `headlineSmall` w700 heading and a
+button. Its one line of body copy is already `onSurfaceVariant`. Forcing the
+rule onto it would demote its heading to a caption.
+
+**The tablet's idle reading pane is exempt outright, and a test said so before
+I did.** It was swept into the rule and reverted when `ink_roles_test.dart`
+failed in both brightnesses. The rule rests on the copy being the only content
+on the screen; nothing is empty there — the middle column is full of articles
+and the right-hand one is waiting to be told which. Pass 2 gave it
+`onSurfaceMuted` deliberately. The exclusion is now asserted in
+`empty_state_roles_test.dart` rather than merely absent.
+
+### 11.5 Alerts' glyph matched a pattern; it was not invented
+
+Five of the six empty states already pair `flashColors.illustration` with their
+copy, and three use the same three numbers: **48dp glyph, 12dp gap, then the
+text**. Alerts takes the destination's own bell,
+`Icons.notifications_none_rounded`, at exactly those numbers.
+
+It is the same glyph the keyword alerts panel's empty state uses. Both are about
+alerts and both are bells; flagged rather than treated as a collision.
+
+### 11.6 Notification channels, for pass 9
+
+**Two channels, and they are already separate.**
+
+| id | name | importance | declared in |
+|---|---|---|---|
+| `flash_keyword_alerts` | Keyword alerts | `Importance.defaultImportance` (3) | `refresh_service.dart:21-22`, posted at `:177` |
+| `flash_unread_count` | Unread count | `Importance.low` (2) | `unread_badge_service.dart:11-12`, posted at `:216` |
+
+**They do not share one, and the unread count is already IMPORTANCE_LOW.** So
+**B8 is already done** — there is nothing to migrate. Verified live on the
+Lenovo: `NotificationChannel{mId='flash_unread_count', mName=Unread count,
+mImportance=2, mOriginalImp=2, mUserLockedFields=0, mDeleted=false}`.
+
+Three facts pass 9 should hold onto:
+
+1. **Channels are created lazily, on the first `show()` for that id** — nothing
+   calls `createNotificationChannel` explicitly. The Lenovo has
+   `flash_unread_count` and **not** `flash_keyword_alerts`, because no keyword
+   alert has ever fired on it. So the 25 testers do not have a uniform set:
+   each has whichever channels their own usage has triggered.
+2. **`mUserLockedFields=0`** on the one channel observed, meaning nothing had
+   been customised there. That is one device and does not generalise.
+3. **If a migration ever is needed**, it is a new id plus
+   `deleteNotificationChannel` on the old one, and the user-visible cost is
+   that anyone who had customised the old channel — sound, importance, dot,
+   lock-screen visibility — silently loses all of it and gets the app's
+   defaults, with no notice and nothing to restore from. That is the reason to
+   avoid needing one, and the reason this was worth checking before writing the
+   pass rather than after.
+
+### 11.7 The reader action bar — a recommendation, not a change
+
+Not started, not threaded. Handoff 4's proposal stays out.
+
+**I would take the overflow.** Four 48dp actions leave the title 160dp at
+360dp, roughly twenty characters of a headline — enough to read "Microsoft
+proposes limits o" and stop, on the one surface where knowing which article you
+are in matters most. Moving open-in-browser into an overflow buys back 48dp to
+208dp, and it is the right action to demote on the evidence already in the app:
+the reader opens in the embedded WebView by default, clean mode is one tap from
+the FAB, and open-in-browser is the escape hatch for the minority of pages that
+do not render — a considered act rather than a reflex, which is what an overflow
+is for. The three that stay, bookmark, share and close, are all one-tap
+reflexes. The counter-argument is real and worth holding a phone for: an
+overflow is two taps and a menu for something some readers use constantly, and
+160dp of title is only cramped if headlines are long, which on this feed list
+they mostly are.

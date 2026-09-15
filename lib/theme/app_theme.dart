@@ -188,6 +188,25 @@ const TextStyle kNumeralTimestampStyle = TextStyle(
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
+/// The clean view's reading measure, from handoff 3's restyle list.
+///
+/// Declared here rather than in `clean_article_view.dart` because they are type
+/// decisions and this is where the type system lives — and because a test that
+/// pins them should not have to reach into a widget's private constants to do
+/// it.
+///
+/// **1.62 is not 1.6 rounded up.** It is the value the restyle list names, and
+/// the second decimal is the kind of thing that gets "tidied" by someone who
+/// reads it as noise: at 17px it is the difference between a 27.5px line and a
+/// 27.2px one, which is small per line and visible down a column of forty.
+/// `clean_view_type_test.dart` pins it for exactly that reason.
+///
+/// 17 rather than the 16 the Material ramp gives `bodyLarge`: this is the one
+/// surface in the app whose entire job is sustained reading, and it is the one
+/// place the ramp is the wrong authority.
+const double kCleanBodySize = 17;
+const double kCleanBodyHeight = 1.62;
+
 /// The colour roles Material has no slot for.
 ///
 /// Deliberately an extension rather than four more `ColorScheme` members bent

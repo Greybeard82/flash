@@ -479,10 +479,14 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             Icon(Icons.notifications_none_rounded,
                 size: 48, color: theme.flashColors.illustration),
             const SizedBox(height: 12),
+            // Two pieces of copy take two roles: this one leads, so it
+            // takes `onSurfaceVariant` and the line under it stays muted.
+            // Both muted made the pair read as one grey paragraph with an
+            // arbitrary line break in it.
             Text(
               l10n.noKeywordAlerts,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.flashColors.onSurfaceMuted,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),

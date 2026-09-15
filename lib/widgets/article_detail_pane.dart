@@ -488,6 +488,19 @@ class ArticleDetailPlaceholder extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    // **Not an empty state, and deliberately exempt from their roles.**
+    //
+    // Pass 8's rule is that empty-state copy takes `onSurfaceVariant`, because
+    // when a screen is empty that copy is the only content on it. This pane is
+    // the exception the rule's own reasoning excludes: nothing here is empty.
+    // The middle column is full of articles and this is the right-hand column
+    // waiting to be told which one — genuinely secondary to the list beside
+    // it, and the one place in the app where recessive is correct.
+    //
+    // Pass 2 decided this and `ink_roles_test.dart` has pinned it since, in
+    // both brightnesses, for the glyph as well as the text. Swept into the
+    // rule during this pass and reverted when that test said so, which is the
+    // test doing exactly what it was written for.
     final muted = theme.flashColors.onSurfaceMuted;
     return Center(
       child: Padding(
