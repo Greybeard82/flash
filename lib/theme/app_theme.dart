@@ -310,6 +310,24 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// 16.92:1 light, 14.24:1 dark and 13.62:1 in Newspaper.
   final Color bannerSurface;
 
+  /// The banner's edge.
+  ///
+  /// **Load-bearing, and held to 3:1.** `bannerSurface` is about 1.10:1
+  /// against the page, so the border is what actually defines where the
+  /// component starts and stops — which makes it a non-text graphical object
+  /// under WCAG 1.4.11 and puts it on a 3:1 floor against **both** the fill it
+  /// sits on and the page behind it.
+  ///
+  /// `outlineVariant` was tried first and is nowhere near: 1.08 against the
+  /// fill and 1.19 against the page in Quiet Ink light. It is a hairline for
+  /// separating list rows that already differ; it cannot carry an edge on its
+  /// own. Newspaper's `outline` fails the same way at 1.37 / 1.50.
+  ///
+  /// Measured, per theme: 5.64 / 6.19 light, 5.63 / 6.22 dark, 4.56 / 5.00 in
+  /// Newspaper. Newspaper takes `onSurfaceMuted` rather than its ink, which
+  /// clears 13.62 and would draw a heavy black rule rather than an edge.
+  final Color bannerBorder;
+
   /// Whether categories are drawn without hue.
   ///
   /// Newspaper only. A newspaper identifies its sections by name, not by
@@ -334,6 +352,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.inert,
     required this.brightness,
     required this.bannerSurface,
+    required this.bannerBorder,
     this.monochromeCategories = false,
   });
 
@@ -351,10 +370,12 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? inert,
     Brightness? brightness,
     Color? bannerSurface,
+    Color? bannerBorder,
     bool? monochromeCategories,
   }) {
     return FlashColors(
       bannerSurface: bannerSurface ?? this.bannerSurface,
+      bannerBorder: bannerBorder ?? this.bannerBorder,
       monochromeCategories:
           monochromeCategories ?? this.monochromeCategories,
       onSurfaceMuted: onSurfaceMuted ?? this.onSurfaceMuted,
@@ -386,6 +407,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
       illustration: Color.lerp(illustration, other.illustration, t)!,
       inert: Color.lerp(inert, other.inert, t)!,
       bannerSurface: Color.lerp(bannerSurface, other.bannerSurface, t)!,
+      bannerBorder: Color.lerp(bannerBorder, other.bannerBorder, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
       // A half-hued chip is not a thing, so this snaps with brightness.
       monochromeCategories:
@@ -405,11 +427,12 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.inert == inert &&
           other.brightness == brightness &&
           other.bannerSurface == bannerSurface &&
+          other.bannerBorder == bannerBorder &&
           other.monochromeCategories == monochromeCategories;
 
   @override
   int get hashCode => Object.hash(onSurfaceMuted, onSurfaceRead, placeholder,
-      navPill, illustration, inert, brightness, bannerSurface,
+      navPill, illustration, inert, brightness, bannerSurface, bannerBorder,
       monochromeCategories);
 }
 
@@ -441,6 +464,7 @@ FlashColors _fallbackFlashColors(ColorScheme scheme) {
     brightness: scheme.brightness,
     // One step off the page, matching what the real themes do.
     bannerSurface: mix(0.94),
+    bannerBorder: scheme.onSurfaceVariant,
   );
 }
 
@@ -463,6 +487,7 @@ const FlashColors _flashColorsLight = FlashColors(
   inert: _qiInertLight,
   brightness: Brightness.light,
   bannerSurface: _qiSurfaceContainerLight,
+  bannerBorder: _qiOnSurfaceVariantLight,
 );
 
 const FlashColors _flashColorsDark = FlashColors(
@@ -474,6 +499,7 @@ const FlashColors _flashColorsDark = FlashColors(
   inert: _qiInertDark,
   brightness: Brightness.dark,
   bannerSurface: _qiSurfaceContainerDark,
+  bannerBorder: _qiOnSurfaceVariantDark,
 );
 
 /// Roles the spec does not name are set from roles it does, never invented:
@@ -828,6 +854,8 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // and secondary surfaces. Newspaper never authors surfaceContainer, so the
   // role is pinned here rather than read off the scheme.
   bannerSurface: _npSurface2,
+  // Not _npInk: at 13.62 it draws a black rule rather than an edge.
+  bannerBorder: Color(0xFF686765),
   placeholder: _npSurface2,
   // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
   // the nav selection, the FAB, the switch and the masthead tint — so a red

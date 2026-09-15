@@ -202,8 +202,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _bannerKey.currentState?.show(l10n.restoreSuccess(count));
     } on FormatException {
       if (mounted) {
-        _bannerKey.currentState
-            ?.show(AppLocalizations.of(context)!.invalidBackupFile);
+        _bannerKey.currentState?.show(
+            AppLocalizations.of(context)!.invalidBackupFile,
+            kind: BannerKind.failure);
       }
     } catch (e) {
       if (mounted) {
@@ -464,8 +465,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // flavour of bad file: the distinction between "not XML", "not OPML" and
       // "unreadable" is not something the user can act on differently.
       if (mounted) {
-        _bannerKey.currentState
-            ?.show(AppLocalizations.of(context)!.opmlImportFailed);
+        _bannerKey.currentState?.show(
+            AppLocalizations.of(context)!.opmlImportFailed,
+            kind: BannerKind.failure);
       }
     } catch (e) {
       if (mounted) _bannerKey.currentState?.show(e.toString());
@@ -499,7 +501,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // An empty file is a worse outcome than being told there is nothing
         // to write: the user would hand it to another reader and find out
         // there.
-        _bannerKey.currentState?.show(l10n.opmlExportEmpty);
+        _bannerKey.currentState?.show(l10n.opmlExportEmpty, kind: BannerKind.failure);
         return;
       }
       // Same as the backup export: silence on a cancel, which is a deliberate

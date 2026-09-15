@@ -167,8 +167,9 @@ class _FeedsScreenState extends State<FeedsScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.moveFeedFailed,
+          kind: BannerKind.failure);
       await _load();
     }
   }
@@ -305,8 +306,9 @@ class _FeedsScreenState extends State<FeedsScreen> {
           .run(() => _folderRepo.reorder(_folders), label: 'Reordering');
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.moveFeedFailed,
+          kind: BannerKind.failure);
       await _load();
     }
   }

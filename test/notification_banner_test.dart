@@ -103,10 +103,17 @@ void main() {
   });
 
   group('it carries a sentence and nothing else', () {
-    testWidgets('no icon, no button, no action slot', (tester) async {
-      // A "Retry" was considered and dropped: that is a widget capability,
-      // not a string, and the FAB is already the retry. Absence erodes, so it
-      // is asserted.
+    testWidgets('exactly one icon, and still no button or action slot',
+        (tester) async {
+      // **The icon half of this was reversed by David pre-launch and the rest
+      // still holds.** It used to assert no icon at all. Then the fill was
+      // made quiet, he marked everything read and saw nothing, and a glyph
+      // became the thing that makes the banner findable — a saturated mark
+      // is visible on a pale fill in a way a pale fill is not on a pale page.
+      //
+      // A "Retry" button was considered and dropped, and that part is
+      // unchanged: it is a widget capability rather than a string, and the
+      // FAB is already the retry. Absence erodes, so it stays asserted.
       await _pump(tester, flashQuietInkTheme(brightness: Brightness.light));
       await _show(tester);
 
@@ -114,7 +121,8 @@ void main() {
         of: find.byType(NotificationBanner),
         matching: find.byType(Icon),
       );
-      expect(inside, findsNothing);
+      expect(inside, findsOneWidget,
+          reason: 'one leading glyph, not a row of them');
       expect(
           find.descendant(
               of: find.byType(NotificationBanner),

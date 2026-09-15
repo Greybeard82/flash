@@ -357,7 +357,7 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
       case CleanReadOutcome.unavailable:
         // First verdict for this URL this session, so say so once.
         final l10n = AppLocalizations.of(context)!;
-        _bannerKey.currentState?.show(l10n.cleanModeUnavailable);
+        _bannerKey.currentState?.show(l10n.cleanModeUnavailable, kind: BannerKind.failure);
       case CleanReadOutcome.alreadyUnavailable:
         // Already judged and already reported. Reopening an article that has
         // no clean version should be quiet, not a recurring error.

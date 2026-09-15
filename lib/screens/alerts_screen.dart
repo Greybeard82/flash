@@ -268,8 +268,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
     if (!mounted) return;
     if (row?.id == null) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertsArticleGone);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertsArticleGone,
+          kind: BannerKind.failure);
       return;
     }
     final nowSaved = !row!.isSaved;

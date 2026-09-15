@@ -147,8 +147,9 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     // one actually stored, permanently writing match rows the configured alert
     // would never have produced ("zelda" whole-word-on matching "Zeldathon").
     if (_existingKeyword(text) != null) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertKeywordExists(text),
+          kind: BannerKind.failure);
       return;
     }
     final wholeWord = _addWholeWord;
@@ -220,8 +221,9 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     // Caught here instead, before anything has been written.
     final clash = _existingKeyword(text);
     if (clash != null && clash.id != entry.id) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertKeywordExists(text),
+          kind: BannerKind.failure);
       return;
     }
 
@@ -244,7 +246,8 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
       if (stillClashes != null && stillClashes.id != entry.id) {
         if (mounted) {
           _bannerKey.currentState
-              ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+              ?.show(AppLocalizations.of(context)!.alertKeywordExists(text),
+                  kind: BannerKind.failure);
         }
         return;
       }

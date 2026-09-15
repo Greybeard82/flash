@@ -123,7 +123,11 @@ void main() {
         // The hairline is load-bearing: without it a fill this quiet has no
         // edge against the list beneath it.
         final border = decoration.border as Border;
-        expect(border.bottom.color, entry.value.colorScheme.outlineVariant);
+        // Was outlineVariant. With a fill this quiet the border is the
+        // component's edge, which puts it on WCAG 1.4.11's 3:1 floor, and
+        // outlineVariant measures 1.08 against the fill in light. See
+        // notification_banner_visibility_test.
+        expect(border.bottom.color, entry.value.flashColors.bannerBorder);
         expect(border.bottom.width, greaterThan(0));
 
         final text = tester.widget<Text>(find.text('Marked all as read'));

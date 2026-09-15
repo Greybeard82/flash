@@ -545,7 +545,8 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   /// screen already owns is the natural place to say so.
   void _reportRefreshFailure() {
     if (!mounted) return;
-    _bannerKey.currentState?.show(AppLocalizations.of(context)!.refreshFailed);
+    _bannerKey.currentState?.show(AppLocalizations.of(context)!.refreshFailed,
+        kind: BannerKind.failure);
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -1445,8 +1446,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       final l10n = AppLocalizations.of(context)!;
       // The mark-all-read itself succeeded either way; say so, but don't
       // claim the feeds refreshed when they didn't.
-      _bannerKey.currentState
-          ?.show(refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead);
+      // One call, either kind: mark-all-read itself succeeded even when
+      // the refresh behind it did not, so the glyph follows the message.
+      _bannerKey.currentState?.show(
+        refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead,
+        kind: refreshFailed ? BannerKind.failure : BannerKind.confirmation,
+      );
     }
   }
 
