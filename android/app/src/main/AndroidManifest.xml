@@ -101,9 +101,15 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
+        <!-- There is deliberately no EnableImpeller entry here. Flash opted
+             out of Impeller for an unrecorded reason and ran on the legacy
+             Skia backend until 0.9.7. The opt out was verified on real
+             hardware first: Vulkan, no errors, no visual difference
+             including the WebView, and the test suite unchanged. Flutter
+             logs an [Action Required] deprecation for the flag on every
+             launch and is removing it, so the pin was going to lapse on
+             somebody else's schedule. Restoring it is one meta data block,
+             but read PRD "The renderer" before you do. -->
     </application>
 
     <queries>
