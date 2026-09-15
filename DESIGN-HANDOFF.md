@@ -2648,3 +2648,77 @@ build stays corrupt in SharedPreferences, so a device could still throw once
 until that entry is rewritten. Flash never schedules anything, so its list is
 always empty — but this is why the first launch after updating is the one to
 watch.
+
+---
+
+## 17. Pre-launch rulings
+
+Design decisions David made after the redesign closed, in the pass that
+precedes the QA. Recorded here because they change authored values and 15.3
+exists so nobody relitigates that kind of thing from memory.
+
+### 17.1 The two contrast exceptions are gone
+
+15.1 parked `onSurfaceMuted` at 3.15:1 and `onSurfaceRead` at 3.99:1 as
+deliberate recessions. **David ruled they clear the bar before launch.** Both
+darkened by the least that does it, because quietness is what these roles are
+for and overshooting satisfies the test while discarding the intent.
+
+| role | was | now |
+|---|---|---|
+| Quiet Ink light `onSurfaceMuted` | `#8A9391` 3.15:1 | `#717877` **4.51:1** |
+| Quiet Ink light `onSurfaceRead` | `#79817F` 3.99:1 | `#6A7270` **4.94:1** |
+
+`onSurfaceMuted` is the true minimum: one step lighter, `#727978`, measures
+4.45 and fails.
+
+**`onSurfaceRead` could not stop at its own minimum, and the reason is worth
+keeping.** Scaled down to the bar it lands on `#717877` — the *same colour* as
+muted. That would collapse the two roles into one grey and reintroduce exactly
+the inverted hierarchy this document's own `app_theme.dart:381` comment exists
+to prevent: a read title receding behind the timestamp beneath it. So read goes
+one visible step further. The separation is 7 units where the original was 17.
+
+Dark and Newspaper do not move, and that is now asserted rather than assumed.
+
+**Flash now has no text contrast exceptions at all.** The `known` map in
+`flash_colors_resolution_test.dart` is emptied rather than deleted — an
+exception list that no longer describes anything is a lie in the suite, but the
+machinery should stay so the next role to fall short has to be written down
+with a number and a reason instead of having the bar lowered around it. Its
+tripwire is inverted: it used to allow exactly two, it now allows none.
+
+### 17.2 Newspaper has no category colour. 6.8 is CLOSED.
+
+Parked since pass 7 waiting on Newspaper hues from Design. **They were never
+going to arrive, because the right answer was that there should not be any.**
+
+A newspaper identifies its sections by name, not by colour. Six greys standing
+in for six hues would be a colour system with the colour removed — worse than
+no colour system, because it keeps the machinery and loses the meaning.
+
+So in Newspaper a chip carries the **paper tint with ink text**, and the
+selected one inverts to **ink fill with paper text**. Every tone is one the
+theme already owns:
+
+| state | fill | text | measured |
+|---|---|---|---|
+| unselected | `surfaceContainerHighest` `#E7E7E3` | `onSurface` `#1D1D1B` | 13.62:1 |
+| selected | `onSurface` `#1D1D1B` | `surface` `#F2F1EE` | 14.95:1 |
+
+**Selected is deliberately not `primary`.** In Newspaper `primary` is the red
+spot colour, already carrying the nav selection, the FAB and the masthead tint;
+a red chip row on top of that is the loudest thing on the screen while buying
+nothing.
+
+Implemented as `FlashColors.monochromeCategories`, a flag rather than a colour,
+because there is no token meaning "this theme is Newspaper" and inferring it
+from a font family or a spot colour would be a guess that silently changes
+meaning the first time either is edited. It defaults to **false**, so a theme
+that forgets the extension keeps its hues rather than silently losing them.
+
+**One thing found on the way and not changed:** the "All" chip falls back to
+`scheme.surfaceContainer`, which Newspaper never authors — it inherits
+Material's derived value. It is only reachable in the hued path now, so it no
+longer affects Newspaper, but `surfaceContainer` being unauthored there is a
+loose end somebody will meet again.

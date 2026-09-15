@@ -181,16 +181,31 @@ class _FolderTab extends StatelessWidget {
     // aggregate look like one more category. The mock does not draw this state
     // — every unselected chip in it is a real category — so the neutral is an
     // inference, flagged as one.
-    final CategoryPalette? palette =
-        colorIndex == null ? null : theme.flashColors.category(colorIndex!);
+    // Newspaper identifies its sections by name, not by colour, so it opts out
+    // of hue entirely rather than being given six greys — which would be a
+    // colour system with the colour removed. Every tone below is one the theme
+    // already owns: no new token, and nothing for Design to supply.
+    final bool mono = theme.flashColors.monochromeCategories;
+
+    final CategoryPalette? palette = (mono || colorIndex == null)
+        ? null
+        : theme.flashColors.category(colorIndex!);
 
     final Color background = isSelected
-        ? scheme.primary
-        : (palette?.chipBackground ?? scheme.surfaceContainer);
+        // Ink fill. Not `primary`, which in Newspaper is the red spot colour
+        // already carrying the nav selection, the FAB and the masthead.
+        ? (mono ? scheme.onSurface : scheme.primary)
+        : (mono
+            // The paper tint. `surfaceContainerHighest` rather than
+            // `surfaceContainer`, because Newspaper authors the former
+            // (_npSurface2) and inherits the latter from Material.
+            ? scheme.surfaceContainerHighest
+            : (palette?.chipBackground ?? scheme.surfaceContainer));
 
     final Color foreground = isSelected
-        ? scheme.onPrimary
-        : (palette?.chipForeground ?? scheme.onSurfaceVariant);
+        ? (mono ? scheme.surface : scheme.onPrimary)
+        : (mono ? scheme.onSurface
+            : (palette?.chipForeground ?? scheme.onSurfaceVariant));
 
     final label = Text(
       this.label,

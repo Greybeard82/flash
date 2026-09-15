@@ -290,6 +290,21 @@ class FlashColors extends ThemeExtension<FlashColors> {
   /// without every caller threading a `Brightness` through.
   final Brightness brightness;
 
+  /// Whether categories are drawn without hue.
+  ///
+  /// Newspaper only. A newspaper identifies its sections by name, not by
+  /// colour: six greys standing in for six hues would be a colour system with
+  /// the colour taken out, which is worse than no colour system. So in
+  /// Newspaper a chip carries the paper tint with ink text, and the selected
+  /// one inverts to ink with paper text — the same two tones the rest of the
+  /// theme is built from.
+  ///
+  /// It lives here rather than being read off the scheme because there is no
+  /// token that means "this theme is Newspaper", and inferring it from a font
+  /// family or a spot colour would be a guess that silently changes meaning
+  /// the first time either is edited.
+  final bool monochromeCategories;
+
   const FlashColors({
     required this.onSurfaceMuted,
     required this.onSurfaceRead,
@@ -298,6 +313,7 @@ class FlashColors extends ThemeExtension<FlashColors> {
     required this.illustration,
     required this.inert,
     required this.brightness,
+    this.monochromeCategories = false,
   });
 
   /// The stored hue for a category, resolved for this theme.
@@ -313,8 +329,11 @@ class FlashColors extends ThemeExtension<FlashColors> {
     Color? illustration,
     Color? inert,
     Brightness? brightness,
+    bool? monochromeCategories,
   }) {
     return FlashColors(
+      monochromeCategories:
+          monochromeCategories ?? this.monochromeCategories,
       onSurfaceMuted: onSurfaceMuted ?? this.onSurfaceMuted,
       onSurfaceRead: onSurfaceRead ?? this.onSurfaceRead,
       placeholder: placeholder ?? this.placeholder,
@@ -344,6 +363,9 @@ class FlashColors extends ThemeExtension<FlashColors> {
       illustration: Color.lerp(illustration, other.illustration, t)!,
       inert: Color.lerp(inert, other.inert, t)!,
       brightness: t < 0.5 ? brightness : other.brightness,
+      // A half-hued chip is not a thing, so this snaps with brightness.
+      monochromeCategories:
+          t < 0.5 ? monochromeCategories : other.monochromeCategories,
     );
   }
 
@@ -357,11 +379,12 @@ class FlashColors extends ThemeExtension<FlashColors> {
           other.navPill == navPill &&
           other.illustration == illustration &&
           other.inert == inert &&
-          other.brightness == brightness;
+          other.brightness == brightness &&
+          other.monochromeCategories == monochromeCategories;
 
   @override
   int get hashCode => Object.hash(onSurfaceMuted, onSurfaceRead, placeholder,
-      navPill, illustration, inert, brightness);
+      navPill, illustration, inert, brightness, monochromeCategories);
 }
 
 /// The ink roles for a theme that does not carry the extension.
@@ -767,6 +790,10 @@ const FlashColors _flashColorsNewspaper = FlashColors(
   // introduced to fix still holds.
   onSurfaceMuted: Color(0xFF686765),
   onSurfaceRead: Color(0xFF5D5D5A),
+  // 6.8, closed. Parked since pass 7 waiting on Newspaper hues from Design
+  // that were never going to arrive, because the right answer was that there
+  // should not be any. See FlashColors.monochromeCategories.
+  monochromeCategories: true,
   placeholder: _npSurface2,
   // Ink, not _npRed. In Newspaper `secondary` is `primary` is _npRed, already
   // the nav selection, the FAB, the switch and the masthead tint — so a red
