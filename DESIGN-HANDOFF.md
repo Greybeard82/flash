@@ -1522,6 +1522,39 @@ matters, the evidence is a screenshot.
 Bought in pass 8c, measuring whether a source name truncates in the reader's
 bar.
 
+### 10.5 A green suite says nothing about a release build
+
+The sibling of 10.3, and bought far more expensively.
+
+`flutter test` runs a debug VM on the host. R8 runs only on a release build.
+So the suite is **structurally incapable** of seeing anything R8 does — a
+stripped generic signature, a renamed class, a shrunk resource — in exactly
+the way the stub font is incapable of measuring a real glyph. The asymmetry
+runs the same direction:
+
+- **fails in the suite** implies **broken**. Sound.
+- **passes in the suite** implies **nothing** about the APK a tester installs.
+
+That gap shipped a data-loss-adjacent bug to 25 testers for the entire life of
+the app. `plugin.cancel()` threw on every release build, the unread
+notification could never be dismissed, and 1672 passing tests had nothing to
+say about it. Nobody was looking at a debug build except us.
+
+**What follows from it.** Anything that only exists in a release build —
+ProGuard rules, `keep.xml`, signing, `minSdk`/`targetSdk` behaviour, anything
+resolved by reflection or by string name — is verified on a device with a
+release APK or it is not verified. The suite's job for that class is to guard
+the *artifact*: `proguard_rules_test.dart` cannot prove the rules work, but it
+fails loudly if the file that buys them is deleted, which is the realistic
+regression.
+
+**And a corollary that cost an hour here.** When testing a release-only bug,
+confirm the trigger actually ran before reading silence as success. An early
+`if (_cleared) return;` and a toggle that was not in the state assumed both
+produced a clean log from a code path that never executed. Absence of an
+exception is only evidence once the call is known to have happened — 10.1,
+wearing different clothes.
+
 ### 10.4 A check that reads source must strip comments as blocks
 
 Three separate assertions in pass 9 failed on correct code because they matched
@@ -2264,32 +2297,12 @@ would not be again before that work.
 Reported during a pass rather than changed, with the reason it was out of
 scope. Where a reason has since expired, it says so.
 
-**The unread notification cannot dismiss itself in a release build.** Found on
-the Pixel during pass 10's install, and the one entry here that is not cosmetic.
-`plugin.cancel()` throws
-`PlatformException(error, Missing type parameter., java.lang.RuntimeException)`
-every time `UnreadBadgeService._clear()` runs. **Release only** — R8 is on for
-`flutter build apk --release`, the app ships no ProGuard configuration, and
-`flutter_local_notifications` 18.0.1 ships no consumer rules either, while its
-cancel path runs through Gson and `RuntimeTypeAdapterFactory`. R8 strips the
-generic signatures Gson needs and Gson says so.
-
-**Not a regression from this redesign.** The call traces to `f95bb51`; pass 9
-only added `color:` to the *post* path, and posting works — the accent is live
-in the shade on both devices.
-
-**What it costs a reader:** reading everything leaves the last count sitting in
-the shade ("2 unread articles" on the Pixel right now) instead of clearing, and
-turning the notification setting off does not remove it either. Both need a
-manual swipe. `_cleared` and `_postedCount` are never updated because the
-exception aborts `_clear` before them. It also throws once on most cold
-launches, where the count is briefly zero before the database resolves.
-
-**Left because it is build configuration, not design** — the likely fix is a
-`proguard-rules.pro` keeping `Signature` and `com.dexterous.**` wired into the
-release block, which changes how the whole app is shrunk and needs verifying
-across every notification path rather than slipped in at the end of a pass.
-**Unverified: no fix has been tried.** David rules on it.
+> **~~The unread notification cannot dismiss itself in a release build.~~
+> FIXED.** Recorded here for one pass only. It was found on the Pixel during
+> pass 10's install, judged out of scope for a design pass, and then fixed on
+> its own in the release-build pass that followed. **Section 16 is the entry
+> that matters** — including the part where the obvious one-line fix turned
+> out to be a no-op that was already applied.
 
 **Alerts snapshots have no saved state of their own, by design.** Fixed in
 pass 9 for the glyph, but the underlying shape remains: `AlertEntry` mirrors an
@@ -2465,3 +2478,173 @@ was wrong roughly as often as the code, and twice the test was right and a
 change was reverted because of it — most recently the tablet's idle reading
 pane in pass 8, which `ink_roles_test.dart` correctly refused to let become an
 empty state.
+
+---
+
+## 16. The release-build ProGuard fix
+
+Not part of the redesign. A launch blocker found on the way out of pass 10 and
+fixed on its own, because it had shipped to every tester in every build.
+
+### 16.1 What was broken
+
+`plugin.cancel()` threw on **every release build**:
+
+```
+PlatformException(error, Missing type parameter., null,
+    java.lang.RuntimeException: Missing type parameter.
+      at H2.a.<init>
+      at FlutterLocalNotificationsPlugin.loadScheduledNotifications
+      at FlutterLocalNotificationsPlugin.removeNotificationFromCache
+      at FlutterLocalNotificationsPlugin.cancelNotification
+      at FlutterLocalNotificationsPlugin.cancel)
+```
+
+`H2.a` is the R8-renamed anonymous `new TypeToken<ArrayList<NotificationDetails>>() {}`.
+
+**What it cost a reader.** The unread-count notification could not be dismissed
+by the app. Read everything and the stale count stayed; open Settings and turn
+the feature off and it *still* stayed, because `onSettingChanged(false)` runs
+the same `_clear()`. The only way out was swiping a notification the app's own
+settings could not remove. `_cleared` and `_postedCount` never updated, because
+the exception aborted `_clear` before them.
+
+**Not a regression from Quiet Ink.** The call dates to `f95bb51`. Pass 9
+touched only the *post* path, which always worked.
+
+### 16.2 The obvious fix was already applied, and was a no-op
+
+Worth its own subsection, because the first guess was wrong and the evidence
+that killed it is reproducible.
+
+`-keepattributes Signature` is the rule everyone reaches for, and it was
+**already in the build** — it arrives inside AGP's own
+`proguard-android-optimize.txt`, and sat at line 125 of
+`build/app/outputs/mapping/release/configuration.txt` in a build that crashed
+anyway. Adding it would have changed nothing and looked like a fix.
+
+The real cause is **R8 full mode**, the AGP 8 default, which this project does
+not opt out of (`android.enableR8.fullMode` is unset). Full mode honours
+`-keepattributes` only for classes **also matched by a `-keep` rule**. The
+anonymous TypeToken subclass matched none, so its signature was stripped,
+`getGenericSuperclass()` returned a raw `Class`, and Gson threw.
+
+`configuration.txt` is the artefact that settles arguments like this: it is the
+complete merged rule set R8 actually received, AAR consumer rules included.
+Before the fix it contained **zero** occurrences of `TypeToken`.
+
+### 16.3 Why this project and not every Flutter app
+
+Four things had to line up, and all four are invisible in the repo:
+
+1. **Flutter turns R8 on.** `FlutterPlugin.kt` sets `isMinifyEnabled = true`
+   and `isShrinkResources = true` for release. Nothing in
+   `android/app/build.gradle.kts` says so. (`res/raw/keep.xml` already existed
+   because this project was bitten by the *resource* half of the same
+   invisibility earlier.)
+2. **R8 full mode** is the AGP 8 default.
+3. **Gson ships its own consumer rules only from 2.11.0.**
+   `flutter_local_notifications` 18.0.1 pins **2.8.9**, so none arrive.
+4. **The plugin ships no consumer rules of its own**, in any version.
+
+The version arithmetic also explains a red herring: `Missing type parameter.`
+was removed from Gson in 2.10. It is reachable here **because 2.8.9 predates
+that too**.
+
+### 16.4 The fix
+
+`android/app/proguard-rules.pro`, a new file. **No `build.gradle.kts` change** —
+Flutter already wires that exact path:
+
+```kotlin
+if (File("${project.projectDir}/proguard-rules.pro").exists()) {
+    proguardFile("proguard-rules.pro")
+}
+```
+
+`proguardFile()` **appends**, so Flutter's defaults survive. Declaring
+`proguardFiles` in the release block instead could *replace* them — a much
+larger and quieter breakage than the one being fixed. `proguard_rules_test.dart`
+asserts nobody ever adds one.
+
+The load-bearing lines:
+
+```
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
+```
+
+`allowobfuscation,allowshrinking` is deliberate: R8 may still rename and remove
+these, only the signature is retained. Not `-keep class com.google.gson.** { *; }`.
+
+Sources, since the plugin README's link is dead: the README points at Gson's
+`examples/android-proguard-example/proguard.cfg`, **deleted upstream on
+2025-04-14 for being outdated**. The live authority is Gson's shipped
+`META-INF/proguard/gson.pro`, plus the plugin's own example app, plus
+`MaikuB/flutter_local_notifications#2223`.
+
+**Cost: 16,384 bytes.** 64,501,792 → 64,518,176. (R8 off entirely would be
+71,578,850, so shrinking is worth ~7 MB and is not the enemy here.)
+
+**This becomes unnecessary at flutter_local_notifications 19.0.0**, which bumps
+Gson to 2.12 so the rules arrive by themselves. That upgrade is breaking
+(Flutter >= 3.22, Dart >= 3.4, minSdk 21, Java 11, and an iOS `zonedSchedule`
+signature change) and was deliberately not taken here.
+
+### 16.5 The audit: what else an unconfigured shrinker was eating
+
+The real question was never the one crash. **The app had no ProGuard
+configuration at all**, so nothing had ever been kept, and this was simply the
+first stripped thing anyone noticed. All 15 Android plugins were audited for
+reflection, Gson, runtime generics and string-named resource lookup.
+
+**Nothing else is broken.** Two plugins ship their own consumer rules
+(`flutter_inappwebview_android`, `flutter_plugin_android_lifecycle`); the rest
+need none, or are covered by rules arriving from their own transitive AARs.
+
+Three are worth knowing about because they are protected *by accident*:
+
+| plugin | mechanism | why it survives |
+|---|---|---|
+| `workmanager_android` | `WorkManager` persists `BackgroundWorker`'s **class name** into its Room DB and later does `Class.forName` + 2-arg constructor. A rename would silently stop background refresh, most visibly *after an app update*. | Covered twice over, neither by us: `androidx.work`'s AAR ships `-keepnames class * extends androidx.work.ListenableWorker`, **and** Flash's own `AndroidManifest.xml` declares `<service android:name="dev.fluttercommunity.workmanager.BackgroundWorker" tools:ignore="Instantiatable"/>`, which makes AGP emit a hard `-keep`. That declaration is semantically bogus — a worker is not a Service, hence the lint suppression — but it is load-bearing for R8 **by accident**. Do not tidy it away. |
+| `firebase_*` | Reflection and runtime resource lookup | Firebase AARs ship their own consumer rules. |
+| the widget | `UnreadWidgetProvider` is named only from the manifest | Manifest-derived keep. Verified live: `dumpsys appwidget` reports the provider with `zombie=false` on both devices. |
+
+**The residual risk is that all of this is inherited.** If a dependency bump
+ever drops `androidx.work` below the version shipping `proguard.txt`, or if
+that odd `<service>` stanza is cleaned up as dead config, background refresh
+becomes a release-only silent failure with no crash to point at. One line —
+`-keep class dev.fluttercommunity.workmanager.BackgroundWorker { *; }` — would
+make it independent. **Not added**: it is outside the notification path this
+pass was scoped to, and it is a decision for David rather than a fix to slip in.
+
+### 16.6 Verified on device, because nothing else can verify it
+
+See 10.5. The suite cannot see this class of bug; the test only guards the file.
+
+Controlled before/after on the Lenovo, identical action, release builds both:
+
+| | R8 on, no rules | R8 **off** | R8 on **+ rules** |
+|---|---|---|---|
+| toggle the setting off with a notification live | **threw**, notification stayed | clean, dismissed | **clean, dismissed** |
+
+Also confirmed on the fixed build: keyword alerts post (ids 2001/2002) with
+`color=0xff15868e`; the **group summary forms** (id 3, `GROUP_SUMMARY`,
+`android.text` = "2 keyword alerts"); both channels exist at the right
+importances (`flash_keyword_alerts` 3, `flash_unread_count` 2); the
+package-replaced receiver path — which `ScheduledNotificationBootReceiver`
+walks on **every** `adb install -r` and which has no MethodChannel to turn a
+throw into a `PlatformException` — is clean on both devices; and the app
+starts and the feed loads.
+
+One thing this pass got for free: `flash_keyword_alerts` had **never existed**
+on the Lenovo, because no keyword alert had ever fired there. It was created
+correctly at the summary, which is pass 9's explicit `createNotificationChannel`
+ordering fix validated on hardware for the first time.
+
+**A caveat from the plugin's maintainer that applies to testers.** The fix is
+not retroactive. A `scheduled_notifications` blob already written by a broken
+build stays corrupt in SharedPreferences, so a device could still throw once
+until that entry is rewritten. Flash never schedules anything, so its list is
+always empty — but this is why the first launch after updating is the one to
+watch.
