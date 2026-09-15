@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/spinning_refresh_icon.dart';
+import '../widgets/flash_switch.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/refresh_interval_field.dart';
 import '../l10n/app_localizations.dart';
@@ -247,7 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // Label-only, matching the Icon badge precedent: the off state is
                 // "opens in Chrome instead", which is what anyone flicking this
                 // already expects from a viewer toggle.
-                SwitchListTile(
+                FlashSwitchListTile(
                   title: Text(l10n.builtInViewer),
                   value: s.useEmbeddedWebView,
                   onChanged: _setUseEmbeddedWebView,
@@ -256,7 +257,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // on its own say that the offer only appears when a page can
                 // actually be extracted, and a switch that looks inert on some
                 // articles needs to say why up front.
-                SwitchListTile(
+                FlashSwitchListTile(
                   title: Text(l10n.cleanModeSettingTitle),
                   subtitle: Text(l10n.cleanModeSettingSubtitle),
                   value: s.cleanModeEnabled,
@@ -272,7 +273,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: s.refreshIntervalMinutes,
                   onChanged: _setRefreshInterval,
                 ),
-                SwitchListTile(
+                FlashSwitchListTile(
                   title: Text(l10n.refreshOnWifiOnly),
                   subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
                   value: s.refreshOnWifiOnly,

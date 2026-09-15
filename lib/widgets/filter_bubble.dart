@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'flash_switch.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
@@ -104,7 +105,7 @@ class _FilterBubbleState extends State<FilterBubble> {
           onSelectionChanged: (s) => _setSortOrder(s.first),
         ),
         const SizedBox(height: 6),
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _showRead,
           title: Text(l10n.showRead, style: theme.textTheme.bodyMedium),

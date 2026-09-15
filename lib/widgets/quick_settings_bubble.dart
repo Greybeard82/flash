@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'flash_switch.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
@@ -206,7 +207,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
           ),
 
         const SizedBox(height: 12),
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.newspaperMode, style: theme.textTheme.bodyMedium),
           subtitle: Text(
@@ -216,7 +217,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
           value: _newspaper,
           onChanged: _setNewspaper,
         ),
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.markReadOnScroll, style: theme.textTheme.bodyMedium),
           subtitle: Text(
@@ -226,7 +227,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
           value: _markReadOnScroll,
           onChanged: _setMarkReadOnScroll,
         ),
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           title:
               Text(l10n.confirmMarkAllRead, style: theme.textTheme.bodyMedium),
@@ -237,7 +238,7 @@ class _QuickSettingsBubbleState extends State<QuickSettingsBubble> {
         // launcher — a number on One UI, a dot on a Pixel — and explaining
         // that here made a one-line toggle carry a paragraph about vendor
         // launcher behaviour that nobody flicking a switch needs.
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: Text(l10n.iconBadge, style: theme.textTheme.bodyMedium),
           value: _iconBadge,
