@@ -148,7 +148,7 @@ void main() {
   }
 
   testWidgets('the two brightnesses use different read greys', (tester) async {
-    // #79817F light, #87908F dark. If these ever collapsed to one value it
+    // #6A7270 light, #87908F dark. If these ever collapsed to one value it
     // would mean the role had been wired to a single hex rather than the
     // palette, and one of the two themes would be wrong.
     final light =

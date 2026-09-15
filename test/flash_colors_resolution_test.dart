@@ -140,7 +140,7 @@ void main() {
     // means numerically, and why it is not "read is darker than muted".
     //
     // Darkness is the wrong measure because it flips with the theme. In Quiet
-    // Ink light the read title is #79817F against muted's #8A9391 — darker. In
+    // Ink light the read title is #6A7270 against muted's #717877 — darker. In
     // Quiet Ink dark it is #87908F against #767F7E — *lighter*. Both are
     // correct: what actually holds in both is that the read title stands
     // further from the page than the timestamp does. So the invariant is
@@ -256,15 +256,20 @@ void main() {
     /// Roles that are known to sit under the bar, with the ratio each one
     /// actually measures.
     ///
-    /// Both are Design's authored Quiet Ink light values and both are
-    /// deliberate — a timestamp and a read headline are meant to recede. They
-    /// are pinned to their measured ratios rather than merely excluded, so a
-    /// drift in either direction fails: quieter is a regression, louder means
-    /// somebody changed a decision without saying so.
-    const known = <String, double>{
-      'Quiet Ink light onSurfaceMuted': 3.15,
-      'Quiet Ink light onSurfaceRead': 3.99,
-    };
+    /// **Deliberately empty. Flash has no text contrast exceptions.**
+    ///
+    /// It held two until pre-launch: Quiet Ink light `onSurfaceMuted` at
+    /// 3.15:1 and `onSurfaceRead` at 3.99:1, both authored to recede and both
+    /// pinned here rather than merely excluded. David ruled they had to clear
+    /// the bar before launch, so they were darkened by the least that does it
+    /// and the entries came out. An exception list that no longer describes
+    /// anything is a lie in the suite, so this is empty rather than commented
+    /// out, and the tripwire below asserts that it stays that way.
+    ///
+    /// The machinery is kept because the next role to fall short should have
+    /// to be written down here, with a number and a reason, rather than have
+    /// the bar quietly lowered around it.
+    const known = <String, double>{};
 
     for (final (themeName, theme) in [
       ('Quiet Ink light', flashQuietInkTheme(brightness: Brightness.light)),
@@ -321,13 +326,50 @@ void main() {
           closeTo(5.85, 0.02));
     });
 
-    test('the known-exception list is small, and only Quiet Ink light', () {
-      // A tripwire on drift. Two entries is a decision; five would mean the
-      // bar had quietly stopped being the bar.
-      expect(known, hasLength(2));
-      expect(known.keys.every((k) => k.startsWith('Quiet Ink light')), isTrue,
-          reason: 'a second theme appearing here means the exception has '
-              'spread rather than been decided');
+    test('there are no text contrast exceptions at all', () {
+      // The tripwire, inverted. It used to allow exactly two; it now allows
+      // none. Adding one back is a deliberate, visible act that fails here
+      // first — which is the point, because the two it used to hold were
+      // added quietly and survived four passes.
+      expect(known, isEmpty,
+          reason: 'every role carrying text clears 4.5:1 as of pre-launch. '
+              'If a new role genuinely must recede, that is a decision for '
+              'David, not a map entry.');
+    });
+
+    test('only Quiet Ink LIGHT moved; dark and Newspaper are untouched', () {
+      // The pre-launch darkening was a light-mode fix. Dark already cleared
+      // the bar comfortably and Newspaper was corrected in an earlier pass,
+      // so either of them shifting means the change was applied too widely.
+      final dark = flashQuietInkTheme(brightness: Brightness.dark);
+      expect(dark.flashColors.onSurfaceMuted, const Color(0xFF767F7E));
+      expect(dark.flashColors.onSurfaceRead, const Color(0xFF87908F));
+
+      final paper = flashNewspaperTheme();
+      expect(contrast(paper.flashColors.onSurfaceMuted, paper.colorScheme.surface),
+          closeTo(5.00, 0.02));
+      expect(contrast(paper.flashColors.onSurfaceRead, paper.colorScheme.surface),
+          closeTo(5.85, 0.02));
+    });
+
+    test('the light values are the MINIMUM that clears the bar', () {
+      // Pinned as hexes, not just as ratios, because "clears 4.5" is also
+      // true of black. The instruction was the least darkening that works:
+      // quietness is what these two roles are for, and overshooting would
+      // have thrown away the authored intent while satisfying the test.
+      final light = flashQuietInkTheme(brightness: Brightness.light);
+      expect(light.flashColors.onSurfaceMuted, const Color(0xFF717877),
+          reason: 'one step lighter, #727978, measures 4.45:1 and fails');
+      expect(light.flashColors.onSurfaceRead, const Color(0xFF6A7270));
+
+      // And the hierarchy the darkening had to preserve: a read headline must
+      // stay darker than the timestamp under it. Both roles wanted the same
+      // minimum-clearing colour, so read had to go further than its own
+      // minimum or the two would have collapsed into one grey.
+      expect(
+          light.flashColors.onSurfaceRead.computeLuminance(),
+          lessThan(light.flashColors.onSurfaceMuted.computeLuminance()),
+          reason: 'this inversion is the bug app_theme.dart:381 documents');
     });
 
     test('decoration roles are deliberately not in this group', () {

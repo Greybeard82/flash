@@ -57,8 +57,8 @@ void main() {
 
     test('roles Material has no slot for', () {
       final f = light.extension<FlashColors>()!;
-      expectColor(f.onSurfaceMuted, 0xFF8A9391, 'onSurfaceMuted');
-      expectColor(f.onSurfaceRead, 0xFF79817F, 'onSurfaceRead');
+      expectColor(f.onSurfaceMuted, 0xFF717877, 'onSurfaceMuted');
+      expectColor(f.onSurfaceRead, 0xFF6A7270, 'onSurfaceRead');
       expectColor(f.placeholder, 0xFFF0F2F2, 'placeholder');
     });
   });

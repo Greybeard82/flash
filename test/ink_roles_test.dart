@@ -117,7 +117,7 @@ void main() {
       test('the role is the authored hex, not a computed grey', () {
         expect(
           flash.onSurfaceMuted.toARGB32(),
-          brightness == Brightness.light ? 0xFF8A9391 : 0xFF767F7E,
+          brightness == Brightness.light ? 0xFF717877 : 0xFF767F7E,
         );
       });
     });
