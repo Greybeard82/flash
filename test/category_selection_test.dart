@@ -168,7 +168,7 @@ void main() {
       // wrong: a one-folder OPML file is still an import, and the user was in
       // Settings, not naming a category.
       final result = await OpmlService().importEntries([
-        OpmlFeedEntry(
+        const OpmlFeedEntry(
           folderName: 'Imported',
           title: 'Ars Technica',
           xmlUrl: 'https://arstechnica.com/feed',

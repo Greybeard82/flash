@@ -22,7 +22,7 @@ QA. **Nothing in the QA section was fixed** except where noted.
 | 5 | `outlineVariant` cannot carry a component edge | **FIXED** | 1.08 / 1.19 against fill / page. New `bannerBorder` role. |
 | 6 | An XML comment broke the release build | **FIXED** | `--` is illegal in an XML comment. Caught only by building. |
 | 7 | `RssService` has no injectable client | **POST-LAUNCH** | `fetchAndStore` calls top-level `http.get`; error paths were untestable. |
-| 8 | Suite flakes under full-run parallelism | **POST-LAUNCH** | Two different files now: a clean-mode test and a `!timersPending` leak. |
+| 8 | Suite flakes under full-run parallelism | **POST-LAUNCH** | Two different files now: a clean-mode test and a `!timersPending` leak. **Rate measured 2026-09-15: roughly 1 run in 3**, always `article_detail_pane_clean_mode_test.dart` → "swapping the article in place resets clean mode", which passes in isolation every time. Five full runs that day: two clean, then one failure, then clean, then one failure. |
 | 9 | Contrast tests on translucent tokens are invalid | **SHIPS AS IS** | `computeLuminance()` ignores alpha. No existing test makes the mistake. |
 | 10 | Widget "999+" still never rendered | **VERIFY ON DEVICE** | No widget placed on any home screen; Samsung's backlog is the case. |
 | 11 | Newspaper inherits Material's `surfaceContainer` | **SHIPS AS IS** | Unauthored; no longer reachable for chips. |
