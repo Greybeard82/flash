@@ -383,7 +383,7 @@ abstract class AppLocalizations {
   /// No description provided for @restoreConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'This will replace all your current feeds, categories and keywords with the saved backup. Articles will be re-fetched on next refresh.'**
+  /// **'This will replace all your current feeds, categories, keywords and bookmarks with the saved backup. Articles will be re-fetched on next refresh.'**
   String get restoreConfirmMessage;
 
   /// No description provided for @restore.

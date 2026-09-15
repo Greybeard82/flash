@@ -162,7 +162,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Dadurch werden alle aktuellen Feeds, Kategorien und gesperrten Stichwörter durch die gespeicherte Sicherung ersetzt. Artikel werden beim nächsten Aktualisieren abgerufen.';
+      'Dadurch werden alle aktuellen Feeds, Kategorien, gesperrten Stichwörter und gespeicherten Artikel durch die gespeicherte Sicherung ersetzt. Artikel werden beim nächsten Aktualisieren abgerufen.';
 
   @override
   String get restore => 'Wiederherstellen';

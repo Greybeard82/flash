@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
+import '../models/article.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../models/keyword_block.dart';
@@ -44,10 +45,14 @@ class LocalBackupService {
     required List<Folder> folders,
     required List<Feed> feeds,
     required List<KeywordBlock> keywords,
+    List<Article> bookmarks = const [],
     String? dialogTitle,
   }) async {
-    final data =
-        BackupSerializer.toMap(folders: folders, feeds: feeds, keywords: keywords);
+    final data = BackupSerializer.toMap(
+        folders: folders,
+        feeds: feeds,
+        keywords: keywords,
+        bookmarks: bookmarks);
     final json = const JsonEncoder.withIndent('  ').convert(data);
     final bytes = Uint8List.fromList(utf8.encode(json));
 

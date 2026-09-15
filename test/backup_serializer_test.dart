@@ -44,9 +44,13 @@ void main() {
   // ── toMap / serialisation ────────────────────────────────────────────────
 
   group('toMap', () {
-    test('version is always 1', () {
+    test('version is 2, and 1 is still readable', () {
+      // Was "always 1". It became 2 when bookmarks went in; a v1 file is
+      // still restorable, which is what stops every backup taken before that
+      // change becoming waste paper.
       final map = BackupSerializer.toMap(folders: [], feeds: [], keywords: []);
-      expect(map['version'], 1);
+      expect(map['version'], 2);
+      expect(BackupSerializer.kSupportedVersions, contains(1));
     });
 
     test('backedUpAt timestamp is present and non-zero', () {
@@ -96,18 +100,27 @@ void main() {
       expect(keywords[1]['wholeWord'], isTrue);
     });
 
-    test('does NOT include read/unread state, API keys, or bookmarks', () {
+    test('includes bookmarks; still excludes read state and secrets', () {
+      // **Bookmarks moved from the exclusion list to the contents.** David
+      // ruled them in before launch: the user chose those and they are
+      // irreplaceable, where feeds can be re-added from memory.
+      //
+      // Read state did NOT move, and the reason is arithmetic rather than
+      // taste. It can only be held by reference, and kFetchDayLimit is 7, so
+      // a backup restored a week after it was taken matches zero articles
+      // while costing ~119 bytes each -- 150-250 KB for a normal library
+      // against ~4 KB for everything else in the file.
       final map = BackupSerializer.toMap(
         folders: [_folder(1, 'Test')],
         feeds: [_feed(id: 1, folderId: 1, title: 'Feed', url: 'https://x.com/rss')],
         keywords: [],
       );
       final keys = map.keys.toSet();
+      expect(keys.contains('bookmarks'), isTrue);
       expect(keys.contains('articles'), isFalse);
       expect(keys.contains('read_state'), isFalse);
+      expect(keys.contains('readState'), isFalse);
       expect(keys.contains('api_key'), isFalse);
-      expect(keys.contains('bookmarks'), isFalse);
-      expect(keys.contains('saved'), isFalse);
     });
 
     test('Drive and local-file output are byte-identical (same format)', () {

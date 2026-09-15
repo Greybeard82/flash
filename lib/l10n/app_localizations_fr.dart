@@ -160,7 +160,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Cela remplacera tous vos flux, catégories et mots bloqués actuels par la sauvegarde enregistrée. Les articles seront récupérés lors du prochain rafraîchissement.';
+      'Cela remplacera tous vos flux, catégories, mots bloqués et articles enregistrés actuels par la sauvegarde enregistrée. Les articles seront récupérés lors du prochain rafraîchissement.';
 
   @override
   String get restore => 'Restaurer';

@@ -7,6 +7,7 @@ import '../widgets/refresh_interval_field.dart';
 import '../l10n/app_localizations.dart';
 import '../models/feed.dart';
 import '../models/settings.dart';
+import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
@@ -138,10 +139,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final folders = await FolderRepository().getAll();
         final feeds = await FeedRepository().getAll();
         final keywords = await KeywordRepository().getAll();
+        // Bookmarks are stored in the file by value, so this is the whole of
+        // what a restore can bring back. Read state is deliberately not
+        // collected -- see BackupSerializer.toMap.
+        final bookmarks = await ArticleRepository().getSaved();
         return LocalBackupService.exportBackup(
           folders: folders,
           feeds: feeds,
           keywords: keywords,
+          bookmarks: bookmarks,
           dialogTitle: l10n.exportDialogTitle,
         );
       }, label: 'Exporting');

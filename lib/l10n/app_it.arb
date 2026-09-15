@@ -49,7 +49,7 @@
   "@exportDialogTitle": { "description": "Title of the system save dialog when exporting a backup file." },
   "restoreSuccess": "{count} feed ripristinati. Trascina per aggiornare.",
   "restoreConfirmTitle": "Ripristinare dal backup?",
-  "restoreConfirmMessage": "Questo sostituirà tutti i tuoi feed, categorie e parole bloccate attuali con il backup salvato. Gli articoli verranno recuperati al prossimo aggiornamento.",
+  "restoreConfirmMessage": "Questo sostituirà tutti i tuoi feed, categorie, parole bloccate e articoli salvati attuali con il backup salvato. Gli articoli verranno recuperati al prossimo aggiornamento.",
   "restore": "Ripristina",
   "theme": "Tema",
   "themeSystem": "Sistema",

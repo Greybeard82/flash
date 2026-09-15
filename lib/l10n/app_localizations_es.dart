@@ -160,7 +160,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Esto reemplazará todas tus fuentes, categorías y palabras bloqueadas actuales con la copia guardada. Los artículos se actualizarán en el próximo refresco.';
+      'Esto reemplazará todas tus fuentes, categorías, palabras bloqueadas y artículos guardados actuales con la copia guardada. Los artículos se actualizarán en el próximo refresco.';
 
   @override
   String get restore => 'Restaurar';

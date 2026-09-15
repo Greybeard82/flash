@@ -1,21 +1,51 @@
+import 'package:sqflite/sqflite.dart' show ConflictAlgorithm;
+
 import '../db/database.dart';
 import '../db/schema.dart';
 import '../models/feed.dart';
 import '../models/folder.dart';
 import '../theme/category_colors.dart' show kCategoryHueCount;
+import '../models/article.dart';
 import '../models/keyword_block.dart';
 import '../services/feeds_changed_notifier.dart';
 
 class BackupSerializer {
-  /// Serialises folders, feeds and keywords to the shared Flash backup format.
+  /// The format this build writes.
+  ///
+  /// **2 adds `bookmarks`.** See [kSupportedVersions] for what it will read.
+  static const int kFormatVersion = 2;
+
+  /// Every version this build can restore.
+  ///
+  /// A v1 file is still perfectly restorable — it simply has no bookmarks —
+  /// so refusing it would strand every backup taken before this change for no
+  /// reason. Going the other way is the case that must fail loudly: an older
+  /// build checks `version != 1` and throws "Not a valid Flash backup file",
+  /// which is a clear refusal rather than a crash or a silent partial restore.
+  /// That behaviour is why the version field earns its place, and why adding
+  /// bookmarks had to bump it rather than just appear.
+  static const Set<int> kSupportedVersions = {1, 2};
+
+  /// Serialises folders, feeds, keywords and bookmarks to the backup format.
+  ///
+  /// **Bookmarks are stored by value, not by reference, and that is the whole
+  /// design.** A bookmark written as (feed url, guid) restores nothing unless
+  /// the feed still carries that article — and `kFetchDayLimit` is 7, so
+  /// anything published more than a week before the restore is discarded at
+  /// fetch time and never comes back. Since a backup is usually restored long
+  /// after it was taken, a reference would restore an empty Bookmarks tab and
+  /// look like data loss. Held by value, a bookmark survives regardless of
+  /// what the feed is serving.
   static Map<String, dynamic> toMap({
     required List<Folder> folders,
     required List<Feed> feeds,
     required List<KeywordBlock> keywords,
+    List<Article> bookmarks = const [],
   }) {
     final folderMap = {for (final f in folders) f.id!: f.name};
+    final feedUrlById = {for (final f in feeds) f.id!: f.url};
     return {
-      'version': 1,
+      'version': kFormatVersion,
       'backedUpAt': DateTime.now().millisecondsSinceEpoch,
       'folders': folders
           .map((f) => {'name': f.name, 'position': f.position})
@@ -32,6 +62,25 @@ class BackupSerializer {
           .toList(),
       'keywords': keywords
           .map((k) => {'keyword': k.keyword, 'wholeWord': k.wholeWord})
+          .toList(),
+      // Read state is deliberately NOT here. It can only be stored by
+      // reference — nobody is putting two thousand article bodies in a
+      // backup — and a reference to an article the feed no longer serves
+      // matches nothing. With kFetchDayLimit at 7, a backup restored a week
+      // after it was taken matches exactly zero articles, while costing
+      // roughly 119 bytes each: ~150-250 KB of file for a library of 1200-2000,
+      // against ~4 KB for everything else in here. Measured, and reported to
+      // David before it was left out.
+      'bookmarks': bookmarks
+          .map((a) => {
+                'feedUrl': feedUrlById[a.feedId] ?? '',
+                'guid': a.guid,
+                'title': a.title,
+                'url': a.url,
+                'publishedAt': a.publishedAt,
+                'description': a.description,
+                'thumbnailUrl': a.thumbnailUrl,
+              })
           .toList(),
     };
   }
@@ -50,7 +99,7 @@ class BackupSerializer {
   /// tolerate *null* but throw on a value of the wrong type. A `position` of
   /// `"0"` would have passed a null-only check and blown up mid-restore.
   static void validate(Map<String, dynamic> data) {
-    if ((data['version'] as int?) != 1) {
+    if (!kSupportedVersions.contains(data['version'] as int?)) {
       throw const FormatException('Not a valid Flash backup file');
     }
 
@@ -96,6 +145,30 @@ class BackupSerializer {
       }
       if (k['wholeWord'] != null && k['wholeWord'] is! bool) {
         throw const FormatException('Backup file has a malformed keyword');
+      }
+    }
+
+    // Absent in every v1 file, so its absence is not an error. Present and
+    // wrong is, and it is checked to the depth the restore loop reads it —
+    // the same lesson as the folders/feeds check above, which was written
+    // after a file that validated and then threw mid-restore with the library
+    // already deleted.
+    final bookmarks = data['bookmarks'];
+    if (bookmarks != null && bookmarks is! List) {
+      throw const FormatException('Backup file is malformed');
+    }
+    for (final b in (bookmarks as List? ?? const [])) {
+      if (b is! Map ||
+          b['guid'] is! String ||
+          b['title'] is! String ||
+          b['url'] is! String) {
+        throw const FormatException('Backup file has a malformed bookmark');
+      }
+      if (b['feedUrl'] != null && b['feedUrl'] is! String) {
+        throw const FormatException('Backup file has a malformed bookmark');
+      }
+      if (b['publishedAt'] != null && b['publishedAt'] is! int) {
+        throw const FormatException('Backup file has a malformed bookmark');
       }
     }
   }
@@ -171,6 +244,10 @@ class BackupSerializer {
       }
 
       var inserted = 0;
+      // Bookmarks are attached by feed url, the same stable identity the alert
+      // re-keying above uses, because feeds.id is AUTOINCREMENT and every feed
+      // comes back under a new one.
+      final newFeedIdByUrl = <String, int>{};
       for (final f in (data['feeds'] as List)) {
         final folderName = f['folderName'] as String? ?? '';
         final folderId = nameToId[folderName];
@@ -185,6 +262,7 @@ class BackupSerializer {
           createdAt: now,
         );
         final newFeedId = await txn.insert(TableNames.feeds, feed.toMap());
+        newFeedIdByUrl[feed.url] = newFeedId;
         // Re-point this feed's alert snapshots at the id it came back under,
         // and at the folder it came back in — the snapshot's folder_id is what
         // mark-folder-read and folder scoping read. AUTOINCREMENT never reuses
@@ -209,6 +287,42 @@ class BackupSerializer {
           createdAt: now,
         );
         await txn.insert(TableNames.keywordBlocklist, keyword.toMap());
+      }
+
+      // Bookmarks last, because they need the feeds to exist.
+      //
+      // Written as ordinary article rows with is_saved = 1, so the Bookmarks
+      // tab, the reader and the saved-state notifier all see them with no
+      // special case anywhere. `fetched_at` is now rather than the original,
+      // which is honest: this is when this device got them.
+      //
+      // A bookmark whose feed is not in the backup is skipped rather than
+      // invented — an article with no feed has nothing to open from and
+      // nowhere to sit in the list.
+      for (final b in (data['bookmarks'] as List? ?? const [])) {
+        final feedId = newFeedIdByUrl[b['feedUrl'] as String? ?? ''];
+        if (feedId == null) continue;
+        await txn.insert(
+          TableNames.articles,
+          {
+            'feed_id': feedId,
+            'guid': b['guid'] as String,
+            'title': b['title'] as String,
+            'url': b['url'] as String,
+            'description': b['description'] as String?,
+            'thumbnail_url': b['thumbnailUrl'] as String?,
+            'published_at': b['publishedAt'] as int?,
+            'fetched_at': now,
+            'is_read': 0,
+            'is_saved': 1,
+          },
+          // The next refresh of the same feed will meet this guid again. The
+          // article row is keyed (feed_id, guid) by a unique index, so an
+          // ignore here would silently drop the incoming copy and a replace
+          // would clear is_saved. Neither is wanted: this insert happens
+          // first, and the fetch path's own upsert preserves is_saved.
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
       }
 
       return inserted;

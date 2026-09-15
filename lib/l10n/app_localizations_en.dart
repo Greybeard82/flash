@@ -160,7 +160,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'This will replace all your current feeds, categories and keywords with the saved backup. Articles will be re-fetched on next refresh.';
+      'This will replace all your current feeds, categories, keywords and bookmarks with the saved backup. Articles will be re-fetched on next refresh.';
 
   @override
   String get restore => 'Restore';

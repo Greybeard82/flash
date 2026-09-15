@@ -49,7 +49,7 @@
   "@exportDialogTitle": { "description": "Title of the system save dialog when exporting a backup file." },
   "restoreSuccess": "{count} fuentes restauradas. Desliza para actualizar.",
   "restoreConfirmTitle": "¿Restaurar desde la copia de seguridad?",
-  "restoreConfirmMessage": "Esto reemplazará todas tus fuentes, categorías y palabras bloqueadas actuales con la copia guardada. Los artículos se actualizarán en el próximo refresco.",
+  "restoreConfirmMessage": "Esto reemplazará todas tus fuentes, categorías, palabras bloqueadas y artículos guardados actuales con la copia guardada. Los artículos se actualizarán en el próximo refresco.",
   "restore": "Restaurar",
   "theme": "Tema",
   "themeSystem": "Sistema",

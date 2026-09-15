@@ -160,7 +160,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Questo sostituirà tutti i tuoi feed, categorie e parole bloccate attuali con il backup salvato. Gli articoli verranno recuperati al prossimo aggiornamento.';
+      'Questo sostituirà tutti i tuoi feed, categorie, parole bloccate e articoli salvati attuali con il backup salvato. Gli articoli verranno recuperati al prossimo aggiornamento.';
 
   @override
   String get restore => 'Ripristina';
