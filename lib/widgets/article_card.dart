@@ -229,6 +229,23 @@ class ArticleCard extends StatelessWidget {
   /// dismissal is the only way one ever leaves the list.
   final VoidCallback? onDelete;
 
+  /// Whether this row is the one the tablet's reading pane is showing.
+  ///
+  /// Paints the row `surfaceContainer`. **Default off, so the phone and
+  /// Bookmarks are byte-for-byte unchanged** — there is no pane on either, so
+  /// there is nothing for a current row to mean. `article_card_is_current_test`
+  /// asserts the default rather than trusting it.
+  ///
+  /// **Not `primaryContainer`.** The teal tint is already inside this row, on
+  /// the action rail; a teal row makes the rail vanish into its own background
+  /// and the whole card reads as pressed rather than as current.
+  ///
+  /// The value is threaded from the shell, which already knows which article
+  /// the pane holds. Finding that out is not the card's job: a card that
+  /// reached for `ArticleDetailScope` itself would be a widget in a list
+  /// subscribing to a controller, once per row.
+  final bool isCurrent;
+
   const ArticleCard({
     super.key,
     required this.article,
@@ -240,6 +257,7 @@ class ArticleCard extends StatelessWidget {
     this.enableSwipeActions = true,
     this.alertKeywords = const [],
     this.onDelete,
+    this.isCurrent = false,
   });
 
   @override
@@ -248,7 +266,16 @@ class ArticleCard extends StatelessWidget {
     final isRead = article.isRead;
     final isTV = FormFactor.isTV;
 
-    final content = Padding(
+    final content = Container(
+      // B2. `surfaceContainer` when this is the article the pane is showing,
+      // and nothing at all otherwise — not `surface`, which would paint an
+      // opaque rectangle over whatever the list is drawn on and defeat the
+      // divider underneath it.
+      //
+      // On the row rather than inside it, so the whole width reads as
+      // selected. The action rail keeps its own tint untouched: one treatment,
+      // not two stacked.
+      color: isCurrent ? theme.colorScheme.surfaceContainer : null,
       // Symmetric again. The right inset was zero while the summary button
       // sat at the card's edge and supplied its own margin from inside its
       // touch box; the thumbnail is the rightmost element once more, so the

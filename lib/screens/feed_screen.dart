@@ -20,6 +20,7 @@ import '../services/loading_controller.dart';
 import '../services/alerts_changed_notifier.dart';
 import '../services/read_state_notifier.dart';
 import '../services/refresh_service.dart';
+import '../services/article_detail_controller.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
@@ -432,8 +433,43 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// The reading pane's controller, when there is one.
+  ///
+  /// **Null on the phone, and that is the whole mechanism.**
+  /// `ArticleDetailScope` is installed by the three-column shell and by
+  /// nothing else, so `maybeOf` comes back null everywhere there is no pane
+  /// — which makes "a phone build never marks a row current" a structural
+  /// fact rather than a rule someone has to remember.
+  ArticleDetailController? _detail;
+
+  /// The URL of the article the pane is showing. Compared by URL rather than
+  /// id because that is what `ArticleDetailController.show` dedupes on, and an
+  /// Alerts-sourced article has no id at all.
+  String? _currentUrl;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribed once, here, rather than per row. A card that reached for the
+    // scope itself would be fifty widgets listening to one controller, and
+    // every one of them would rebuild on every change.
+    final detail = ArticleDetailScope.maybeOf(context);
+    if (identical(detail, _detail)) return;
+    _detail?.removeListener(_onCurrentArticleChanged);
+    _detail = detail;
+    _detail?.addListener(_onCurrentArticleChanged);
+    _currentUrl = _detail?.article?.url;
+  }
+
+  void _onCurrentArticleChanged() {
+    final url = _detail?.article?.url;
+    if (!mounted || url == _currentUrl) return;
+    setState(() => _currentUrl = url);
+  }
+
   @override
   void dispose() {
+    _detail?.removeListener(_onCurrentArticleChanged);
     WidgetsBinding.instance.removeObserver(this);
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
@@ -1848,6 +1884,10 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       const Divider(height: 1),
                     ArticleCard(
                       article: article,
+                      // B2. False on the phone for free: `_currentUrl` is only
+                      // ever non-null under the three-column shell.
+                      isCurrent:
+                          _currentUrl != null && article.url == _currentUrl,
                       // Horizontal drags page between category tabs here.
                       enableSwipeActions: false,
                       onTap: () => _openArticle(article),
