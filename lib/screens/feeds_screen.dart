@@ -393,10 +393,17 @@ class _FeedsScreenState extends State<FeedsScreen> {
     if (!mounted || result == null) return;
     await _load();
     if (!mounted) return;
+    // **One key, two opposite outcomes.** `starterPackAddedBanner` reads
+    // "5 feeds added" above zero and "No new feeds added" at zero, so a fixed
+    // tick would put a success glyph beside a message saying nothing happened.
+    // The icon follows the count rather than the call site: no new string, no
+    // ARB change, one condition.
     _bannerKey.currentState
         ?.show(AppLocalizations.of(context)!.starterPackAddedBanner(
       result.feedsAdded,
-    ));
+    ), kind: result.feedsAdded == 0
+            ? BannerKind.failure
+            : BannerKind.confirmation);
   }
 
   // ── Add feed ──

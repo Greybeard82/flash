@@ -199,7 +199,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .run(() => LocalBackupService.importBackup(), label: 'Restoring');
       if (!mounted) return;
       if (count == -1) return; // user cancelled picker
-      _bannerKey.currentState?.show(l10n.restoreSuccess(count));
+      // Same shape as starterPackAddedBanner: the count can be zero. A
+      // backup whose feeds list is empty, or whose every feed named a folder
+      // that is not in the file, restores nothing -- and "0 feeds restored"
+      // beside a tick reads as "success: nothing happened".
+      _bannerKey.currentState?.show(l10n.restoreSuccess(count),
+          kind: count == 0 ? BannerKind.failure : BannerKind.confirmation);
     } on FormatException {
       if (mounted) {
         _bannerKey.currentState?.show(
@@ -455,11 +460,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Not awaited — an import of fifty feeds is fifty favicon round trips,
       // and the banner should not wait behind them.
       unawaited(service.warmFavicons(result.addedFeeds));
-      _bannerKey.currentState?.show(l10n.opmlImportedBanner(
-        result.feedsImported,
-        result.foldersCreated,
-        result.skipped,
-      ));
+      // And again, with the most reachable version of it: re-importing a
+      // file you already imported skips every entry, so this reads
+      // "Feeds added: 0 - Folders created: 0 - Skipped: 12". The suite
+      // already covers that exact case as "re-importing the same file changes
+      // nothing", which is precisely when a tick is wrong.
+      final importedNothing =
+          result.feedsImported == 0 && result.foldersCreated == 0;
+      _bannerKey.currentState?.show(
+          l10n.opmlImportedBanner(
+            result.feedsImported,
+            result.foldersCreated,
+            result.skipped,
+          ),
+          kind: importedNothing
+              ? BannerKind.failure
+              : BannerKind.confirmation);
     } on OpmlParseException {
       // The file was not usable and nothing was written. One message for every
       // flavour of bad file: the distinction between "not XML", "not OPML" and
