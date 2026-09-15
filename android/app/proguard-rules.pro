@@ -96,3 +96,30 @@
 -keepclassmembers,allowobfuscation class * {
   @com.google.gson.annotations.SerializedName <fields>;
 }
+
+# ---------------------------------------------------------------------------
+# WorkManager's background refresh worker.
+# ---------------------------------------------------------------------------
+# WorkManager does not construct BackgroundWorker. It persists the fully
+# qualified CLASS NAME into its own Room database, and androidx.work's
+# WorkerFactory later does Class.forName plus a 2-arg (Context, WorkerParameters)
+# constructor lookup to run it. Rename or strip either and background refresh
+# stops -- silently, with no crash to point at, and most visibly AFTER an app
+# update, when the database still holds the previous build's name.
+#
+# This rule is the SECOND belt, and it is deliberate. Two other things already
+# keep this class, and neither is something to rely on:
+#
+#   1. androidx.work's own AAR ships `-keepnames class * extends
+#      androidx.work.ListenableWorker`. Inherited: a dependency bump that drops
+#      below the version shipping those rules takes it away.
+#   2. AndroidManifest.xml declares BackgroundWorker as a <service>. That
+#      declaration is semantically WRONG -- a ListenableWorker is not a Service,
+#      which is exactly why it carries tools:ignore="Instantiatable" -- but it
+#      makes AGP emit a hard manifest-derived keep. It reads like dead config
+#      somebody forgot to delete, and the next person to tidy it away would be
+#      removing a load-bearing line by accident.
+#
+# The manifest line stays. This rule exists so that if either of those goes,
+# background refresh does not go with it. Belt and belt, not belt and mistake.
+-keep class dev.fluttercommunity.workmanager.BackgroundWorker { *; }

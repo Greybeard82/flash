@@ -105,6 +105,27 @@ void main() {
               'used to confirm the bug.');
     });
 
+    test('BackgroundWorker is kept explicitly, not just by accident', () {
+      // WorkManager resolves this class by name out of its own database. Two
+      // other things keep it -- androidx.work's bundled rules and a manifest
+      // <service> declaration that is semantically bogus -- and both are
+      // inherited rather than owned. This rule is the one Flash controls.
+      expect(_rules(),
+          contains('class dev.fluttercommunity.workmanager.BackgroundWorker'),
+          reason: 'without it, background refresh can be obfuscated away '
+              'silently by a dependency bump or a manifest tidy-up');
+    });
+
+    test('the manifest declaration that R8 also keys on is still present', () {
+      // Paired with the rule above on purpose: the comment in the manifest
+      // says "do not delete me", and this is what notices if someone does.
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
+      expect(manifest,
+          contains('dev.fluttercommunity.workmanager.BackgroundWorker'),
+          reason: 'it reads like dead config and is not');
+    });
+
     test('the resource-side twin is still there', () {
       // keep.xml is the same lesson on the resource side: shrinking is on and
       // invisible, and the notification icon is resolved by string name. If
