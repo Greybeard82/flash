@@ -444,9 +444,21 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final l10n = widget.l10n;
-    // Named for the role it holds, not the one it used to fake. This was
-    // `muted` while it was onSurface at 50%; it is the secondary ink level.
-    final secondary = theme.colorScheme.onSurfaceVariant;
+    // **Named `variantInk`, and the naming has now been wrong twice.**
+    //
+    // It was `muted` while it was `onSurface` at 50% alpha, and was renamed to
+    // `secondary` to describe the ink LEVEL — second of the three, below
+    // `onSurface` and above `onSurfaceMuted`. Accurate as a description and a
+    // trap as a name: `secondary` is a `ColorScheme` role this app reserves
+    // for exactly three jobs, none of them this one, and a local carrying that
+    // word while holding `onSurfaceVariant` invites a tidy-up to
+    // `theme.colorScheme.secondary` that would turn this control orange and
+    // look like a correction.
+    //
+    // `summary_sheet_ink_test.dart` pins the resolved colour, so that edit
+    // fails rather than ships. This removes the instinct that produces it,
+    // which is the half a test cannot cover.
+    final variantInk = theme.colorScheme.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -461,7 +473,7 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
               Expanded(
                 child: Text(widget.message,
                     style:
-                        theme.textTheme.bodyMedium?.copyWith(color: secondary)),
+                        theme.textTheme.bodyMedium?.copyWith(color: variantInk)),
               ),
             ],
           ),
@@ -484,14 +496,14 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
                             ? l10n.aiSummaryHideDetails
                             : l10n.aiSummaryShowDetails,
                         style: theme.textTheme.labelMedium?.copyWith(
-                            color: secondary, fontWeight: FontWeight.w500),
+                            color: variantInk, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(width: 2),
                       AnimatedRotation(
                         turns: _showDetails ? 0.5 : 0,
                         duration: const Duration(milliseconds: 150),
                         child: Icon(Icons.expand_more_rounded,
-                            size: 18, color: secondary),
+                            size: 18, color: variantInk),
                       ),
                     ],
                   ),
