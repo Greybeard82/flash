@@ -124,9 +124,61 @@ class UnreadBadgeService {
   /// that trusted the count alone would decide there was nothing to do.
   bool _cleared = false;
 
-  Future<void> update(int count) async {
+  /// Skip the next post, once.
+  ///
+  /// **A one-shot, deliberately not a mode.** Mark-all-read dismisses the
+  /// notification and then immediately runs a refresh, and that refresh
+  /// legitimately finds new articles -- so without this the notification
+  /// reappears seconds later and mark-all-read looks like it failed. The
+  /// reader just asked for an empty deck; a notification is an interruption,
+  /// and they have effectively declined one.
+  ///
+  /// Nothing else is hidden. The in-app count, the launcher badge, the widget
+  /// and the list all stay truthful. Only the interruption is withheld, and
+  /// only for the single refresh that mark-all-read itself started.
+  ///
+  /// **The failure mode this is shaped against is a flag that leaks** and
+  /// silently kills notifications for the rest of the session. So it is
+  /// consumed at the very top of [update], before any early return, which
+  /// makes "survives one call" structurally impossible rather than a property
+  /// of getting every branch right. There is no setter that turns it off,
+  /// because there is no state to turn off.
+  bool _suppressNextPost = false;
+
+  /// Serialises [update] against itself.
+  ///
+  /// [update] has several `await`s before it touches `_postedCount` or
+  /// `_cleared`, and most callers do not await it. Two overlapping calls could
+  /// therefore interleave on that shared state and the last writer was
+  /// whichever happened to finish first -- which is how a dismiss and a
+  /// re-post could land in either order. Calls now run one at a time, in
+  /// arrival order.
+  Future<void> _queue = Future<void>.value();
+
+  /// Withhold the next notification post, once.
+  ///
+  /// Call immediately before the refresh whose result should not interrupt.
+  /// The very next [update] consumes it, whatever that update decides to do.
+  void suppressNextNotification() {
+    _suppressNextPost = true;
+  }
+
+  Future<void> update(int count) {
+    final next = _queue.then((_) => _update(count));
+    // Detached so one failure cannot poison every later update; the returned
+    // future still carries the error to anyone awaiting this call.
+    _queue = next.then((_) {}, onError: (_) {});
+    return next;
+  }
+
+  Future<void> _update(int count) async {
     final safe = count < 0 ? 0 : count;
     final badge = safe > kMaxBadgeCount ? kMaxBadgeCount : safe;
+
+    // Consumed here, before anything that can return early. Whatever else
+    // this call does, the flag does not survive it.
+    final suppressPost = _suppressNextPost;
+    _suppressNextPost = false;
 
     // The home screen widget rides along here rather than at this service's
     // callers. Everything that changes the unread total already calls this,
@@ -134,12 +186,27 @@ class UnreadBadgeService {
     // eight spots and forgotten in a ninth — and it shows the same number the
     // badge does, written in the same breath. Uncapped: the widget is a
     // TextView with room to render "99+" itself.
+    // Already safe: UnreadWidgetService.update swallows its own failures,
+    // for exactly the reason spelled out below. Left unwrapped so there is one
+    // obvious place that catch lives rather than two that disagree.
     await UnreadWidgetService.instance.update(safe);
 
     // Sent everywhere and trusted nowhere — see the class comment. One call,
     // no notification needed, and it is the whole feature on the launchers
     // that do honour it.
-    await AppBadgePlus.updateBadge(badge);
+    // **This one was the real gap, and it is where David saw the bug.**
+    // It sat as a bare await in front of the `safe == 0` branch, so a throw
+    // here skipped `_clear()` entirely and the notification was stranded --
+    // silently, because no caller awaited this future to catch anything. A
+    // Samsung launcher is exactly the kind to answer a badge broadcast oddly.
+    // The badge is the least important of the three signals and must not be
+    // able to take the other two down with it.
+    try {
+      await AppBadgePlus.updateBadge(badge);
+    } catch (error, stack) {
+      debugPrint('UnreadBadgeService: launcher badge failed: $error');
+      debugPrintStack(stackTrace: stack);
+    }
 
     if (!await _notificationBadgeEnabled()) {
       await _clear();
@@ -155,6 +222,12 @@ class UnreadBadgeService {
     // above the cap would rewrite the shade entry for a number nobody can
     // see change.
     if (_postedCount == badge) return;
+
+    // After the clear branches, so mark-all-read still dismisses; before the
+    // post, so the refresh it kicked off cannot put one back. `_postedCount`
+    // is deliberately left alone: the next genuine count change posts
+    // normally, which is what "for that refresh only" means.
+    if (suppressPost) return;
 
     await _sink.post(badgeNumber: badge, text: unreadBadgeText(safe));
     _postedCount = badge;

@@ -1379,7 +1379,14 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
         _booting = true;
         _counts = _counts.clearedAll();
       });
-      UnreadBadgeService.instance.update(0);
+      // Awaited, so the dismiss has certainly happened before the refresh
+      // below starts producing counts. Unawaited, this raced the update at the
+      // end of _loadArticlesBody and either could land last.
+      await UnreadBadgeService.instance.update(0);
+      // The refresh is allowed to find articles; it is not allowed to
+      // interrupt about them. One shot, consumed by the next update, which is
+      // the one _loadArticles makes below.
+      UnreadBadgeService.instance.suppressNextNotification();
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
         _lastFetchAt = DateTime.now();
@@ -1427,7 +1434,12 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
             total: allCount, byFolder: folderCounts);
       });
       _resetScrollToTop();
-      UnreadBadgeService.instance.update(allCount);
+      // Same ruling as the All tab: this count is the product of the refresh
+      // mark-all-read started, so it may be shown but not announced. Armed
+      // immediately before the call that consumes it, so there is no window in
+      // which the flag is set and something else could eat it.
+      UnreadBadgeService.instance.suppressNextNotification();
+      await UnreadBadgeService.instance.update(allCount);
       AlertsChangedNotifier.instance.alertsChanged();
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
