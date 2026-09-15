@@ -26,6 +26,19 @@ import '../theme/category_colors.dart';
 class FolderTabBar extends StatefulWidget implements PreferredSizeWidget {
   static const double barHeight = 56.0;
 
+  /// How wide each edge fade is.
+  ///
+  /// Wide enough to read as a soft edge rather than a hard line, narrow enough
+  /// that it never covers a whole chip — the narrowest chip is 72dp
+  /// ([_FolderTab._minWidth]), so a partly covered chip still shows more than
+  /// half of itself.
+  static const double edgeFadeWidth = 32.0;
+
+  /// Matches the chip's own selection animation directly below, and the
+  /// banner slide, and the switch. A fourth tempo for a fourth thing is how an
+  /// app stops feeling like one app.
+  static const Duration edgeFadeDuration = Duration(milliseconds: 200);
+
   @override
   Size get preferredSize => const Size.fromHeight(barHeight);
 
@@ -54,10 +67,52 @@ class _FolderTabBarState extends State<FolderTabBar> {
   final ScrollController _scrollController = ScrollController();
   final Map<int, GlobalKey> _tabKeys = {};
 
+  /// Whether there is anything past each edge.
+  ///
+  /// **Both start false and that is the correct resting state**, not a
+  /// placeholder: a bar whose chips all fit has nothing past either edge and
+  /// must show neither fade. An always-on fade is worse than no fade, because
+  /// it is an affordance that lies — it promises more to the side every time
+  /// anyone looks, including when there is nothing there.
+  bool _fadeAtStart = false;
+  bool _fadeAtEnd = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_updateEdgeFades);
+    // Nothing has been laid out yet, so the controller has no position to ask.
+    // The first honest answer is available at the end of this frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateEdgeFades());
+  }
+
   @override
   void dispose() {
+    _scrollController.removeListener(_updateEdgeFades);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Recomputes both edges from the scroll POSITION, which is the whole point.
+  ///
+  /// Not from whether a scroll is happening — that is what
+  /// `ScrollFadeController` answers for the floating buttons, and it is a
+  /// different question with a different answer. This one is "is there
+  /// anything over there", and it has to be true while the finger is nowhere
+  /// near the screen.
+  void _updateEdgeFades() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    // Half a pixel, because a position that has settled exactly at an extent
+    // can sit a rounding error away from it and flicker the fade on and off.
+    const double epsilon = 0.5;
+    final atStart = position.pixels > position.minScrollExtent + epsilon;
+    final atEnd = position.pixels < position.maxScrollExtent - epsilon;
+    if (atStart == _fadeAtStart && atEnd == _fadeAtEnd) return;
+    setState(() {
+      _fadeAtStart = atStart;
+      _fadeAtEnd = atEnd;
+    });
   }
 
   @override
@@ -74,6 +129,13 @@ class _FolderTabBarState extends State<FolderTabBar> {
     if (oldWidget.selectedIndex != widget.selectedIndex ||
         oldWidget.folders.length != widget.folders.length) {
       _scrollToSelected();
+    }
+    // A chip added or removed changes maxScrollExtent without anybody
+    // scrolling, so the listener above never fires for it. Deleting the
+    // category that was making the bar overflow is exactly the case: the fade
+    // has to go away, and nothing else would have told it to.
+    if (oldWidget.folders.length != widget.folders.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _updateEdgeFades());
     }
   }
 
@@ -116,28 +178,103 @@ class _FolderTabBarState extends State<FolderTabBar> {
           )),
     ];
 
+    // **The colour the fade fades TO, taken from the theme rather than
+    // assumed.** This widget lives in `AppBar.bottom` and paints no background
+    // of its own, so the surface behind it is the app bar's: white in Quiet
+    // Ink light, #0D1211 in Quiet Ink dark, #F2F1EE newsprint in Newspaper. A
+    // fade hardcoded to white would be a grey smudge on newsprint and a pale
+    // bruise in the dark, which is the specific way this goes wrong.
+    final ThemeData theme = Theme.of(context);
+    final Color surface =
+        theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface;
+
     // Transparent: this lives in AppBar.bottom, and the app bar paints the
     // background.
     return SizedBox(
       height: FolderTabBar.barHeight,
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: List.generate(tabs.length, (i) {
-            final tab = tabs[i];
-            return _FolderTab(
-              key: ValueKey('folder_tab_$i'),
-              tabKey: _keyFor(i),
-              label: tab.label,
-              count: tab.count,
-              colorIndex: tab.colorIndex,
-              isSelected: i == widget.selectedIndex,
-              onTap: () => widget.onTabSelected(i),
-              onLongPress: widget.onMarkAllRead,
-            );
-          }),
+      // Metrics change without anyone scrolling -- a window resize, a chip
+      // whose count grew a digit -- and the controller listener does not fire
+      // for those. This does.
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: (_) {
+          WidgetsBinding.instance
+              .addPostFrameCallback((_) => _updateEdgeFades());
+          return false;
+        },
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: List.generate(tabs.length, (i) {
+                  final tab = tabs[i];
+                  return _FolderTab(
+                    key: ValueKey('folder_tab_$i'),
+                    tabKey: _keyFor(i),
+                    label: tab.label,
+                    count: tab.count,
+                    colorIndex: tab.colorIndex,
+                    isSelected: i == widget.selectedIndex,
+                    onTap: () => widget.onTabSelected(i),
+                    onLongPress: widget.onMarkAllRead,
+                  );
+                }),
+              ),
+            ),
+            _EdgeFade(visible: _fadeAtStart, atStart: true, surface: surface),
+            _EdgeFade(visible: _fadeAtEnd, atStart: false, surface: surface),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One edge's fade: a strip of the surface colour dissolving into nothing.
+///
+/// **It never takes a tap.** The chip under it is a chip the user can see and
+/// is reaching for; a decoration that swallowed that tap would be a worse bug
+/// than the missing affordance this exists to fix. [IgnorePointer] is the
+/// whole of the fix and `folder_tab_bar_fade_test.dart` taps the chip nearest
+/// each edge to prove it.
+class _EdgeFade extends StatelessWidget {
+  const _EdgeFade({
+    required this.visible,
+    required this.atStart,
+    required this.surface,
+  });
+
+  final bool visible;
+  final bool atStart;
+  final Color surface;
+
+  @override
+  Widget build(BuildContext context) {
+    return PositionedDirectional(
+      top: 0,
+      bottom: 0,
+      start: atStart ? 0 : null,
+      end: atStart ? null : 0,
+      width: FolderTabBar.edgeFadeWidth,
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration: FolderTabBar.edgeFadeDuration,
+          curve: Curves.easeOut,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: AlignmentDirectional.centerStart,
+                end: AlignmentDirectional.centerEnd,
+                // Opaque against the outer edge, gone by the inner one.
+                colors: atStart
+                    ? [surface, surface.withValues(alpha: 0)]
+                    : [surface.withValues(alpha: 0), surface],
+              ),
+            ),
+          ),
         ),
       ),
     );
