@@ -384,9 +384,21 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     SettingsNotifier.instance.addListener(_onSettingsChanged);
     // Bookmarks toggles the saved flag on articles this list may be holding,
     // and it is kept alive alongside this screen, so the change would
-    // otherwise never reach here. (Feed/folder structure changes use
-    // FeedsChangedNotifier instead — see _consumeFeedsChange.)
+    // otherwise never reach here.
     SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
+    // **Feed and folder structure changes reach this screen two ways, and it
+    // needs both.** [_consumeFeedsChange] already ran from `didUpdateWidget`
+    // on an `isVisible` false→true transition, which covers walking back from
+    // the Categories tab. It does not cover a write that lands while this
+    // screen is *already* showing, and it does not cover one that arrives
+    // while a fetch is in flight, because the busy guard defers the change to
+    // a transition that may never come.
+    //
+    // FeedsScreen has listened to this broadcast since the OPML work, for the
+    // same reason and with the same shape. This screen was the half that was
+    // never wired up: the article list had the pull half and not the push
+    // half.
+    FeedsChangedNotifier.instance.addListener(_onFeedsChangedElsewhere);
     // A new blocklist keyword hides rows this list is already holding, and
     // the panel that adds one is opened from this very screen, so nothing
     // else would ever tell it to re-query.
@@ -406,6 +418,19 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     if (widget.isVisible && !oldWidget.isVisible) {
       unawaited(_consumeFeedsChange());
     }
+  }
+
+  /// A feed or folder was written somewhere else, and this screen is
+  /// mounted — wherever it happens to be mounted.
+  ///
+  /// This is the half that does not depend on a visibility transition, which
+  /// is what makes it work on a tablet as well as a phone: the three-column
+  /// shell can have the structure change and the article list on screen at
+  /// the same time, with no push, no pop and no tab switch to hang a reload
+  /// on. A fix wired to navigation would work on the Pixel and silently do
+  /// nothing on the Lenovo.
+  void _onFeedsChangedElsewhere() {
+    if (mounted) unawaited(_consumeFeedsChange());
   }
 
   /// Acts on a feed or folder change made on another tab.
@@ -475,6 +500,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     BlockedStateNotifier.instance.removeListener(_onBlockedStateChanged);
+    FeedsChangedNotifier.instance.removeListener(_onFeedsChangedElsewhere);
     _scrollDebounce?.cancel();
     _pageController.dispose();
     _fabFade.dispose();
@@ -592,6 +618,11 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     setState(() => _backgroundFetching = true);
     await _fetchAndApply(ownLaunchReturn: ownLaunchReturn);
     if (mounted) setState(() => _backgroundFetching = false);
+    // A change that arrived mid-fetch was deferred by the busy guard rather
+    // than dropped, and nothing else would come back for it: the broadcast
+    // has already fired and a visibility transition may never happen. This is
+    // that second look, and it is a no-op when there is nothing queued.
+    if (mounted) unawaited(_consumeFeedsChange());
   }
 
   /// Fetches, deletes every read article, then decides whether anything
