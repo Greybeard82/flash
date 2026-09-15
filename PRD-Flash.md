@@ -478,6 +478,24 @@ iOS; accounts and sync across devices; in-app language choice; per-feed refresh 
 
 - **Monetisation.** A free tier with a banner ad while reading and a daily cap on AI summaries; a one-time unlock of about €4 removes both. No subscription. Premium limits lock gracefully rather than blocking the app. Anyone who installs before the paid version keeps everything permanently (promised on the website). Google Play Billing is not integrated yet.
 - **Portrait tablets — dated, not open-ended.** Tablets are landscape-locked for now. `targetSdk` is **pinned at 36** in `android/app/build.gradle.kts` rather than inherited from the Flutter SDK, so the lock cannot be lost in a toolchain upgrade. **API 37 lands ~August 2027 and makes adaptive UI mandatory on large screens**, at which point portrait tablet stops being optional: tablets and foldables can no longer opt out of resizability, and `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` stops holding the lock. Android 17 shipped 16 June 2026; Google Play will require new apps and updates to target API 37 from August 2027, so a portrait tablet layout has to exist before the app can ship an update after that date. Recorded 2026-09-14.
+- **The Impeller opt-out — dated, and currently unowned.**
+`AndroidManifest.xml` sets `io.flutter.embedding.android.EnableImpeller` to
+`false`, so Flash renders through the legacy Skia GL backend rather than
+Impeller, which is the default on Android. **Nobody recorded why.** It arrived
+in `3d5e449`, a six-bullet omnibus commit that does not mention it, with no
+comment beside it and no note anywhere in the repo. Flutter now logs
+`[Action Required]: Impeller opt-out deprecated` on every launch and states the
+flag is being removed in an upcoming release — so **one day Flash gets Impeller
+whether it wants it or not, in a build with no related change**, and whatever
+bug prompted the opt-out returns with nothing to connect it to. This is the
+same shape as the `targetSdk` API-37 problem above: a deadline with no owner.
+**Tested 2026-09-15 on the Lenovo Tab M11**: built with the opt-out removed, the
+app ran on the Impeller Vulkan backend with no errors, and the feed, the reader
+and the WebView inside it all rendered correctly; the full suite passed
+unchanged. It also fixed a rendering failure that Skia caused elsewhere.
+**Recommendation: remove the opt-out** — the only argument for keeping it would
+be the original reason for adding it, and there is no record of one. Not
+removed here; David's call. Recorded 2026-09-15.
 - **Phone split view** (being specified). A mode on phones that puts the reading pane on top and the article list below it, reusing the tablet reading pane. Open questions: minimum screen height, default split, Clean mode as default, and its interaction with mark-read-on-scroll.
 - **Google TV redesign** (mocked up). D-pad grid, a focused summary view, cloud summaries (no Nano on TV).
 

@@ -308,3 +308,167 @@ justify, because nobody recorded why.
 
 Not flipped, as instructed. One build with it set to `true` would also settle
 whether it explains finding 2.
+
+---
+
+# Part three
+
+## ⚠ Emulators: stopped, and not to be restarted
+
+**David reported the emulator flashing badly enough to be a photosensitivity
+risk.** Every emulator was killed on the spot and none will be started again.
+Nothing in this project needs one: all three test devices are real.
+
+This retires findings that depended on an emulator, and one of them is retired
+by being **answered**.
+
+### Impeller does fix the emulator rendering — observed, not measured
+
+Before the emulator was stopped, the Impeller build was launched on the same
+AVD that had never got past the splash screen. **It rendered the feed.**
+`bad color buffer handle` fell from about 2400 to 24.
+
+That confirms the hypothesis from part two: Flash was the one app there running
+the legacy Skia GL path, and it was the one app that would not draw.
+
+**Recorded as observed rather than measured**, and deliberately not reproduced.
+One launch, one screenshot, no repeat run and no instrumentation. It is strong
+enough to explain the symptom and not strong enough to be called a benchmark.
+
+### A correction to my own reading of that screenshot
+
+I described the emulator render as "only the top ~45% paints, the rest is
+black" and put it down to a graphics limitation.
+
+**That was wrong, and David spotted it.** The AVD window is portrait-shaped;
+Flash landscape-locks above 600dp. So the app correctly occupied a landscape
+band inside a portrait window, with black above and below. **That is the
+orientation rule working exactly as designed, not a rendering defect.**
+
+Written down so nobody files it later as a bug, and as a reminder that a
+screenshot of an unfamiliar surface is evidence about the surface as much as
+about the app.
+
+## Impeller on real hardware: clean
+
+Built once with `EnableImpeller = true` and run on the Lenovo. **Reverted
+immediately afterwards** — David rules on whether it stays.
+
+| check | result |
+|---|---|
+| Does it run | Yes. `Using the Impeller rendering backend (Vulkan).` |
+| Errors | None. Zero `E flutter`, zero `FATAL`. |
+| The feed | Renders correctly. Fonts, chips, action rail, thumbnails, dividers all as Skia. |
+| The reader | Renders correctly, **including the WebView**. |
+| Test suite | 1788 passing, 1 skipped — unchanged. |
+
+**The reader is the result that matters.** Platform views composite differently
+under Impeller, and Flash puts a WebView inside its reading pane. It was the
+most likely place for a difference and there was none: the two-line bar, the
+four actions, the clean-view FAB and the page itself all drew correctly.
+
+**No visual difference was found anywhere.** Newspaper was not exercised under
+Impeller, because doing so means toggling a setting on David's own device and
+the evidence was already one-sided.
+
+**Recommendation: remove the opt-out.** It runs, it renders, it fixes a
+rendering failure that Skia caused, and the opt-out is being removed upstream
+whether or not anyone chooses. The only reason to keep it would be the original
+reason for adding it, and there is no record of one.
+
+## Literata's non-Latin fallback — looked at, finally
+
+Open since pass 8. Run on the cleared Samsung with one Russian feed
+(`lenta.ru/rss/news`), added and **removed afterwards**.
+
+**Nothing renders as tofu.** The substitution is clean, every glyph draws, and
+the article is completely readable. That was the worst case and it does not
+happen.
+
+**But the reading view silently stops being Literata.** Side by side, in the
+same clean view on the same device, minutes apart:
+
+- **English** — Literata. Unmistakable serif: bracketed serifs, ball terminals,
+  the slab-ish weight the reading view was designed around.
+- **Russian** — a **grotesque sans-serif**, flat terminals, no serifs anywhere.
+  The system face, not a serif fallback.
+
+So it is not a degraded Literata. It is a different typeface with a different
+voice, and the reading view's entire typographic identity is gone for that
+article. A reader with one Russian feed among twenty gets two visibly different
+reading experiences and nothing explains why.
+
+**On the line height**, which was the specific worry: `kCleanBodyHeight = 1.62`
+was tuned for Literata's x-height and is applied unchanged to the substitute.
+It reads **loose rather than wrong** — noticeably airy, not broken, and still
+comfortable. The face change is the real finding; the leading is a second-order
+consequence of it.
+
+**Not fixed, and not obviously worth fixing.** Bundling Cyrillic and Greek
+Literata subsets costs app size for a case most readers never hit; accepting
+the sans is defensible. What is not defensible is that nobody knew. It is
+written down now.
+
+**One thing that does work:** Cyrillic renders correctly everywhere outside the
+clean view — feed list, reader bar, feed titles, and the "Remove feed" dialog
+all handle it without complaint.
+
+## The pending timer: production code, but not a leak
+
+Traced to its actual origin rather than guessed at.
+
+```
+Timer (duration: 0:00:10.000000, periodic: false)
+  SqfliteDatabaseMixin.txnSynchronized
+  ArticleRepository.findByGuid              (article_repository.dart:228)
+  _ArticleDetailPaneState._resolveArticleId (article_detail_pane.dart:248)
+```
+
+**It is sqflite's internal 10-second lock timeout**, started by a **production**
+call: the reading pane resolves an article's id by (feedId, guid) on open, the
+lookup is async, and the widget can be disposed before it finishes.
+
+**It is not a leak in the app.** sqflite's timer is internal and clears when the
+query completes; `_resolveArticleId` already guards with `!mounted` so nothing
+is written to a dead widget. In the app this is invisible and harmless.
+
+**It is also not a test-only quirk**, which is the answer to the question asked.
+Production code starts work that outlives the widget, and `testWidgets`'
+pending-timer assertion is right to notice. It fails only when the timing lines
+up, which is why it looks like a flake.
+
+**And it is ONE root cause, not two.** Part two reported "two different files".
+That was wrong: the `!timersPending` failure is *inside*
+`article_detail_pane_clean_mode_test.dart`, the same file as the other
+intermittent failure. One cause, one file.
+
+Stays **POST-LAUNCH** as instructed, reclassified in description: not "a flaky
+test" but "an uncancellable async DB call whose in-flight work outlives the
+widget".
+
+## The "999+" widget check: closed as unverifiable
+
+Not done, and **not to be done by rebuilding the backlog**. Clearing the
+Samsung cost the 2153-unread accumulation, rebuilding it needs days of real
+feed traffic, and seeding it artificially would not be a device test.
+
+**What is verified:** the clamp threshold, the "+" form, the autosize
+attributes and their 18–28sp bounds, and that the layout reads resources rather
+than literals — all in unit tests.
+
+**What is not:** purely whether the autosized text physically fits on a 1×1
+tile at that width. **Worst case if it does not: the tile ellipsises**, showing
+something like "99…" or a clipped "999+" — wrong but not broken, and fixable in
+one line by lowering the autosize floor.
+
+## One thing I got wrong, worth recording
+
+While removing the test feed I mis-tapped and opened **"Delete category —
+Travelling? All feeds and articles in this category will be deleted."** I
+cancelled it. Nothing was lost, and the device was the cleared one.
+
+Two things follow. The confirmation dialog did its job, which is the design
+working. And a coordinate-driven UI script is one stale screenshot away from
+a destructive tap — the list had collapsed between my screenshot and my tap, so
+the same coordinates meant a different row. Verify the screen state immediately
+before any tap that can delete.
