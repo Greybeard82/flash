@@ -2849,6 +2849,32 @@ same shape elsewhere found no third site. The fix is the shape being made
 whole, not a repair of an observed failure — worth knowing if it ever comes
 back.
 
+#### And then, on the way out, the thing that is probably the actual bug
+
+**Found on 0.9.6+31 on the Lenovo, after the fix shipped.** The folder bar is
+horizontally scrollable, chips are in the user's own category order, and a new
+category is appended to the **end**. `ZedQA`, the most recently created
+category here, holds two feeds and 18 unread — and it is not on screen. Three
+chips fit on the tablet before the fold and about three and a half on the M51;
+there are six categories. Reaching the new one takes a deliberate sideways
+swipe that nothing invites.
+
+So a user makes a category, adds a feed, comes back, and the library looks
+unchanged — **exactly the report** — while the data underneath is completely
+correct. Which is why it never reproduced from a database check or from the
+Categories screen: both of those show the category, because it is there.
+
+The stale-listener bug in 18.1 was real and is fixed. This is a second,
+likelier cause of the same sentence, and 18.1 alone does not resolve it: the
+chip now appears the instant the category is made, at a scroll offset nobody
+is looking at.
+
+**Not fixed, because the fix is a decision.** The candidates, cheapest first:
+bring a newly created category into view (`Scrollable.ensureVisible` on the
+chip, on the notifier's broadcast); insert new categories at the front rather
+than the end; or show an edge affordance so the bar reads as scrollable. The
+first is the smallest and matches what the user just did. David chooses.
+
 ### 18.2 Names capitalise as names
 
 `TextCapitalization.sentences` on three fields that take proper nouns —

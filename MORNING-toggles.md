@@ -9,9 +9,45 @@ commit, it touches five files, and reverting it takes the call sites with it.
 
 ---
 
+## 0. Read this first — I think I found the category bug, and it is not what I fixed
+
+**On 0.9.6+31, on the Lenovo, after the fix was already in.** The folder bar
+scrolls sideways. Chips come in your category order, and a new category goes
+on the **end**. `ZedQA` — the last one you made, two feeds, 18 unread — is not
+on screen when the list opens. Three chips fit before the fold on the tablet,
+about three and a half on the M51, and you have six categories.
+
+So: you make a category, add a feed, come back, and the library looks
+unchanged. The category is there. The data is right. **The chip is off the
+right-hand edge**, and nothing tells you the bar scrolls.
+
+That is your report, word for word, and it explains why I could never
+reproduce it — I was checking the database and the Categories screen, both of
+which show the category, because the category exists.
+
+**Swipe the folder bar left before you do anything else.** If ZedQA is sitting
+there at the end, that was the bug.
+
+I have not fixed it, because the fix is a choice and it is yours:
+
+- **bring the new chip into view** — `Scrollable.ensureVisible` when the
+  category is created. Smallest, and it matches what you just did.
+- **put new categories at the front** instead of the end. Changes your
+  ordering, which you set by hand.
+- **show an edge fade** so the bar reads as scrollable at all. Fixes the class
+  rather than the instance, and helps every category past the third.
+
+Say which and it is a short commit.
+
+The fix below is still real and still shipped — the article list genuinely had
+no way to hear about a structure change on a tablet — it is just not, I now
+think, the thing you were seeing.
+
+---
+
 ## 1. The disappearing category — on a phone AND on the tablet
 
-The one that mattered. Do it first and do it twice.
+The stale-listener half. Do it first and do it twice.
 
 1. Article list open. Menu → Categories.
 2. Add a category. Add a feed to it.
