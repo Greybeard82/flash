@@ -2812,3 +2812,93 @@ not a semantics change.
 **One thing worth knowing if it is taken up:** the fill is now quiet enough
 that a variant does not have to shout. The old `inverseSurface` treatment had
 no headroom to add emphasis to; this one does.
+
+---
+
+## 18. Two bugs, then the square toggles
+
+### 18.1 The disappearing category — the fix, and the fix that would have been wrong
+
+Create a category, put a feed in it, go back to the article list: the library
+has not changed there until a pull to refresh.
+
+**The wrong fix is a reload when the Categories route pops.** It works on a
+phone and does nothing on a tablet, where the three-column shell can have the
+structure change and the article list on screen at once — no push, no pop, no
+tab switch to hang it on. The right shape is "something every interested
+listener hears, wherever it is mounted", and it was already in the repo.
+
+`FeedsChangedNotifier` does two jobs and only one of them was fully wired.
+It **records** a change, for a single consumer that decides whether to fetch,
+and it **broadcasts**, for anything mounted that is displaying the structure.
+`FeedsScreen` has listened to the broadcast since the OPML work. `FeedScreen`
+never did: it had the pull half and not the push half, and its only route in
+was an `isVisible` transition.
+
+A second hole closed with it: `_consumeFeedsChange` bails while a fetch is in
+flight and leaves the change queued, and nothing came back for it — the
+broadcast had already fired and a transition might never happen.
+`_backgroundRefresh` now takes a second look when it finishes.
+
+`consume()` stays single-consumer. The new handler re-enters the existing path
+rather than re-querying, because a second consumer would swallow the pending
+change and the new feed would arrive with no articles.
+
+**Not reproduced on 0.9.5+30**, on either form factor, and the sweep for the
+same shape elsewhere found no third site. The fix is the shape being made
+whole, not a repair of an observed failure — worth knowing if it ever comes
+back.
+
+### 18.2 Names capitalise as names
+
+`TextCapitalization.sentences` on three fields that take proper nouns —
+category name, feed title, and the rename dialog. A category called "Travel"
+typed as "travel" is a keyboard that disagrees with the thing being named.
+**The class, not the instance: three fields, all three changed**, and the grep
+that found them is the one to rerun when a fourth is added.
+
+### 18.3 The segmented buttons — see 10.6
+
+Not reproduced, no change to the control, and the investigation produced a
+harness rule instead. The short version: one
+`SegmentedButtonThemeData.style.shape` has two unrelated fates, the group's
+outer shape honours it and each segment's does not, and neither a theme
+assertion nor a segment-render assertion describes what the user sees.
+
+### 18.4 The switch is the only control here that had to be built
+
+**Verified against the pinned SDK before a line was written**, because the
+cheap outcome was a theme entry. `SwitchThemeData` in Flutter 3.41.6 has ten
+properties and no shape; `Switch` takes no `ShapeBorder`; `_SwitchPainter`
+paints the track as `RRect.fromRectAndRadius(trackRect,
+Radius.circular(trackHeight / 2))` — a stadium derived from the height, with
+no way in. So: `lib/widgets/flash_switch.dart`, no package.
+
+**`kFlashSwitchCornerRatio` is the one number to tune.** The corner as a
+proportion of track height — 0.5 is the stadium, 0.0 is a hard rectangle, 0.32
+ships. The thumb takes the same proportion of its own height, so both curves
+stay in one family at any value. A ratio rather than an absolute radius
+because no screenshot or mock reading gives a radius anyone can trust.
+
+The three ways a custom toggle is worse than the stock one it replaced, each
+asserted in `test/flash_switch_test.dart`:
+
+- **It announces itself as a button.** `Semantics(toggled:)` is what makes a
+  reader say "switch, on". Disabled advertises no tap action.
+- **It shrinks to the size of the art.** Track 26dp, box 48 with
+  `HitTestBehavior.opaque`, so the empty target above the track is live.
+- **It only takes taps.** Drag is **distance**-based — a quarter of the track
+  — not velocity. A slow deliberate drag has almost no velocity, and velocity
+  makes the behaviour depend on how fast someone moves.
+
+1.4.11 at 3:1 is measured in all three themes, both live states, four pairs.
+**The OFF track is `onSurfaceMuted`, not a pale grey, because of one of them**:
+a Material-style pale track measures about 1.1:1 against white and relies on
+an outline to be visible at all. Disabled is exempt from the floor and is
+asserted distinct from both live colours instead.
+
+200ms, matching `folder_tab_bar`'s chip selection and the banner slide.
+
+**8 stock `SwitchListTile`s before — settings 3, filter bubble 1, quick
+settings 4 — and 0 after.** If this is ever backed out, it is one commit and
+the call sites revert with it.
