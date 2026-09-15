@@ -1,12 +1,20 @@
 # Device list — the release-build fix
 
-**0.9.2+27 on the Lenovo and the Pixel.** Pushed through `5c4141a`.
+**0.9.2+27 on all three devices.** Pushed through `3f7ee2d`.
 **1678 passing, 1 skipped, analyzer clean.**
 
-**The Samsung M51 is still off USB.** It has not reconnected all session, so it
-did **not** get this build. One `adb install -r` when it does — and it is the
-one device where you can still see the bug, so it is worth catching before you
-update it.
+**All three devices have it, Samsung included** — it reconnected and was
+updated. It had been sitting on **0.8.1 (code 24)**, three versions behind, so
+it made exactly the jump this fix worries about: from a build where
+`plugin.cancel()` always threw, to one where it does not.
+
+That upgrade came through **clean**. No stale blob, no throw on the
+package-replaced path, no throw on first launch — the non-retroactivity caveat
+in item 5 below did not bite here. It also posts with `color=0xff15868e` on One
+UI, which is the first Samsung shade the accent has been seen on.
+
+**It is carrying 2153 unread articles**, which makes it the best device you
+have for the "999+" widget check that has been open since pass 9 — see item 4.
 
 ---
 
@@ -70,20 +78,30 @@ were removed with the keywords.
 
 ### 4. The widget
 
-**Not verified, and it cannot be from here: there is no Flash widget on either
-home screen.** What I could confirm is that the provider itself survived R8 —
-`dumpsys appwidget` reports it with `zombie=false` on both devices, which a
-stripped or renamed provider would not be.
+**Not verified, and it cannot be from here: there is no Flash widget placed on
+any of the three home screens.** What I could confirm is that the provider
+itself survived R8 — `dumpsys appwidget` reports it with `zombie=false` on
+every device, which a stripped or renamed provider would not be.
 
-If you place one, that closes the last open item on this list.
+**Place one on the Samsung.** It is sitting on 2153 unread, so it renders the
+four-character "999+" case immediately — the exact thing that has been
+unverifiable since pass 9, because the host suite cannot measure a TextView the
+launcher draws in another process. One to three digits should stay at the full
+28sp; only "999+" should shrink, to about 20sp. If it clips, the autosize
+bounds are wrong and it is a one-line fix.
+
+That closes the last open item on this list.
 
 ### 5. First launch after updating, on any device
 
 The plugin's maintainer notes the fix **is not retroactive**: a bad blob
 written by a broken build stays bad in storage until it is rewritten. Flash
-never schedules notifications, so its list should always be empty — but the
-first launch after updating is the moment to watch, and the Samsung is the one
-device that will make that jump from a broken build.
+never schedules notifications, so its list should always be empty.
+
+**The Samsung already made that jump and came through clean** — 0.8.1 straight
+to 0.9.2, no throw on the package-replaced receiver and none on first launch.
+That is the best evidence available that the caveat does not bite Flash, since
+it is the only device that went from a genuinely broken build to a fixed one.
 
 ---
 
