@@ -1658,7 +1658,29 @@ Three facts pass 9 should hold onto:
    avoid needing one, and the reason this was worth checking before writing the
    pass rather than after.
 
-### 11.7 The reader action bar — a recommendation, not a change
+### 11.7 The reader action bar — a recommendation, REVERSED on new
+### information
+
+> **Read this section knowing the layout it judges is not the one that was
+> built.** It is kept in full, and kept accurate, because it is still the
+> best case against four visible buttons and somebody should be able to
+> find it.
+>
+> The recommendation below chose between section 4's two options, and
+> **both of them keep the title line**. David chose a third afterwards:
+> the title goes entirely and the bar carries the source alone. Under
+> that, the central premise — 160dp leaves roughly twenty characters
+> of headline — simply disappears. There is no title to truncate, the
+> source fits 160dp comfortably, and four visible buttons cost nothing.
+>
+> The secondary point survives and was **overruled deliberately**:
+> open-in-browser is indeed considered rather than reflexive, but the
+> moment it is needed is the moment a page has failed to render and the
+> reader is already annoyed. Making the escape hatch two taps deep to save
+> space that is no longer scarce is the wrong trade.
+>
+> **Reversed on new information, not rejected.** The reasoning was sound
+> about the question it was asked; the question changed.
 
 Not started, not threaded. Handoff 4's proposal stays out.
 
@@ -1675,3 +1697,158 @@ reflexes. The counter-argument is real and worth holding a phone for: an
 overflow is two taps and a menu for something some readers use constantly, and
 160dp of title is only cramped if headlines are long, which on this feed list
 they mostly are.
+
+---
+
+## 12. Pass 8b: the reader's actions, and sharing a summary
+
+### 12.1 The bar: one line of text, four buttons
+
+`[close] [source] [open in browser] [bookmark] [share]`. The article title line
+is gone; the attribution is promoted from a `labelSmall` second line to
+`titleSmall` as the only one. It still carries publisher **and** date, which
+Play policy requires of a news app.
+
+**56dp before, 56dp after** — measured in both layouts before anything was
+built. The four `IconButton`s set a 48dp floor and the 4dp vertical padding
+takes it to 56, which is exactly what the two-line column already measured.
+That is a coincidence of Material's defaults rather than a guarantee, which is
+why `reader_action_bar_test.dart` pins the literal in all three themes plus the
+no-bookmark and no-attribution layouts. A bar that shrank would resize the
+platform view mid-read on the tablet, reflow the page and lose the scroll
+position.
+
+**The attribution can be empty and now falls back to the host.** `feedTitle`
+and `publishedAt` are both nullable on `Article`, so the join really can come
+out empty — and with the title gone that would leave four buttons and nothing
+saying where you are. The host is stripped of `www.`, which is four characters
+of nothing in a bar this narrow, and is what Chrome shows in the same position.
+Only a *wholly* empty join reaches it: an article with a date and no publisher
+still shows the date.
+
+**Long source names keep the ellipsis.** The longest in the starter pack is
+`The New York Times (World)` at 26 characters, which fits at 360dp. A publisher
+long enough to truncate loses the tail of its own name rather than the date,
+because the date is joined after it.
+
+### 12.2 The bookmark is owned by the pane, not threaded
+
+`openArticle()` is a free function with **two positional parameters and no
+optionals**, and it is one of five call sites. Threading a callback would mean
+editing all five plus both `ArticleDetailPane` constructions — and two of the
+five, the search screen and the keyword group panel, render plain `ListTile`s
+with no saved-state code at all, so each would have to invent a bookmark
+implementation purely to pass one down.
+
+The pane already constructs `SettingsRepository()` inline twice and calls
+`launchUrl` directly, so owning an `ArticleRepository` is the established shape
+here rather than a new one. `ArticleCard` taking `onBookmark` is the
+counter-precedent and it is a different case: the card lives inside a screen
+that already owns the list and its repository.
+
+**It listens to `SavedStateNotifier`**, because a bookmark that lies about
+state is worse than no bookmark: the same article can be unsaved from the
+card's rail or the radial menu while the reader sits open over them. Three
+things about that notifier are load-bearing and are written into the code:
+
+- The payload is read **synchronously** inside the listener. The notifier holds
+  only the last change and the next broadcast overwrites it, so deferring
+  across an await would act on a different article.
+- Every listener does its **own** id comparison; the notifier does no
+  filtering. Without it this pane would repaint whenever any row anywhere was
+  bookmarked.
+- The pane's own write broadcasts too, and the same comparison is what makes
+  that self-cancelling.
+
+**No bookmark button at all when the article has no id.** An article opened
+from the Alerts tab is built by `AlertEntry.toArticle()` and carries a null id
+on purpose — identity there is (feedId, guid), not an article id. Nothing can
+be written without one, so the button is **absent rather than present and
+inert**: a control that does nothing when pressed is a worse answer than one
+that is not offered. `feed_screen._toggleSaved` guards the same way.
+
+### 12.3 Sharing a summary, and copy changing with it
+
+A share button beside copy, same 18px glyph in a standard `IconButton`, so it
+inherits the same 48dp target and raises no geometry question.
+
+Both build **one payload**, through `buildSummaryShareText` in
+`summary_formatter.dart`:
+
+```
+<article title>
+
+<summary>
+
+<AI disclaimer>
+<url>
+```
+
+Subject is the article title, matching `shareArticle`.
+
+**Copy changed, and that is the point rather than a side effect.** It used to
+put the bare summary on the clipboard — no title, no link, no sign a machine
+wrote it — so pasted into a chat it read as the publisher's own words. If
+share carried attribution and copy did not, copy would become the button people
+use to strip it, and the inconsistency would be the bug rather than the
+feature. `summary_share_payload_test.dart` pins the byte-equality and, per the
+standing rule in 10.2, also asserts the two **call sites** share one builder
+rather than each calling it.
+
+Neither the link nor the disclaimer is decoration. Flash's supply depends on
+publishers continuing to offer feeds, and an app that circulates their content
+with no traffic back is the thing publishers close feeds over. And these
+summaries are sometimes wrong: without the label the mistake is attributed to
+the publisher rather than to the app that generated it.
+
+**Both buttons stay.** Android's share sheet offers copy-to-clipboard, so there
+is mild redundancy — but copy is one tap and share-then-pick-copy is two, and
+this app already accepts two routes to one action on the bookmark. A decision,
+not an oversight.
+
+### 12.4 No new ARB keys, and why the existing disclaimers travel
+
+`aiSummaryDisclaimer` and `aiSummaryDisclaimerCloud` both work standing alone
+in a message, so this pass added **zero strings**. Checked in all five locales:
+
+| | en |
+|---|---|
+| on-device | "Generated on-device by Gemini Nano. May not be fully accurate." |
+| cloud | "Generated by Gemini in the cloud. May not be fully accurate." |
+
+**Neither uses deixis.** No "this", no "above", no "the summary below— " so
+neither needs the UI around it to make sense. Each names its generator, which
+is the whole job: it puts the mistake on an AI rather than on the publisher.
+Pinned in the payload test, so a future edit that adds "the summary above" to
+either string fails there rather than shipping a sentence that points at
+nothing.
+
+**One limitation, stated rather than fixed:** neither names Flash, so a
+recipient cannot tell which app produced the summary. That is not required for
+the disclaimer's purpose and adding it would be a new key across five locales.
+Recorded as a known gap.
+
+### 12.5 The clean view toggle is untouched, and was verified rather than
+### assumed
+
+Still a `FloatingActionButton.extended` inside `Positioned(right: 16, bottom:
+16)` in the pane's body `Stack` — **not** a `Scaffold` FAB — with a text
+label, conditional on `_cleanBlocks != null`, and nowhere near the bar.
+
+`git diff` from the commit that introduced it to HEAD shows **not one line of
+the FAB block has changed** since the day it was written. The five commits that
+have touched this file since changed imports, the attribution argument, and the
+placeholder's ink.
+
+Two details worth having, since neither is what the shorthand implies:
+
+- The condition is `_cleanBlocks != null`, not "a clean version exists". Three
+  distinct causes make the toggle absent and look identical on screen: the
+  setting is off, extraction is in flight, and extraction failed.
+- "Does not move" is true of its **anchor**, not its width. An extended FAB
+  sizes to its label, and the two English labels differ in length, so the left
+  edge shifts on every toggle.
+
+`heroTag: 'clean_mode_toggle'` is load-bearing: on the tablet the middle
+column's screens and this pane share one Navigator, and 'refresh', 'search' and
+'mark_all_read' are already taken.
