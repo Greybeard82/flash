@@ -63,21 +63,42 @@ class _FolderTabBarState extends State<FolderTabBar> {
   @override
   void didUpdateWidget(FolderTabBar oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.selectedIndex != widget.selectedIndex) {
+    // **The folder count is part of the condition, not just the index.**
+    // A category created at the end of the list arrives as a chip that did
+    // not exist in the previous build, and the selection can move onto it
+    // while the index it is given happens to be one nothing was watching. A
+    // condition reading only `selectedIndex` never fires for that case, and
+    // the new chip stays parked off the right-hand edge of a bar that gives
+    // no sign it scrolls — which is what "the category disappeared" actually
+    // was.
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.folders.length != widget.folders.length) {
       _scrollToSelected();
     }
   }
 
   GlobalKey _keyFor(int i) => _tabKeys.putIfAbsent(i, GlobalKey.new);
 
+  /// Brings the selected chip into view **after the frame that builds it**.
+  ///
+  /// The post-frame callback is the entire fix, not a precaution.
+  /// `didUpdateWidget` runs before `build`, so for a chip that has just
+  /// appeared `_tabKeys` has no entry yet — it is populated inside `build` by
+  /// [_keyFor] — and even with a key there would be no element and no
+  /// geometry to aim at. Called synchronously, this hits the null guard below
+  /// and does nothing at all, silently, which is the worst possible way for
+  /// it to fail: the code reads as though it scrolls.
   void _scrollToSelected() {
-    final context = _tabKeys[widget.selectedIndex]?.currentContext;
-    if (context == null) return;
-    Scrollable.ensureVisible(
-      context,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final context = _tabKeys[widget.selectedIndex]?.currentContext;
+      if (context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override

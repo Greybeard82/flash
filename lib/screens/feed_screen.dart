@@ -440,8 +440,15 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   /// racing a fetch that is already running.
   Future<void> _consumeFeedsChange() async {
     if (!mounted || _booting || _refreshing || _backgroundFetching) return;
+    // Taken before the early return below, not after it. The two signals
+    // arrive on the same debounce and either can land first; reading the
+    // selection only when a change survives would drop it whenever the
+    // structure change had already been consumed by the visibility
+    // transition a moment earlier.
+    final selectFolderId =
+        FeedsChangedNotifier.instance.takeUserCreatedCategory();
     final change = FeedsChangedNotifier.instance.consume();
-    if (change == null) return;
+    if (change == null && selectFolderId == null) return;
 
     if (change == FeedsChange.needsFetch) {
       // A new feed has no articles yet. _backgroundRefresh reloads and
@@ -456,6 +463,48 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       AlertsChangedNotifier.instance.alertsChanged();
       _resetScrollToTop();
     }
+    if (selectFolderId != null) _selectCreatedFolder(selectFolderId);
+  }
+
+  /// True when the selected tab is a category with **no feeds filed under
+  /// it at all** — as opposed to a category whose feeds have simply produced
+  /// nothing new.
+  ///
+  /// Not `_hasFeeds`, which is app-wide and answers a different question:
+  /// someone with twenty feeds in five categories and a sixth just created
+  /// has feeds, and has nothing in the category they are looking at.
+  ///
+  /// Read off `_feedFolderId`, which the article load already builds, so this
+  /// costs a walk of a map that is in hand rather than a query.
+  bool get _selectedFolderHasNoFeeds {
+    if (_selectedTabIndex == 0 || _selectedTabIndex > _folders.length) {
+      return false;
+    }
+    final id = _folders[_selectedTabIndex - 1].id;
+    return id != null && !_feedFolderId.containsValue(id);
+  }
+
+  /// Selects the category the user just made, so they land in the thing they
+  /// just named rather than back on All with a chip they have to go and find.
+  ///
+  /// **Only ever reached from a [FeedsChangedNotifier.takeUserCreatedCategory]
+  /// that came back non-null**, which happens for exactly one call site — see
+  /// that method. An import, a restore, the starter pack and every other
+  /// reason the notifier fires all arrive here with null and change nothing.
+  ///
+  /// Post-frame because the folder was appended by the reload immediately
+  /// above: the PageView's item count grows in that `setState`, and
+  /// `animateToPage` cannot reach a page the viewport has not built yet.
+  void _selectCreatedFolder(int folderId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final i = _folders.indexWhere((f) => f.id == folderId);
+      // Created and deleted again before this ran, or never reached the
+      // reload. Leave the selection where the user had it rather than
+      // guessing at a replacement.
+      if (i < 0) return;
+      _onTabSelected(i + 1); // 0 is All.
+    });
   }
 
   /// The reading pane's controller, when there is one.
@@ -1827,6 +1876,51 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
       return ListView.builder(
         itemCount: 8,
         itemBuilder: (_, __) => const ShimmerCard(),
+      );
+    }
+
+    // **A category with nothing subscribed to it is not "caught up".** There
+    // is nothing to be caught up with. Before this pass the distinction cost
+    // nothing, because the only way to be looking at an empty category was to
+    // go and tap it; now creating one selects it, so this is the first thing
+    // a person sees after naming their first category, and "No new articles.
+    // You're all caught up." is a double tick congratulating them on reading
+    // a folder that has never held anything.
+    //
+    // Both strings already exist in all five locales. `addFirstFeed` is
+    // deliberately NOT used with them — "add your first feed" is a lie to
+    // someone who has twenty, filed elsewhere.
+    if (_articles.isEmpty && _selectedFolderHasNoFeeds) {
+      return RefreshIndicator(
+        onRefresh: _refreshCurrentTab,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.24),
+            Icon(Icons.rss_feed_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 16),
+            Text(
+              l10n.nothingHereYet,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: FilledButton.icon(
+                onPressed: widget.onNavigateToFeeds,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addAFeedButton),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(200, 52),
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
 

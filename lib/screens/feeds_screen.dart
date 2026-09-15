@@ -948,6 +948,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
         ),
       );
     }, label: 'Adding category');
+    // Before the mounted check on purpose: the sheet being gone does not make
+    // the creation any less deliberate, and this is the only place in the app
+    // that knows a person did it. FolderRepository.insert has already fired
+    // structureChanged; this adds the intent that the repository cannot see.
+    FeedsChangedNotifier.instance.categoryCreatedByUser(created.id!);
     if (!mounted) return;
     _categoryController.clear();
     setState(() {
