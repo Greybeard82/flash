@@ -1604,6 +1604,36 @@ The same shape has now appeared three times on this control — `showSelectedIco
 the `secondary` colour trap, and this. When a theme "does nothing", the call
 site and the widget source are the first two places to look, not the last.
 
+### 10.7 Drive a device by content, never by coordinate
+
+A screenshot is a photograph of a moment. A tap is an event in a later one,
+and nothing guarantees the two describe the same screen.
+
+**What this cost.** Removing a test feed from the Categories screen: screenshot,
+read the row position, tap it. Between the two the list collapsed by one row,
+so the identical coordinates landed on the row below and opened **"Delete
+category — Travelling?"** — a real category, with real feeds, on David's own
+device. It was cancelled, and only because the confirmation happened to be
+read before it was dismissed. Nothing about the tap was wrong except that the
+screen had moved under it.
+
+**The rule.** Find the element, or re-screenshot in the same breath as the
+action and verify the row you are about to touch is still the row you meant.
+Never carry a coordinate across an app state change — a delete, an insert, a
+collapse, a refresh, a keyboard appearing. Coordinates are only safe within a
+screen that has demonstrably not changed since it was read.
+
+**And the destructive case has its own floor:** before any tap that can delete,
+overwrite or send, re-read the screen immediately beforehand and confirm the
+target by its text. A confirmation dialog is not the safety net — it is the
+last one, and it works by being read, which is exactly what a fast sequence of
+coordinate taps does not do.
+
+This is the device-facing twin of 10.1. There, a mutation was assumed to have
+landed and had not; here, a screen is assumed to have held still and did not.
+Both are the same mistake: acting on a fact that was true when it was read and
+is not being checked at the moment it is used.
+
 
 ---
 
@@ -2822,11 +2852,27 @@ no headroom to add emphasis to; this one does.
 Create a category, put a feed in it, go back to the article list: the library
 has not changed there until a pull to refresh.
 
-**The wrong fix is a reload when the Categories route pops.** It works on a
-phone and does nothing on a tablet, where the three-column shell can have the
-structure change and the article list on screen at once — no push, no pop, no
-tab switch to hang it on. The right shape is "something every interested
-listener hears, wherever it is mounted", and it was already in the repo.
+**The wrong fix is a reload when the Categories route pops.** The right shape
+is "something every interested listener hears, wherever it is mounted", and it
+was already in the repo.
+
+> **Correction, made in pass 19.** The original reasoning here, and in commit
+> `7774db0`, said a tablet can show the Categories screen and the article list
+> at the same time. **It cannot, in any tier.** There is one `IndexedStack`
+> (`app.dart:1266`) showing one child, and all three layouts put that single
+> stack in one slot. The wide tier's three columns are *sections bar | one
+> section screen | article detail pane* — the third column is the reader, not
+> a second section. Verified by grep: `FeedScreen(` and `FeedsScreen(` each
+> appear exactly once in `lib/`, adjacent, inside that stack.
+>
+> The fix is still right and the wrong fix is still wrong, for a reason that
+> survives: **Settings is a pushed route, not a tab.** An OPML import or a
+> backup restore writes from a route sitting *over* a live screen, with no tab
+> switch and no pop of the Categories route to hang a reload on. And the busy
+> guard defers a change to a transition that may never arrive. Both are cases
+> a navigation-wired reload misses. The claim that needed correcting was the
+> example, not the conclusion — which is its own small lesson about how
+> comfortable a plausible mechanism feels once it has explained something.
 
 `FeedsChangedNotifier` does two jobs and only one of them was fully wired.
 It **records** a change, for a single consumer that decides whether to fetch,
@@ -2928,3 +2974,109 @@ asserted distinct from both live colours instead.
 **8 stock `SwitchListTile`s before — settings 3, filter bubble 1, quick
 settings 4 — and 0 after.** If this is ever backed out, it is one commit and
 the call sites revert with it.
+
+---
+
+## 19. The last pass before the testers
+
+### 19.1 Two mechanisms, one symptom — and that is now a pattern
+
+**Say it plainly: both category bugs were real.** The stale view was genuine,
+which is exactly why pull-to-refresh fixed it. Underneath it sat a second
+problem wearing the same costume, and fixing the first stopped being
+sufficient the moment it stopped being the only one.
+
+This is the **second** time in three passes. Mark-all-read (17, and
+`PRELAUNCH-QA.md` 1.4) needed three separate fixes — one-shot suppression, a
+serialised update queue, and a caught badge failure — for what arrived as one
+sentence from one user. The category bug needed two.
+
+**So treat it as expected rather than as a coincidence.** A symptom is a
+report about what a person saw; it is not a count of causes. The failure mode
+it produces is specific and cheap to avoid: fix the mechanism you found,
+verify the *symptom* rather than the mechanism, and when the symptom survives,
+believe it. The tell in both cases was the same — a fix that was demonstrably
+correct in a test and a report that did not go away.
+
+The corollary for a non-reproduction: "I could not reproduce it" is evidence
+about the *mechanism you were looking for*, never about whether the user saw
+something. The folder-bar cause was found by walking the actual screen on the
+actual device after the first fix had already shipped.
+
+### 19.2 Selecting a new category: when it fires is the design
+
+The scroll was already written. `FolderTabBar._scrollToSelected` has existed
+since the chip redesign, and had never once worked for a newly created
+category, for two reasons that are each sufficient:
+
+- **`didUpdateWidget` watched only `selectedIndex`.** A bar that grew a chip
+  was not a reason to scroll anywhere.
+- **`didUpdateWidget` runs before `build`,** and `_tabKeys` is populated inside
+  `build`. For a chip that has just appeared, the lookup returns null,
+  `ensureVisible` is never called, and the method returns having done nothing
+  — silently, past a guard that reads as a defensive null check. It is now
+  deferred to a post-frame callback.
+
+Both leave source that looks correct, which is why both are pinned by driving
+the widget and reading the real scroll offset. Against the old implementation
+the new chip's right edge measured **976.75 in a 400-point viewport**.
+
+**The part that needed care was not the scrolling.**
+`FolderRepository.insert` is the choke point all four creation paths go
+through, and wiring the selection there would have been one line and wrong
+four times out of five: it sees a row, not an intent. An OPML file of fifty
+folders would have yanked the article list into an arbitrary one of them.
+
+So the intent is **declared**, by `categoryCreatedByUser`, at the single call
+site that has it (`feeds_screen.dart`, the add sheet's inline creator).
+`_record` — the path every other fire takes — never touches the field. The
+article list takes it single-consumer and **before** the early return, because
+both signals ride the same 300ms debounce and either can land first.
+
+`category_selection_test.dart` drives the real import, the real starter pack
+and the real restore over sqflite FFI rather than asserting the source lacks a
+string: five folders from OPML select none, one folder from OPML selects none
+either, the pack selects none, a restore selects none.
+
+**And what you land on.** A category with no feeds is not caught up — there
+is nothing to be caught up with. It was showing `Icons.done_all_rounded` and
+"No new articles. You're all caught up.", which is now the first thing a
+person sees after naming their first category. `nothingHereYet` plus an
+**Add a feed** button; deliberately not `addFirstFeed`, which is a lie to
+someone with twenty filed elsewhere. Both strings already exist in all five
+locales, so this adds none.
+
+### 19.3 The renderer, and the font
+
+Both are recorded where they belong rather than here: **Impeller** in the PRD
+at 4.4, moved out of "Decided, not built"; **the Literata subset** in
+`pubspec.yaml` beside the regeneration command.
+
+One thing worth keeping in this file, because it is a method rather than a
+fact: **the recorded subset command was verified by reproduction, not by
+reading.** Run against Google's `Literata[opsz,wght].ttf`, the Latin-only
+command in `pubspec.yaml` produces a file with the **same SHA256** as the one
+shipping in 0.9.6. That is what licenses treating it as the procedure rather
+than as somebody's note about the procedure — and it is a cheap check to make
+any time a build artifact is supposed to be reproducible from a written
+recipe.
+
+### 19.4 Size, tracked rather than assumed
+
+| Build | APK | Change |
+|---|---|---|
+| 0.9.2, before the shrinker rules | 64,501,792 | — |
+| 0.9.2, shipped | 64,518,176 | +16,384 (ProGuard keeps) |
+| 0.9.6+31 | 64,387,196 | −130,980 |
+| **0.9.7+32** | **64,552,860** | **+165,664** |
+
+Net since 0.9.2 shipped: **+34,684 bytes**, or 0.05 percent, across five
+versions that added the shrinker rules, a custom switch, and 267 Cyrillic and
+Greek glyphs. This pass's +165,664 is the font almost exactly: the subset grew
+by 271,908 bytes raw and compresses into the APK at roughly 147,000.
+
+The drop into 0.9.6 was not planned and is worth knowing: replacing all eight
+`SwitchListTile`s with `FlashSwitch` let the tree shaker drop Material's
+switch machinery, which paid for the custom widget several times over. Nobody
+predicted that, which is the argument for measuring rather than reasoning
+about size.
