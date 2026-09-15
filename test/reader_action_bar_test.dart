@@ -24,6 +24,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'package:flash/db/database.dart';
 
 import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
@@ -85,6 +88,18 @@ Future<void> _pump(
   await tester.pump();
 }
 
+/// Lets the pane's real (feedId, guid) lookup finish, then rebuilds.
+///
+/// `testWidgets` runs inside FakeAsync, where a sqflite FFI Future never
+/// resolves, so the resolution has to be given real time outside that zone.
+Future<void> _settleRealAsync(WidgetTester tester) async {
+  for (var i = 0; i < 3; i++) {
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 120)));
+    await tester.pump();
+  }
+}
+
 /// The bar is the Material that wraps the SafeArea at the top of the pane.
 double _barHeight(WidgetTester tester) => tester
     .getSize(find.ancestor(
@@ -94,6 +109,14 @@ double _barHeight(WidgetTester tester) => tester
     .height;
 
 void main() {
+  // The pane resolves a missing article id against the database, so an
+// in-memory one has to exist before any case with a null id runs.
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    AppDatabase.useForTesting();
+  });
+
   final themes = <String, ThemeData>{
     'light': flashQuietInkTheme(brightness: Brightness.light),
     'dark': flashQuietInkTheme(brightness: Brightness.dark),
@@ -404,19 +427,70 @@ void main() {
       expect(find.byIcon(Icons.bookmark_border_rounded), findsOneWidget);
     });
 
-    testWidgets('no bookmark button at all when the article has no id',
-        (tester) async {
-      // An article opened from the Alerts tab is built by
-      // `AlertEntry.toArticle()` and carries a null id on purpose — identity
-      // there is (feedId, guid). Nothing can be written without one, so the
-      // button is absent rather than present and inert.
+    testWidgets('absent when the id resolves to nothing', (tester) async {
+      // **Narrower than it was.** Pass 8b hid the button whenever
+      // `article.id` was null, which is every article opened from the Alerts
+      // tab — and the Alerts screen bookmarks those successfully by
+      // resolving (feedId, guid). "Absent beats inert" was the right
+      // principle applied to a wrong premise: the action was available and
+      // the id was merely somewhere else.
+      //
+      // So absence now means the row genuinely is not there, which is the
+      // case this asserts: a null id and no matching row in the database.
       await _pump(tester, theme: theme, article: _article(id: null));
+      await _settleRealAsync(tester);
 
       expect(find.byIcon(Icons.bookmark_border_rounded), findsNothing);
       expect(find.byIcon(Icons.bookmark_rounded), findsNothing);
       expect(find.byIcon(Icons.share_rounded), findsOneWidget,
           reason: 'share needs no id and must survive');
       expect(find.byIcon(Icons.open_in_new_rounded), findsOneWidget);
+    });
+
+    testWidgets('present and correct for an Alerts-sourced article',
+        (tester) async {
+      // The 1.2 fix. A snapshot with no id, whose row exists and is saved:
+      // the reader resolves it and draws the same filled bookmark the Alerts
+      // list draws for the same article.
+      await tester.runAsync(() async {
+        final db = await AppDatabase.instance.database;
+        final folderId = await db.insert('folders',
+            {'name': 'F', 'position': 0, 'created_at': 0});
+        await db.insert('feeds', {
+          'id': 7,
+          'folder_id': folderId,
+          'title': 'A Feed',
+          'url': 'https://example.com/feed7',
+          'created_at': 0,
+        });
+        await db.insert('articles', {
+          'feed_id': 7,
+          'guid': 'alert-guid',
+          'title': 'H',
+          'url': 'https://example.com/alert-guid',
+          'fetched_at': 0,
+          'is_read': 0,
+          'is_saved': 1,
+          'is_blocked': 0,
+        });
+      });
+
+      await _pump(tester,
+          theme: theme,
+          article: const Article(
+            id: null,
+            feedId: 7,
+            guid: 'alert-guid',
+            title: 'H',
+            url: 'https://example.com/alert-guid',
+            fetchedAt: 0,
+            feedTitle: 'A Feed',
+          ));
+      await _settleRealAsync(tester);
+
+      expect(find.byIcon(Icons.bookmark_rounded), findsOneWidget,
+          reason: 'the row says saved, so the reader must too — and the '
+              'button must exist at all, which is the bug this fixes');
     });
   });
 

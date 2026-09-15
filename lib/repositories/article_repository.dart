@@ -7,6 +7,15 @@ import '../services/blocked_state_notifier.dart';
 import '../utils/keyword_matcher.dart';
 import '../utils/constants.dart';
 
+/// Identity for an article that has no `articles` id to identify it with.
+///
+/// The Alerts tab keys off (feedId, guid) throughout, because an alert match
+/// outlives the article row it was taken from — see `AlertEntry.toArticle`.
+/// A top-level function rather than a method so the screen that builds these
+/// keys and the repository that returns them cannot disagree about the
+/// separator.
+String savedKey(int feedId, String guid) => '$feedId|$guid';
+
 class ArticleRepository {
   Future<Database> get _db async => AppDatabase.instance.database;
 
@@ -187,6 +196,33 @@ class ArticleRepository {
   ///
   /// Blocked rows are included. This is an identity lookup, not a list query,
   /// and hiding the row would make an entry that *does* exist look gone.
+  /// The (feedId, guid) of every saved article, as keys from [savedKey].
+  ///
+  /// **One query for a whole screen, deliberately, and the alternative is the
+  /// bug this exists to avoid.** The Alerts tab holds snapshots that carry no
+  /// `articles` id, so the only way to know whether one is bookmarked is to
+  /// look the real row up by (feedId, guid) — and doing that per row inside a
+  /// list build is N queries for N rows, on a list that scrolls.
+  ///
+  /// No `WHERE ... IN` over the visible guids, for two reasons pointing the
+  /// same way: SQLite caps bound variables at 999 and an alerts list can pass
+  /// that, and saved articles are the user's own bookmarks, which is a small
+  /// set by nature. The Bookmarks screen already reads all of them.
+  ///
+  /// Returns keys rather than [Article]s because the caller only asks a
+  /// yes/no question, and the rows would be a second copy of data the
+  /// snapshot already carries.
+  Future<Set<String>> savedArticleKeys() async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      'SELECT feed_id, guid FROM ${TableNames.articles} WHERE is_saved = 1',
+    );
+    return {
+      for (final row in rows)
+        savedKey(row['feed_id'] as int, row['guid'] as String),
+    };
+  }
+
   Future<Article?> findByGuid(int feedId, String guid) async {
     final db = await _db;
     final rows = await db.rawQuery('''

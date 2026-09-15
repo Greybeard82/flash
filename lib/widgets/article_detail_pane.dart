@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -158,10 +159,29 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
   /// whenever the list last loaded.
   late bool _isSaved;
 
+  /// The `articles` row id this pane writes against.
+  ///
+  /// **Usually `widget.article.id`, and resolved when that is null.** An
+  /// article opened from the Alerts tab is a snapshot: `AlertEntry.toArticle()`
+  /// leaves the id null on purpose, because identity there is (feedId, guid)
+  /// and the row it was taken from may have been retired.
+  ///
+  /// Pass 8b read that null as "this article cannot be bookmarked" and hid the
+  /// button. That was the right principle — absent beats inert — applied to a
+  /// wrong premise: the action is available, the id is just somewhere else.
+  /// The Alerts screen has always resolved it by (feedId, guid) and bookmarked
+  /// successfully while the reader opened from the same list refused to.
+  ///
+  /// Null after resolution means there genuinely is no row, and then the
+  /// button stays absent, which is still right.
+  int? _articleId;
+
   @override
   void initState() {
     super.initState();
     _isSaved = widget.article.isSaved;
+    _articleId = widget.article.id;
+    if (_articleId == null) unawaited(_resolveArticleId());
     // A bookmark button that lies about state is worse than no bookmark
     // button: the same article can be unsaved from the card's rail or the
     // radial menu while this pane is open behind them.
@@ -186,7 +206,7 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
     final saved = SavedStateNotifier.instance.saved;
     // The guard is what makes this self-cancelling: this pane's own write
     // broadcasts too, and by then `_isSaved` already agrees.
-    if (id == null || id != widget.article.id || saved == _isSaved) return;
+    if (id == null || id != _articleId || saved == _isSaved) return;
     setState(() => _isSaved = saved);
   }
 
@@ -199,7 +219,7 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
   /// same way. The button is hidden in that case rather than left to do
   /// nothing when pressed — see `_PaneTopBar`.
   Future<void> _toggleSaved() async {
-    final id = widget.article.id;
+    final id = _articleId;
     if (id == null) return;
 
     final nowSaved = !_isSaved;
@@ -210,6 +230,30 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
     // After the local patch, so this pane's own listener sees a value that
     // already agrees and does nothing.
     SavedStateNotifier.instance.articleSavedStateChanged(id, saved: nowSaved);
+  }
+
+  /// Looks the real row up for a snapshot that carries no id.
+  ///
+  /// One indexed read on (feed_id, guid), on open, and only when the id is
+  /// missing — which is the Alerts tab and nowhere else. The bookmark appears
+  /// once it lands rather than being drawn optimistically and taken away: a
+  /// button that vanishes is worse than one that arrives a frame late.
+  ///
+  /// **`isSaved` is taken from the resolved row, not from the snapshot.** That
+  /// is the whole invariant: the glyph and the write must read the same
+  /// source. The snapshot's `isSaved` is whatever the Alerts list resolved for
+  /// it, which is now the same value — but this pane can also be reached from
+  /// a notification, where nothing resolved anything.
+  Future<void> _resolveArticleId() async {
+    final row = await _articleRepo.findByGuid(
+      widget.article.feedId,
+      widget.article.guid,
+    );
+    if (!mounted || row?.id == null) return;
+    setState(() {
+      _articleId = row!.id;
+      _isSaved = row.isSaved;
+    });
   }
 
   Future<void> _share() => ShareService().shareArticle(widget.article);
@@ -258,7 +302,9 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
         // The incoming article carries its own saved state, and it is fresher
         // than whatever the previous one left here.
         _isSaved = widget.article.isSaved;
+        _articleId = widget.article.id;
       });
+      if (_articleId == null) unawaited(_resolveArticleId());
       _loadCleanVersion();
     }
   }
@@ -357,7 +403,7 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
           onClose: widget.onClose,
           onOpenInBrowser: _openInBrowser,
           openInBrowserTooltip: l10n.openInBrowser,
-          onBookmark: widget.article.id == null ? null : _toggleSaved,
+          onBookmark: _articleId == null ? null : _toggleSaved,
           isSaved: _isSaved,
           bookmarkTooltip: _isSaved ? l10n.saved : l10n.bookmark,
           onShare: _share,

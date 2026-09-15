@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+
+import 'package:flash/db/database.dart';
 
 import 'package:flash/l10n/app_localizations.dart';
 import 'package:flash/models/article.dart';
@@ -62,6 +65,15 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  // The pane resolves a missing article id against the database now, so
+// these need one on a real isolate even though none of them is about
+// bookmarks. Same apparatus action_rail_test.dart already stands up.
+  setUpAll(() {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    AppDatabase.useForTesting();
+  });
+
   setUp(CleanArticleCache.instance.clear);
 
   testWidgets('no toggle when the setting is off, even with blocks cached',

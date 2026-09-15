@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -130,6 +131,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
   /// nothing collapsed is exactly "everything expanded."
   final Set<String> _collapsedKeywords = {};
 
+  /// Which entries are bookmarked, as `savedKey(feedId, guid)`.
+  ///
+  /// Resolved once per load rather than per row. A snapshot carries no
+  /// `articles` id, so the only truthful answer comes from the real row — and
+  /// asking per row inside a scrolling list build is N queries for N rows.
+  /// This is one, and the build itself stays query-free.
+  Set<String> _savedKeys = {};
+
   /// Entry order *within* each keyword section — which keyword's section
   /// comes first is a separate, unrelated ordering (see
   /// [_keywordSections]). In-memory only, same scope as
@@ -141,6 +150,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     super.initState();
     _scrollController.addListener(_fabFade.onScroll);
     AlertsChangedNotifier.instance.addListener(_onAlertsChanged);
+    SavedStateNotifier.instance.addListener(_onSavedStateChanged);
     AlertNavigationIntent.instance.addListener(_onAlertNavigationRequested);
     _load().then((_) => _consumeAlertNavigation());
   }
@@ -148,6 +158,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   @override
   void dispose() {
     AlertsChangedNotifier.instance.removeListener(_onAlertsChanged);
+    SavedStateNotifier.instance.removeListener(_onSavedStateChanged);
     AlertNavigationIntent.instance.removeListener(_onAlertNavigationRequested);
     if (_openPanel?.mounted ?? false) _openPanel!.remove();
     _fabFade.dispose();
@@ -190,11 +201,31 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   Future<void> _load() async {
     final entries = await _alertMatchRepo.getEntries();
+    // Read alongside the entries, not lazily per row. Two queries for the
+    // screen, regardless of how many alerts are in it.
+    final savedKeys = await _articleRepo.savedArticleKeys();
     if (!mounted) return;
     setState(() {
       _entries = entries;
+      _savedKeys = savedKeys;
       _loading = false;
     });
+  }
+
+  /// Re-reads saved state after someone else changes it.
+  ///
+  /// The notifier carries an `articleId`, and this screen has none to compare
+  /// it against — its entries are keyed by (feedId, guid). Rather than
+  /// translating, it re-reads the one query. That costs a single indexed read
+  /// on an event that happens when a person taps a bookmark, and it is what
+  /// keeps the glyph honest when the same article is saved from the reader
+  /// opened out of this very list.
+  void _onSavedStateChanged() => unawaited(_refreshSavedKeys());
+
+  Future<void> _refreshSavedKeys() async {
+    final savedKeys = await _articleRepo.savedArticleKeys();
+    if (!mounted) return;
+    setState(() => _savedKeys = savedKeys);
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
@@ -244,6 +275,18 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final nowSaved = !row!.isSaved;
     await _articleRepo.setSaved(row.id!, saved: nowSaved);
     HapticFeedback.lightImpact();
+    // Patched locally as well as re-read through the notifier below, so the
+    // glyph turns under the finger rather than after a round trip.
+    if (mounted) {
+      final key = savedKey(snapshot.feedId, snapshot.guid);
+      setState(() {
+        if (nowSaved) {
+          _savedKeys = {..._savedKeys, key};
+        } else {
+          _savedKeys = {..._savedKeys}..remove(key);
+        }
+      });
+    }
     // Bookmarks is kept alive and loads only in initState, so without this the
     // bookmark does not appear there until a pull-to-refresh.
     SavedStateNotifier.instance
@@ -453,7 +496,12 @@ class _AlertsScreenState extends State<AlertsScreen> {
           }
 
           final entry = (row as KeywordEntryRow).entry;
-          final article = entry.toArticle();
+          // Saved state comes from the set resolved at load, not from a
+          // per-row lookup: this closure runs for every row the list builds
+          // and rebuilds, and a query in here would scale with the list.
+          final article = entry.toArticle(
+            isSaved: _savedKeys.contains(savedKey(entry.feedId, entry.guid)),
+          );
           final needsDivider = i > 0 && rows[i - 1] is KeywordEntryRow;
           return Column(
             mainAxisSize: MainAxisSize.min,
