@@ -12,6 +12,7 @@ import '../services/gemini_nano_service.dart';
 import '../services/loading_controller.dart';
 import '../services/summary_cache.dart';
 import '../services/summary_formatter.dart';
+import '../services/share_service.dart';
 import '../services/summary_source.dart';
 import '../utils/date_utils.dart';
 import '../theme/app_theme.dart';
@@ -340,6 +341,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                             done: _done,
                             teaserOnly: _teaserOnly,
                             fromCloud: _fromCloud,
+                            article: widget.article,
                             onCopied: () => _bannerKey.currentState
                                 ?.show(l10n.summaryCopied)),
               ),
@@ -550,6 +552,11 @@ class _SummaryText extends StatelessWidget {
   /// (a banner at its top), not to this leaf widget.
   final VoidCallback onCopied;
 
+  /// Needed for the title and the link that leave with the summary. The
+  /// widget renders neither; it carries them so copy and share can build one
+  /// payload between them rather than two.
+  final Article article;
+
   const _SummaryText(
       {super.key,
       required this.summary,
@@ -557,6 +564,7 @@ class _SummaryText extends StatelessWidget {
       required this.l10n,
       required this.done,
       required this.onCopied,
+      required this.article,
       this.teaserOnly = false,
       this.fromCloud = false});
 
@@ -565,6 +573,19 @@ class _SummaryText extends StatelessWidget {
     final bodyStyle =
         theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8);
     final lines = summary.split('\n');
+
+    final disclaimer =
+        fromCloud ? l10n.aiSummaryDisclaimerCloud : l10n.aiSummaryDisclaimer;
+
+    // Built once and handed to both buttons, which is the whole point: the
+    // clipboard and the share sheet must receive the same bytes. See
+    // `buildSummaryShareText`.
+    final payload = buildSummaryShareText(
+      title: article.title,
+      summary: summary,
+      disclaimer: disclaimer,
+      url: article.url,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,21 +617,37 @@ class _SummaryText extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                    fromCloud
-                        ? l10n.aiSummaryDisclaimerCloud
-                        : l10n.aiSummaryDisclaimer,
+                child: Text(disclaimer,
                     style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.flashColors.onSurfaceMuted,
                         fontStyle: FontStyle.italic)),
               ),
+              // **Copy now carries what share carries**, which is a change to
+              // shipped behaviour and a deliberate one. It used to put the
+              // bare summary on the clipboard — no title, no link, no sign a
+              // machine wrote it — so pasted into a chat it read as the
+              // publisher's own words. If share attributed and copy did not,
+              // copy would become the button people use to strip it.
               IconButton(
                 icon: const Icon(Icons.copy_rounded, size: 18),
                 tooltip: l10n.copySummary,
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: summary));
+                  Clipboard.setData(ClipboardData(text: payload));
                   onCopied();
                 },
+              ),
+              // Beside copy rather than instead of it. Android's share sheet
+              // offers copy-to-clipboard, so there is mild redundancy — but
+              // copy is one tap and share-then-pick-copy is two, and this app
+              // already accepts two routes to one action on the bookmark.
+              // Recorded as a decision, not an oversight.
+              //
+              // Same 18px glyph in a standard IconButton, so it inherits the
+              // same 48dp target as copy and raises no geometry question.
+              IconButton(
+                icon: const Icon(Icons.share_rounded, size: 18),
+                tooltip: l10n.share,
+                onPressed: () => ShareService().shareSummary(article, payload),
               ),
             ],
           ),

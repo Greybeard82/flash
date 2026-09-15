@@ -11,4 +11,21 @@ class ShareService {
     await SharePlus.instance
         .share(ShareParams(text: text, subject: article.title));
   }
+
+  /// Shares an AI summary, with its attribution attached.
+  ///
+  /// A second method on the same service rather than a second share path: one
+  /// place owns the share sheet, so a future change to how this app shares
+  /// anything lands once. The payload differs from [shareArticle] because it
+  /// has to — a summary needs the title, the link and the AI label, where an
+  /// article is a title and a link.
+  ///
+  /// [text] arrives already built, by `buildSummaryShareText`, because the
+  /// identical string also goes on the clipboard and the two must not be
+  /// assembled separately. The subject matches [shareArticle]: the article
+  /// title, which is what an email client will use as its line.
+  Future<void> shareSummary(Article article, String text) async {
+    await SharePlus.instance
+        .share(ShareParams(text: text, subject: article.title));
+  }
 }
