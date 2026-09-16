@@ -1225,6 +1225,18 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
             // this field is always disabled on the first frame and there is
             // nothing here to focus into yet. The chips are the first step.
             autofocus: false,
+            // This field takes a name *or* a URL, and the IME was treating
+            // every URL as prose. On the Samsung, typing
+            // https://hnrss.org/frontpage and pressing the keyboard's Enter
+            // key committed https://hnrss.org/FrontPage — a predictive-text
+            // correction applied to the path on commit — and the add failed
+            // with "Could not parse feed at this URL", blaming the address
+            // rather than the correction. The same URL submitted with the
+            // search icon, which does not go through an IME commit, worked.
+            // The tablet hid this entirely: its keyboard only capitalised the
+            // scheme, and schemes are case-insensitive.
+            keyboardType: TextInputType.url,
+            autocorrect: false,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
