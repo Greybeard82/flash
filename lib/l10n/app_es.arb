@@ -24,6 +24,7 @@
   "save": "Guardar",
   "addToCategory": "Añadir a categoría",
   "editFeed": "Editar fuente",
+  "feedOptions": "Opciones de la fuente",
   "feedName": "Nombre de la fuente",
   "category": "Categoría",
   "cancel": "Cancelar",

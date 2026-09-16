@@ -80,6 +80,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get editFeed => 'Modifier le flux';
 
   @override
+  String get feedOptions => 'Options du flux';
+
+  @override
   String get feedName => 'Nom du flux';
 
   @override

@@ -24,6 +24,7 @@
   "save": "Enregistrer",
   "addToCategory": "Ajouter à la catégorie",
   "editFeed": "Modifier le flux",
+  "feedOptions": "Options du flux",
   "feedName": "Nom du flux",
   "category": "Catégorie",
   "cancel": "Annuler",

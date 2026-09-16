@@ -80,6 +80,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get editFeed => 'Editar fuente';
 
   @override
+  String get feedOptions => 'Opciones de la fuente';
+
+  @override
   String get feedName => 'Nombre de la fuente';
 
   @override

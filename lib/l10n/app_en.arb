@@ -29,6 +29,8 @@
   "save": "Save",
   "addToCategory": "Add to category",
   "editFeed": "Edit feed",
+  "feedOptions": "Feed options",
+  "@feedOptions": { "description": "Accessible label for the overflow button on a feed row; opens a sheet offering Edit and Remove." },
   "feedName": "Feed name",
   "category": "Category",
   "cancel": "Cancel",

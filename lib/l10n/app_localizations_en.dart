@@ -80,6 +80,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editFeed => 'Edit feed';
 
   @override
+  String get feedOptions => 'Feed options';
+
+  @override
   String get feedName => 'Feed name';
 
   @override

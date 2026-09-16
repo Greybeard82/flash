@@ -24,6 +24,7 @@
   "save": "Salva",
   "addToCategory": "Aggiungi alla categoria",
   "editFeed": "Modifica feed",
+  "feedOptions": "Opzioni del feed",
   "feedName": "Nome del feed",
   "category": "Categoria",
   "cancel": "Annulla",

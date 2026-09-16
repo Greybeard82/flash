@@ -242,6 +242,12 @@ abstract class AppLocalizations {
   /// **'Edit feed'**
   String get editFeed;
 
+  /// Accessible label for the overflow button on a feed row; opens a sheet offering Edit and Remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed options'**
+  String get feedOptions;
+
   /// No description provided for @feedName.
   ///
   /// In en, this message translates to:

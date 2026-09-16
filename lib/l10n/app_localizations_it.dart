@@ -80,6 +80,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get editFeed => 'Modifica feed';
 
   @override
+  String get feedOptions => 'Opzioni del feed';
+
+  @override
   String get feedName => 'Nome del feed';
 
   @override
