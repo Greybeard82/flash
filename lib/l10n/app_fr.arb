@@ -99,6 +99,7 @@
   "copySummary": "Copier le résumé",
   "summaryCopied": "Résumé copié",
   "searchArticles": "Rechercher des articles…",
+  "searchPrompt": "Saisis un mot pour le retrouver dans tes articles",
   "noSearchResults": "Aucun article ne correspond à \"{query}\"",
   "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
   "summary": "Résumé",

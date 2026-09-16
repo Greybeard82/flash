@@ -32,6 +32,7 @@ const _emptyStates = <String>[
   'lib/screens/feed_screen.dart',
   'lib/screens/bookmarks_screen.dart',
   'lib/screens/alerts_screen.dart',
+  'lib/screens/search_screen.dart',
   'lib/widgets/keyword_alerts_panel.dart',
   'lib/widgets/keyword_group_panel.dart',
 ];

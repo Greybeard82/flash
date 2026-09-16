@@ -650,6 +650,12 @@ abstract class AppLocalizations {
   /// **'Search articles…'**
   String get searchArticles;
 
+  /// Empty-state copy on the search screen before anything has been typed.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a word to find it in your articles'**
+  String get searchPrompt;
+
   /// No description provided for @noSearchResults.
   ///
   /// In en, this message translates to:

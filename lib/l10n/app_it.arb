@@ -99,6 +99,7 @@
   "copySummary": "Copia riepilogo",
   "summaryCopied": "Riepilogo copiato",
   "searchArticles": "Cerca articoli…",
+  "searchPrompt": "Digita una parola per cercarla nei tuoi articoli",
   "noSearchResults": "Nessun articolo corrisponde a \"{query}\"",
   "@noSearchResults": { "placeholders": { "query": { "type": "String" } } },
   "summary": "Riassunto",

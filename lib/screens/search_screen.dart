@@ -120,7 +120,41 @@ class _SearchScreenState extends State<SearchScreen> {
               child: SpinningRefreshIcon(
                   size: 40, color: theme.colorScheme.primary))
           : _lastQuery.isEmpty
-              ? const SizedBox.shrink()
+              // Was SizedBox.shrink(), which rendered a blank screen under a
+              // focused field and read as a screen that had failed to load
+              // rather than one waiting for input.
+              //
+              // The shared empty-state shape: a 48dp `illustration` glyph over
+              // one line of `onSurfaceVariant` copy. The first attempt at this
+              // used the glyph alone, on the grounds that the only true
+              // sentence was already on screen as the field's hint —
+              // `empty_state_roles_test` rejected it, and rightly: a glyph with
+              // no copy under it is the bare state this app has removed
+              // everywhere else. The copy says what to do rather than
+              // restating the hint.
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          size: 48,
+                          color: theme.flashColors.illustration,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.searchPrompt,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : _results.isEmpty
                   ? Center(
                       child: Text(

@@ -306,6 +306,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchArticles => 'Search articles…';
 
   @override
+  String get searchPrompt => 'Type a word to find it in your articles';
+
+  @override
   String noSearchResults(String query) {
     return 'No articles match \"$query\"';
   }

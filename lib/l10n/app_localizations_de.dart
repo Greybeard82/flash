@@ -309,6 +309,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get searchArticles => 'Artikel suchen…';
 
   @override
+  String get searchPrompt =>
+      'Gib ein Wort ein, um es in deinen Artikeln zu finden';
+
+  @override
   String noSearchResults(String query) {
     return 'Keine Artikel zu \"$query\" gefunden';
   }
