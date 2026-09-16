@@ -1028,6 +1028,12 @@ abstract class AppLocalizations {
   /// **'Select an article to read it here'**
   String get selectAnArticle;
 
+  /// Reading-pane placeholder on Categories, where no article can be selected from the screen beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Articles you open appear here'**
+  String get articlesAppearHere;
+
   /// Settings toggle: on opens articles in the app own reader, off opens Chrome.
   ///
   /// In en, this message translates to:

@@ -181,6 +181,7 @@
   "keywordListAnd": " y ",
   "openInBrowser": "Abrir en el navegador",
   "selectAnArticle": "Selecciona un artículo para leerlo aquí",
+  "articlesAppearHere": "Los artículos que abras aparecerán aquí",
   "builtInViewer": "Abrir artículos en el visor integrado",
   "reading": "Lectura",
   "summaryLength": "Longitud del resumen IA",

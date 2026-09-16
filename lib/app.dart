@@ -1415,7 +1415,16 @@ class _AppShellState extends State<_AppShell>
                       builder: (context, _) {
                         final article = _detailController.article;
                         if (article == null) {
-                          return const ArticleDetailPlaceholder();
+                          // Categories is the one section that never fills
+                          // this column — it expands feeds in place and never
+                          // calls openArticle — so it gets copy that states
+                          // what the pane is for instead of asking for a
+                          // selection that cannot be made from there.
+                          return ArticleDetailPlaceholder(
+                            message: _currentIndex == kSectionCategories
+                                ? l10n.articlesAppearHere
+                                : null,
+                          );
                         }
                         return ArticleDetailPane(
                           article: article,

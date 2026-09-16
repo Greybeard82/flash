@@ -573,6 +573,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get selectAnArticle => 'Seleziona un articolo per leggerlo qui';
 
   @override
+  String get articlesAppearHere => 'Gli articoli che apri compaiono qui';
+
+  @override
   String get builtInViewer => 'Apri gli articoli nel visualizzatore integrato';
 
   @override

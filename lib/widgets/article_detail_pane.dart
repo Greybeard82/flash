@@ -731,7 +731,21 @@ class _PaneTopBar extends StatelessWidget {
 
 /// What the right-hand column shows before anything has been picked.
 class ArticleDetailPlaceholder extends StatelessWidget {
-  const ArticleDetailPlaceholder({super.key});
+  /// Overrides the default copy for a section the pane cannot be filled from.
+  ///
+  /// The default sentence asks the user to select an article, which is
+  /// followable on Flash, Bookmarks and Alerts — all three route taps through
+  /// `openArticle`, which calls `pane.show`. Categories does not: it lists
+  /// folders and feeds, expands them in place, and never puts an article in
+  /// this column. There the instruction was an instruction you could not obey,
+  /// across half the tablet screen, so that one section passes a statement of
+  /// fact instead.
+  ///
+  /// Copy is chosen by the shell, which is the only thing that knows which
+  /// section the pane is sitting beside; the pane itself stays ignorant.
+  final String? message;
+
+  const ArticleDetailPlaceholder({super.key, this.message});
 
   @override
   Widget build(BuildContext context) {
@@ -760,7 +774,7 @@ class ArticleDetailPlaceholder extends StatelessWidget {
             Icon(Icons.article_outlined, size: 44, color: muted),
             const SizedBox(height: 12),
             Text(
-              l10n.selectAnArticle,
+              message ?? l10n.selectAnArticle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),

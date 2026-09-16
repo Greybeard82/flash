@@ -280,6 +280,8 @@
     "description": "Tooltip on the reader's action that hands the article to Chrome instead."
   },
   "selectAnArticle": "Select an article to read it here",
+  "articlesAppearHere": "Articles you open appear here",
+  "@articlesAppearHere": { "description": "Reading-pane placeholder on Categories, where no article can be selected from the screen beside it." },
   "@selectAnArticle": {
     "description": "Empty state of the reading pane in the three-column tablet layout."
   },
