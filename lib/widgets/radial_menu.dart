@@ -378,17 +378,34 @@ class _RadialButton extends StatelessWidget {
         ),
         if (label.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              // The disabled half is `inert` per 6.5. The enabled half was
-              // ink at 80%, which is not a level the scale has; it is a
-              // caption under an icon button, so it takes onSurfaceVariant.
-              // Inferred — 6.5 ruled on the disabled half only.
-              color: enabled
-                  ? theme.colorScheme.onSurfaceVariant
-                  : theme.flashColors.inert,
-              fontWeight: FontWeight.w600,
+          // The same surface the circle above sits on, for the same reason.
+          // The caption used to be bare Text over the menu's scrim, which
+          // means over whatever article headline happened to be behind it —
+          // and since the labels are the only thing naming the two glyphs,
+          // that made the menu unreadable at exactly the moment it had to be
+          // read. `surfaceContainerHighest` and elevation 4 are taken from the
+          // circle rather than chosen, so the two read as one object and both
+          // stay correct in Quiet Ink light, Quiet Ink dark and Newspaper.
+          Material(
+            color: surface,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(9),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  // The disabled half is `inert` per 6.5. The enabled half was
+                  // ink at 80%, which is not a level the scale has; it is a
+                  // caption under an icon button, so it takes onSurfaceVariant.
+                  // Inferred — 6.5 ruled on the disabled half only.
+                  color: enabled
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.flashColors.inert,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
