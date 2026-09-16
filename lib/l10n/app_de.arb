@@ -49,7 +49,7 @@
   "@exportDialogTitle": { "description": "Title of the system save dialog when exporting a backup file." },
   "restoreSuccess": "{count} Feeds wiederhergestellt. Zum Aktualisieren ziehen.",
   "restoreConfirmTitle": "Aus Sicherung wiederherstellen?",
-  "restoreConfirmMessage": "Dadurch werden alle aktuellen Feeds, Kategorien, gesperrten Stichwörter und gespeicherten Artikel durch die gespeicherte Sicherung ersetzt. Artikel werden beim nächsten Aktualisieren abgerufen.",
+  "restoreConfirmMessage": "Dadurch werden alle aktuellen Feeds, Kategorien, gesperrten Stichwörter und gespeicherten Artikel durch die gespeicherte Sicherung ersetzt. Stichwort-Benachrichtigungen sind nicht Teil einer Sicherung und bleiben unverändert. Artikel werden beim nächsten Aktualisieren abgerufen.",
   "restore": "Wiederherstellen",
   "theme": "Design",
   "themeSystem": "System",

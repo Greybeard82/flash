@@ -72,7 +72,7 @@
     "placeholders": { "count": { "type": "int" } }
   },
   "restoreConfirmTitle": "Restore from backup?",
-  "restoreConfirmMessage": "This will replace all your current feeds, categories, keywords and bookmarks with the saved backup. Articles will be re-fetched on next refresh.",
+  "restoreConfirmMessage": "This will replace your current feeds, categories, blocked keywords and bookmarks with the saved backup. Keyword alerts are not part of a backup and are left untouched. Articles will be re-fetched on next refresh.",
   "restore": "Restore",
   "theme": "Theme",
   "themeSystem": "System",

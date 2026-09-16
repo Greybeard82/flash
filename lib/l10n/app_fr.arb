@@ -49,7 +49,7 @@
   "@exportDialogTitle": { "description": "Title of the system save dialog when exporting a backup file." },
   "restoreSuccess": "{count} flux restaurés. Tirez pour actualiser.",
   "restoreConfirmTitle": "Restaurer depuis la sauvegarde ?",
-  "restoreConfirmMessage": "Cela remplacera tous vos flux, catégories, mots bloqués et articles enregistrés actuels par la sauvegarde enregistrée. Les articles seront récupérés lors du prochain rafraîchissement.",
+  "restoreConfirmMessage": "Cela remplacera tous vos flux, catégories, mots bloqués et articles enregistrés actuels par la sauvegarde enregistrée. Les alertes par mot-clé ne font pas partie d'une sauvegarde et resteront inchangées. Les articles seront récupérés lors du prochain rafraîchissement.",
   "restore": "Restaurer",
   "theme": "Thème",
   "themeSystem": "Système",
