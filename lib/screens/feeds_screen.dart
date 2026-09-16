@@ -903,10 +903,25 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   void initState() {
     super.initState();
     _localFolders = List<Folder>.of(widget.folders);
+    _controller.addListener(_clearErrorWhenEmptied);
+  }
+
+  /// An error describes the address that produced it, so it stops being true
+  /// the moment that address is gone. Emptying the field used to leave
+  /// "Could not parse feed at this URL" sitting under a blank input, which
+  /// reads as a complaint about nothing and outlives the thing it was about.
+  ///
+  /// Only on empty, deliberately: clearing on every keystroke would wipe the
+  /// message while the user was still editing the address it refers to, which
+  /// is exactly when they are most likely to be reading it.
+  void _clearErrorWhenEmptied() {
+    if (_controller.text.isNotEmpty || _error.isEmpty) return;
+    setState(() => _error = '');
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_clearErrorWhenEmptied);
     _controller.dispose();
     _categoryController.dispose();
     _categoryFocus.dispose();
