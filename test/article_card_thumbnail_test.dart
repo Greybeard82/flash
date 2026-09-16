@@ -65,8 +65,6 @@ Future<void> _pump(WidgetTester tester,
       body: ArticleCard(
         article: _article(isRead: isRead),
         onTap: () {},
-        onMarkRead: () {},
-        onMarkUnread: () {},
         onShare: () {},
         onBookmark: () {},
       ),

@@ -46,11 +46,13 @@ import '../theme/app_theme.dart';
 ///
 /// **Identity is `(feedId, guid)`, never an article id.** `AlertEntry
 /// .toArticle()` deliberately leaves `id` null, so every operation below keys
-/// off the pair. Two consequences that look like style choices and are not:
-/// swipe actions stay off, because `ArticleCard`'s `Dismissible` keys on
-/// `ValueKey('article_<id>')` and every card here would claim the same
-/// `article_null`; and no scroll anchor is kept, because `ScrollAnchor` is
-/// keyed on the id too.
+/// off the pair. One consequence that looks like a style choice and is not:
+/// no scroll anchor is kept, because `ScrollAnchor` is keyed on the id too.
+/// This is also why the card carried no swipe actions back when `ArticleCard`
+/// still wrapped itself in a `Dismissible` — that keyed on
+/// `ValueKey('article_<id>')` and every card here would have claimed the same
+/// `article_null`. The `Dismissible` has since been removed outright, so the
+/// hazard is gone rather than avoided.
 ///
 /// **Read state lives in two tables and both are written.** The snapshot
 /// always, the `articles` row only when it still exists — which it usually
@@ -229,23 +231,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   // ── Actions ────────────────────────────────────────────────────────────────
-
-  /// Writes the read flag to both tables, in that order and independently.
-  Future<void> _setEntryRead(Article snapshot, {required bool isRead}) async {
-    await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid,
-        isRead: isRead);
-    final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
-    if (row?.id != null && row!.isRead != isRead) {
-      if (isRead) {
-        await _articleRepo.markAsRead(row.id!);
-      } else {
-        await _articleRepo.markAsUnread(row.id!);
-      }
-      ReadStateNotifier.instance.articleReadStateChanged();
-    }
-    HapticFeedback.lightImpact();
-    if (mounted) await _load();
-  }
 
   Future<void> _openEntry(Article snapshot) async {
     await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid, isRead: true);
@@ -512,15 +497,8 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 const Divider(height: 1),
               ArticleCard(
                 article: article,
-                // Off, and not a style choice: the Dismissible keys on the
-                // article id, which is null for every entry here, so a
-                // swipe-enabled card is a duplicate-key crash rather than a
-                // gesture.
-                enableSwipeActions: false,
                 alertKeywords: entry.keywords,
                 onTap: () => _openEntry(article),
-                onMarkRead: () => _setEntryRead(article, isRead: true),
-                onMarkUnread: () => _setEntryRead(article, isRead: false),
                 onShare: () => _shareService.shareArticle(article),
                 onBookmark: () => _toggleSaved(article),
                 // The bin is offered here and nowhere else. An alert match

@@ -72,8 +72,6 @@ Future<void> _pump(WidgetTester tester, {required bool isRead}) async {
             ArticleCard(
               article: _article(isRead: isRead),
               onTap: () {},
-              onMarkRead: () {},
-              onMarkUnread: () {},
               onShare: () {},
               onBookmark: () {},
             ),

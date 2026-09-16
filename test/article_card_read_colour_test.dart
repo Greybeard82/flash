@@ -71,8 +71,6 @@ Future<void> _pump(
             ArticleCard(
               article: _article(isRead: isRead),
               onTap: () {},
-              onMarkRead: () {},
-              onMarkUnread: () {},
               onShare: () {},
               onBookmark: () {},
             ),

@@ -66,8 +66,6 @@ Future<void> _pump(
               article: _article().copyWith(isRead: isRead),
               alertKeywords: keywords,
               onTap: () {},
-              onMarkRead: () {},
-              onMarkUnread: () {},
               onShare: () {},
               onBookmark: () {},
             ),

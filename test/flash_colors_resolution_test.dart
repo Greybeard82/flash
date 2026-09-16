@@ -118,8 +118,6 @@ void main() {
           ArticleCard(
             article: _article(isRead: true),
             onTap: () {},
-            onMarkRead: () {},
-            onMarkUnread: () {},
             onShare: () {},
             onBookmark: () {},
           ),

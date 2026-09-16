@@ -74,8 +74,6 @@ Widget _app(ThemeData theme, Widget child) => MaterialApp(
 ArticleCard _card({required bool isRead}) => ArticleCard(
       article: _article(isRead: isRead),
       onTap: () {},
-      onMarkRead: () {},
-      onMarkUnread: () {},
       onShare: () {},
       onBookmark: () {},
     );

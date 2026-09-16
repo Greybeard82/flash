@@ -110,22 +110,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     }, label: 'Removing bookmark');
   }
 
-  Future<void> _markRead(Article article) async {
-    if (article.id == null) return;
-    DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
-    await _articleRepo.markAsRead(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
-    ReadStateNotifier.instance.articleReadStateChanged();
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles
-            .map((a) => a.id == article.id ? a.copyWith(isRead: true) : a)
-            .toList();
-      });
-    }
-  }
-
   /// Read state only.
   ///
   /// None of Flash's retirement, cleanup or refetch: a saved article is exempt
@@ -150,30 +134,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     ReadStateNotifier.instance.articleReadStateChanged();
 
     if (!mounted) return;
-    // Patched locally rather than reloaded, for the same instant-feedback
-    // reason _markRead does it that way.
+    // Patched locally rather than reloaded, so the rows dim at once
+    // instead of after a round trip to the database.
     setState(() {
       _articles = [
         for (final a in _articles) a.isRead ? a : a.copyWith(isRead: true),
       ];
     });
-  }
-
-  Future<void> _markUnread(Article article) async {
-    if (article.id == null) return;
-    await _articleRepo.markAsUnread(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
-    // markAsUnread clears read_at, so the article leaves the show-read window
-    // as well as the unread count. Ping so the feed's badges re-query.
-    ReadStateNotifier.instance.articleReadStateChanged();
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles
-            .map((a) => a.id == article.id ? a.copyWith(isRead: false) : a)
-            .toList();
-      });
-    }
   }
 
   @override
@@ -252,8 +219,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                       return ArticleCard(
                         article: article,
                         onTap: () => _openArticle(article),
-                        onMarkRead: () => _markRead(article),
-                        onMarkUnread: () => _markUnread(article),
                         onShare: () => _shareService.shareArticle(article),
                         onBookmark: () => _toggleSaved(article),
                       );

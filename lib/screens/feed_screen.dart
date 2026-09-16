@@ -1364,46 +1364,6 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
     if (mounted) _restoreAnchor();
   }
 
-  Future<void> _markRead(Article article) async {
-    if (article.id == null || article.isRead) return;
-    DiagLog.read(
-      id: article.id!,
-      trigger: 'swipe',
-      offset: _scrollController.hasClients ? _scrollController.offset : -1,
-    );
-    await _articleRepo.markAsRead(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
-
-    HapticFeedback.lightImpact();
-    if (!mounted) return;
-    setState(() {
-      _setArticles([
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isRead: true) : a,
-      ]);
-      _counts = _counts.applyRead(_folderOf(article));
-    });
-    UnreadBadgeService.instance.update(_counts.all);
-  }
-
-  Future<void> _markUnread(Article article) async {
-    if (article.id == null || !article.isRead) return;
-    await _articleRepo.markAsUnread(article.id!);
-    // Both directions, or an article deliberately put back to unread would
-    // stay dimmed in the Alerts tab.
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
-    HapticFeedback.lightImpact();
-    if (!mounted) return;
-    setState(() {
-      _setArticles([
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isRead: false) : a,
-      ]);
-      _counts = _counts.applyUnread(_folderOf(article));
-    });
-    UnreadBadgeService.instance.update(_counts.all);
-  }
-
   Future<void> _toggleSaved(Article article) async {
     if (article.id == null) return;
     final nowSaved = !article.isSaved;
@@ -1828,10 +1788,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
               const Divider(height: 1),
             ArticleCard(
               article: article,
-              enableSwipeActions: false,
               onTap: () => _openArticle(article),
-              onMarkRead: () => _markRead(article),
-              onMarkUnread: () => _markUnread(article),
               onShare: () => _shareService.shareArticle(article),
               onBookmark: () => _toggleSaved(article),
             ),
@@ -2030,11 +1987,7 @@ class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
                       // ever non-null under the three-column shell.
                       isCurrent:
                           _currentUrl != null && article.url == _currentUrl,
-                      // Horizontal drags page between category tabs here.
-                      enableSwipeActions: false,
                       onTap: () => _openArticle(article),
-                      onMarkRead: () => _markRead(article),
-                      onMarkUnread: () => _markUnread(article),
                       onShare: () => _shareService.shareArticle(article),
                       onBookmark: () => _toggleSaved(article),
                     ),

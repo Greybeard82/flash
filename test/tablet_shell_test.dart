@@ -57,8 +57,6 @@ Future<void> _pump(
             ? ArticleCard(
                 article: _article(),
                 onTap: () {},
-                onMarkRead: () {},
-                onMarkUnread: () {},
                 onShare: () {},
                 onBookmark: () {},
               )
@@ -66,8 +64,6 @@ Future<void> _pump(
                 article: _article(),
                 isCurrent: isCurrent,
                 onTap: () {},
-                onMarkRead: () {},
-                onMarkUnread: () {},
                 onShare: () {},
                 onBookmark: () {},
               ),

@@ -77,12 +77,13 @@ const Color darkBg = Color(0xFF0D1211);
 //
 //   * **Teal is the only interactive colour.** Anything you can press is
 //     `primary` or `primaryContainer`.
-//   * **Orange means the article is in your queue.** It has exactly three
-//     jobs and no others: the unread dot on a feed row (`secondary`), the
+//   * **Orange means the article is in your queue.** It has exactly two
+//     jobs and no others: the unread dot on a feed row (`secondary`), and the
 //     saved bookmark glyph on the action rail (`secondary`, on the same
-//     `primaryContainer` tint the unsaved glyph sits on), and the
-//     swipe-to-unread reveal on Bookmarks (`secondary` at 15% behind a
-//     `secondary` glyph).
+//     `primaryContainer` tint the unsaved glyph sits on).
+//
+//     There was a third — the swipe-to-unread reveal on Bookmarks — until
+//     swipe-to-mark-read was removed from `ArticleCard` outright.
 //
 //     The second of those was a `savedFill` block under an `onSavedFill`
 //     glyph until the fill was removed. Both roles are deleted; see the
@@ -90,7 +91,8 @@ const Color darkBg = Color(0xFF0D1211);
 //
 //     This used to read "orange means unread, and nothing else", which
 //     described a UI that never shipped — there is no unread dot in the code
-//     yet, and `secondary` has only ever been painted by the swipe reveal.
+//     yet, and `secondary` was for a long time painted only by the swipe
+//     reveal, which no longer exists.
 //     Faults are not orange: an invalid URL in the add-feed sheet and the
 //     stale-feed warning in Categories are `error`.
 

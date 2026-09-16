@@ -200,17 +200,8 @@ class _DimTransition extends StatelessWidget {
 class ArticleCard extends StatelessWidget {
   final Article article;
   final VoidCallback onTap;
-  final VoidCallback onMarkRead;
-  final VoidCallback onMarkUnread;
   final VoidCallback onShare;
   final VoidCallback onBookmark;
-
-  /// Whether horizontal swipes mark the article read/unread.
-  ///
-  /// Off in the main feed, where a horizontal drag now pages between category
-  /// tabs and the two gestures would fight. Still on in Bookmarks, which has
-  /// no tabs and where swipe is the main way to toggle read state.
-  final bool enableSwipeActions;
 
   /// Alert keywords this article matched, badged under the title.
   ///
@@ -250,11 +241,8 @@ class ArticleCard extends StatelessWidget {
     super.key,
     required this.article,
     required this.onTap,
-    required this.onMarkRead,
-    required this.onMarkUnread,
     required this.onShare,
     required this.onBookmark,
-    this.enableSwipeActions = true,
     this.alertKeywords = const [],
     this.onDelete,
     this.isCurrent = false,
@@ -413,15 +401,20 @@ class ArticleCard extends StatelessWidget {
       ),
     );
 
-    // On TV: no touchscreen, so skip Dismissible swipe and long-press radial menu.
+    // On TV: no touchscreen, so skip the long-press radial menu.
     // D-pad OK fires onTap; share/bookmark are reachable inside the preview sheet.
     if (isTV) {
       return InkWell(onTap: onTap, child: content);
     }
 
-    // Long-press radial menu (share / bookmark) is independent of swipe, so
-    // turning swipe off must not take bookmarking from the feed with it.
-    final tappable = GestureDetector(
+    // Swipe-to-mark-read was removed: a horizontal drag on the feed pages
+    // between category tabs, and that is the only thing a horizontal drag on a
+    // card should ever do. The Dismissible that used to wrap this survived here
+    // long after the feed switched it off, still live on Bookmarks — one
+    // gesture meaning two different things depending on the screen. Read state
+    // is changed by opening an article, by mark-read-on-scroll, or by
+    // mark-all-read.
+    return GestureDetector(
       onLongPress: () => showRadialMenu(
         context: context,
         onShare: onShare,
@@ -430,61 +423,6 @@ class ArticleCard extends StatelessWidget {
         onDelete: onDelete,
       ),
       child: InkWell(onTap: onTap, child: content),
-    );
-    if (!enableSwipeActions) return tappable;
-
-    // Two gestures, two backgrounds. Flutter paints `background` behind a
-    // startToEnd drag (finger moving left-to-right, revealing the left edge)
-    // and `secondaryBackground` behind endToStart (right-to-left, revealing
-    // the right edge). Right-to-left marks read; left-to-right marks unread.
-    // Each icon sits on the edge its own gesture uncovers.
-    final unreadBg = _swipeBackground(
-      context,
-      alignment: Alignment.centerLeft,
-      color: theme.colorScheme.secondary.withValues(alpha: 0.15),
-      icon: Icons.mark_email_unread_rounded,
-      iconColor: theme.colorScheme.secondary,
-    );
-    final readBg = _swipeBackground(
-      context,
-      alignment: Alignment.centerRight,
-      color: theme.colorScheme.primary.withValues(alpha: 0.15),
-      icon: Icons.mark_email_read_rounded,
-      iconColor: theme.colorScheme.primary,
-    );
-    return Dismissible(
-      key: ValueKey('article_${article.id}'),
-      background: unreadBg,
-      secondaryBackground: readBg,
-      // confirmDismiss always returns false — the card never leaves the list,
-      // it just changes read state and springs back. The stock 200ms
-      // snap-back is longer than it needs to be for a gesture with no
-      // dismissal to wait on.
-      movementDuration: const Duration(milliseconds: 150),
-      confirmDismiss: (direction) async {
-        if (direction == DismissDirection.endToStart) {
-          onMarkRead();
-        } else {
-          onMarkUnread();
-        }
-        return false;
-      },
-      child: tappable,
-    );
-  }
-
-  Widget _swipeBackground(
-    BuildContext context, {
-    required AlignmentGeometry alignment,
-    required Color color,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    return Container(
-      color: color,
-      alignment: alignment,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Icon(icon, color: iconColor, size: 28),
     );
   }
 }
@@ -744,8 +682,9 @@ class _ThumbnailWidget extends StatelessWidget {
 /// occasionally. Save now shares that target, in the same footprint.
 ///
 /// Save is still in the radial menu too, and that is deliberate rather than
-/// duplication left to tidy up: long-press has to keep working because swipe
-/// can be turned off, and the comment above `tappable` explains why.
+/// duplication left to tidy up: the radial menu is the only place Share lives,
+/// so long-press has to keep working regardless, and a menu that offered Share
+/// without Save would be the odd one out.
 ///
 /// **Geometry.** 28dp of visible button inside a 40dp touch box, 72dp tall to
 /// match the thumbnail exactly, with the thumbnail's 8dp corner radius on the
