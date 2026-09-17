@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
+import '../theme/app_theme.dart';
 
 class RadialMenu extends StatefulWidget {
   final VoidCallback onShare;
@@ -79,7 +80,21 @@ class _RadialMenuState extends State<RadialMenu>
         children: [
           FadeTransition(
             opacity: _opacity,
-            child: Container(color: Colors.black.withValues(alpha: 0.6)),
+            // `scrim`, not `Colors.black` — the same swap the bubble panel's
+            // overlay took. Byte-identical today, since neither scheme
+            // declares a scrim and both fall to ColorScheme's own black.
+            //
+            // The two overlays still dim by different amounts, 0.6 here and
+            // 0.28 in `bubble_panel.dart`, and that is left alone: this one
+            // covers the whole screen to isolate a menu, the other blurs
+            // behind a panel that is still part of its screen. Picking one
+            // number for both is a design call, not a token swap.
+            child: Container(
+              color: Theme.of(context)
+                  .colorScheme
+                  .scrim
+                  .withValues(alpha: 0.6),
+            ),
           ),
           Positioned(
             bottom: MediaQuery.of(context).size.height * 0.10,
@@ -315,16 +330,31 @@ class _RadialButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final surface = theme.colorScheme.surfaceContainerHighest;
-    final accent =
-        tint ?? (isClose ? theme.colorScheme.error : theme.colorScheme.primary);
 
-    final bg = isClose || enabled
-        ? accent.withValues(alpha: 0.15)
-        : theme.colorScheme.onSurface.withValues(alpha: 0.08);
+    // Close used to paint itself in `error`, which said "delete this forever"
+    // in exactly the red used for "cancel this menu" — the two loudest things
+    // on the ring were the one that destroys an article and the one that puts
+    // the menu away. It is a neutral glyph on a neutral circle now. `tint`
+    // still exists and Alerts' delete still passes `error` through it, so the
+    // one genuinely destructive action keeps the colour to itself.
+    final accent = tint ?? theme.colorScheme.primary;
 
-    final iconColor = isClose || enabled
-        ? accent
-        : theme.colorScheme.onSurface.withValues(alpha: 0.3);
+    final Color bg;
+    final Color iconColor;
+    if (isClose) {
+      bg = Colors.transparent;
+      iconColor = theme.colorScheme.onSurfaceVariant;
+    } else if (enabled) {
+      bg = accent.withValues(alpha: 0.15);
+      iconColor = accent;
+    } else {
+      // 6.5: disabled and inert are one role, and the 8% wash goes away
+      // rather than changing value. A faint disc behind a faint glyph was
+      // two ways of saying the same thing, and the fainter it got the more
+      // it read as a rendering artefact.
+      bg = Colors.transparent;
+      iconColor = theme.flashColors.inert;
+    }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -348,13 +378,34 @@ class _RadialButton extends StatelessWidget {
         ),
         if (label.isNotEmpty) ...[
           const SizedBox(height: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: enabled
-                  ? theme.colorScheme.onSurface.withValues(alpha: 0.8)
-                  : theme.colorScheme.onSurface.withValues(alpha: 0.3),
-              fontWeight: FontWeight.w600,
+          // The same surface the circle above sits on, for the same reason.
+          // The caption used to be bare Text over the menu's scrim, which
+          // means over whatever article headline happened to be behind it —
+          // and since the labels are the only thing naming the two glyphs,
+          // that made the menu unreadable at exactly the moment it had to be
+          // read. `surfaceContainerHighest` and elevation 4 are taken from the
+          // circle rather than chosen, so the two read as one object and both
+          // stay correct in Quiet Ink light, Quiet Ink dark and Newspaper.
+          Material(
+            color: surface,
+            elevation: 4,
+            borderRadius: BorderRadius.circular(9),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              child: Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  // The disabled half is `inert` per 6.5. The enabled half was
+                  // ink at 80%, which is not a level the scale has; it is a
+                  // caption under an icon button, so it takes onSurfaceVariant.
+                  // Inferred — 6.5 ruled on the disabled half only.
+                  color: enabled
+                      ? theme.colorScheme.onSurfaceVariant
+                      : theme.flashColors.inert,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],

@@ -48,7 +48,7 @@ Article _article({required bool isRead}) => Article(
 
 Future<void> _pump(WidgetTester tester, {required bool isRead}) async {
   await tester.pumpWidget(MaterialApp(
-    theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.light),
+    theme: flashQuietInkTheme(brightness: Brightness.light),
     localizationsDelegates: const [
       AppLocalizations.delegate,
       GlobalMaterialLocalizations.delegate,
@@ -72,8 +72,6 @@ Future<void> _pump(WidgetTester tester, {required bool isRead}) async {
             ArticleCard(
               article: _article(isRead: isRead),
               onTap: () {},
-              onMarkRead: () {},
-              onMarkUnread: () {},
               onShare: () {},
               onBookmark: () {},
             ),

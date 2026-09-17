@@ -21,6 +21,20 @@ const String kRefreshTaskUniqueName = 'flash_feed_refresh_periodic';
 const String _kKeywordChannelId = 'flash_keyword_alerts';
 const String _kKeywordChannelName = 'Keyword alerts';
 
+/// The group summary's id.
+///
+/// **Fixed, and deliberately outside the range the per-set ids come
+/// from.** `AlertMatchRepository.notificationIdFor` mints those from the
+/// sorted keyword set starting at 2000, and that is the fix this must not
+/// undo: it is what stops two different keyword sets collapsing into each
+/// other. The summary is one notification that always replaces itself, so
+/// it wants the opposite — one id, forever.
+///
+/// 3 rather than 2: `kUnreadBadgeNotificationId` is 1, and 2 was the old
+/// hardcoded keyword id that every alert collided on. Leaving it empty
+/// means an upgrade cannot land a summary on top of a stale alert.
+const int kAlertSummaryNotificationId = 3;
+
 /// Bundles every keyword alert under one heading in the shade. Now that each
 /// keyword set posts under its own id they no longer overwrite each other,
 /// which trades one destroyed notification for a wall of them; grouping is
@@ -180,11 +194,13 @@ Future<int> _doRefresh({
               priority: Priority.defaultPriority,
               showWhen: true,
               groupKey: _kKeywordGroupKey,
+              color: kFlashNotificationAccent,
             ),
           ),
           payload: kAlertNotificationPayload,
         );
       }
+      await _postGroupSummary(plugin, l10n, plans.length);
       shown = '${plans.length} shown, areNotificationsEnabled=$enabled';
     } catch (e) {
       // Deliberately caught here rather than left to bubble: callbackDispatcher
@@ -206,6 +222,60 @@ Future<int> _doRefresh({
   }
 
   return totalNew;
+}
+
+/// Makes sure the keyword channel exists, then posts the group's summary.
+///
+/// **The channel is created explicitly and that is not belt-and-braces.**
+/// `flutter_local_notifications` creates a channel lazily, on the first
+/// `show()` that names it — which was verified on the Lenovo, where
+/// `flash_unread_count` exists and `flash_keyword_alerts` does not, because no
+/// keyword alert has ever fired there. So a device's channel set depends on
+/// what that device happens to have done. A summary that inherited the
+/// channel's existence from a child would be relying on a child having fired
+/// first, on that device, ever — which for a fresh install is exactly the
+/// ordering that has not happened yet.
+///
+/// Creating a channel that already exists is a no-op on Android, and the
+/// importance of an existing channel cannot be raised in code anyway, so this
+/// cannot disturb a channel a user has already tuned.
+///
+/// **Nothing is posted for a single alert.** Android hides a summary whose
+/// group has one child on some versions and shows a redundant second card on
+/// others; either way one alert plus one summary saying "1 keyword alert" is
+/// two notifications for one event.
+Future<void> _postGroupSummary(
+  FlutterLocalNotificationsPlugin plugin,
+  AppLocalizations? l10n,
+  int count,
+) async {
+  if (count < 2) return;
+
+  final android = plugin.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(const AndroidNotificationChannel(
+    _kKeywordChannelId,
+    _kKeywordChannelName,
+    importance: Importance.defaultImportance,
+  ));
+
+  await plugin.show(
+    kAlertSummaryNotificationId,
+    _alertTitle(l10n),
+    l10n?.alertNotificationSummary(count) ?? '$count keyword alerts',
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        _kKeywordChannelId,
+        _kKeywordChannelName,
+        importance: Importance.defaultImportance,
+        priority: Priority.defaultPriority,
+        groupKey: _kKeywordGroupKey,
+        setAsGroupSummary: true,
+        color: kFlashNotificationAccent,
+      ),
+    ),
+    payload: kAlertNotificationPayload,
+  );
 }
 
 /// NUL-joined, matching the key both [planAlertNotifications] and

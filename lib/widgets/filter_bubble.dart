@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'flash_switch.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/settings.dart';
 import '../repositories/settings_repository.dart';
 import '../services/settings_notifier.dart';
 import 'bubble_panel.dart';
+import '../theme/app_theme.dart';
 
 /// Filter panel: sort order, read visibility, and the two keyword tools.
 ///
@@ -103,7 +105,7 @@ class _FilterBubbleState extends State<FilterBubble> {
           onSelectionChanged: (s) => _setSortOrder(s.first),
         ),
         const SizedBox(height: 6),
-        SwitchListTile(
+        FlashSwitchListTile(
           contentPadding: EdgeInsets.zero,
           value: _showRead,
           title: Text(l10n.showRead, style: theme.textTheme.bodyMedium),
@@ -138,7 +140,7 @@ class _FilterBubbleState extends State<FilterBubble> {
         Text(
           l10n.filterBubbleFootnote,
           style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            color: theme.flashColors.onSurfaceMuted,
           ),
         ),
         const SizedBox(height: 14),
@@ -192,14 +194,14 @@ class _ToolRow extends StatelessWidget {
                   Text(
                     subtitle,
                     style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ],
               ),
             ),
             Icon(Icons.chevron_right_rounded,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                color: theme.flashColors.onSurfaceMuted),
           ],
         ),
       ),

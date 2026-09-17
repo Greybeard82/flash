@@ -1,3 +1,5 @@
+import 'package:flutter/painting.dart' show Color;
+
 /// The group every Flash notification belongs to.
 ///
 /// Android stacks notifications from the same app only when they agree on a
@@ -27,3 +29,28 @@
 /// What the key does earn: several keyword alerts collapse under one heading
 /// instead of stacking up as separate cards, which is what it is for.
 const String kFlashNotificationGroupKey = 'io.getflash.app.notifications';
+
+/// The tint Android applies to the small icon in the shade.
+///
+/// **One constant, not a theme pair.** `Notification.color` is a single
+/// ARGB read in the system's process, long after any Flutter theme has
+/// stopped existing, so there is nothing to resolve a light/dark pair
+/// against. `primary` light measures 2.7:1 on a dark shade and dark 1.8:1
+/// on a light one, which is why neither palette value could be reused and a
+/// third had to be authored.
+///
+/// Measured here rather than taken on trust, and it agrees with 1.3 to the
+/// digit: **4.35:1** on `#FFFFFF`, **3.96:1** on `#1B1B1B`, **3.69:1** on
+/// the `#1F2223` shade card.
+///
+/// **Do not re-derive `#12787F`.** It measures 5.23 / 3.30 / **3.06**, and
+/// a 0.07 margin against a surface nobody controls — OEM skins, One UI
+/// and Material You each draw the shade card differently — is not a
+/// margin. Neither value is a palette token, so there was never a fidelity
+/// case for the riskier one.
+///
+/// Tints the small icon only. On API 30 and earlier it also tinted the
+/// shade's app-name label at ~12sp, where the bar is 4.5:1 — see 5.1:
+/// the answer is that old shades get a slightly quiet app name, not that
+/// this value changes.
+const Color kFlashNotificationAccent = Color(0xFF15868E);

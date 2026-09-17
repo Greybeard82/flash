@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/feed.dart';
 
 class FeedCard extends StatelessWidget {
@@ -33,7 +34,7 @@ class FeedCard extends StatelessWidget {
       subtitle: Text(
         feed.domain,
         style: theme.textTheme.bodySmall?.copyWith(
-          color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+          color: theme.colorScheme.onSurfaceVariant,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -56,6 +57,11 @@ class FeedCard extends StatelessWidget {
           ],
           IconButton(
             onPressed: onEdit,
+            // The category row's two buttons next to this one both announce
+            // themselves ("Rename category", "Delete category"); this one
+            // announced nothing at all, so a screen reader reached the feed
+            // row and found an unlabelled button that opens Edit / Remove.
+            tooltip: AppLocalizations.of(context)!.feedOptions,
             icon: const Icon(Icons.more_vert),
             iconSize: 20,
             visualDensity: VisualDensity.compact,

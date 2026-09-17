@@ -9,6 +9,7 @@ import '../repositories/article_repository.dart';
 import '../services/article_opener.dart';
 import '../services/loading_controller.dart';
 import '../services/read_state_notifier.dart';
+import '../theme/app_theme.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -46,14 +47,20 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query == _lastQuery) return;
     _lastQuery = query;
     if (query.trim().isEmpty) {
-      setState(() { _results = []; _loading = false; });
+      setState(() {
+        _results = [];
+        _loading = false;
+      });
       return;
     }
     setState(() => _loading = true);
     final results = await LoadingController.instance
         .run(() => _repo.search(query), label: 'Searching');
     if (mounted && query == _lastQuery) {
-      setState(() { _results = results; _loading = false; });
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
     }
   }
 
@@ -63,8 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
       await _repo.markAsRead(article.id!);
       // Mirrored into the alert snapshot, which keeps its own is_read — see
       // the same call in bookmarks_screen.dart.
-      await _alertMatchRepo
-          .setRead(article.feedId, article.guid, isRead: true);
+      await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -114,13 +120,47 @@ class _SearchScreenState extends State<SearchScreen> {
               child: SpinningRefreshIcon(
                   size: 40, color: theme.colorScheme.primary))
           : _lastQuery.isEmpty
-              ? const SizedBox.shrink()
+              // Was SizedBox.shrink(), which rendered a blank screen under a
+              // focused field and read as a screen that had failed to load
+              // rather than one waiting for input.
+              //
+              // The shared empty-state shape: a 48dp `illustration` glyph over
+              // one line of `onSurfaceVariant` copy. The first attempt at this
+              // used the glyph alone, on the grounds that the only true
+              // sentence was already on screen as the field's hint —
+              // `empty_state_roles_test` rejected it, and rightly: a glyph with
+              // no copy under it is the bare state this app has removed
+              // everywhere else. The copy says what to do rather than
+              // restating the hint.
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.search_rounded,
+                          size: 48,
+                          color: theme.flashColors.illustration,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          l10n.searchPrompt,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : _results.isEmpty
                   ? Center(
                       child: Text(
                         l10n.noSearchResults(_lastQuery),
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -128,7 +168,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   : ListView.separated(
                       itemCount: _results.length,
                       separatorBuilder: (_, __) =>
-                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          // Full-bleed: this is an article list.
+                          const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final a = _results[i];
                         return ListTile(
@@ -136,16 +177,30 @@ class _SearchScreenState extends State<SearchScreen> {
                             a.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                            // 6.3: a read search result follows the card,
+                            // elementwise. Title to onSurfaceRead, source to
+                            // onSurfaceMuted, and the weight held at w600
+                            // either way.
+                            //
+                            // The weight is the part worth stating. This read
+                            // w400 when read, and lighter glyphs are narrower,
+                            // so a title near the two-line wrap boundary
+                            // reflowed the moment it was marked read. That is
+                            // the bug article_card_read_colour_test.dart was
+                            // written for; the same list, the same trap.
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: a.isRead ? FontWeight.w400 : FontWeight.w600,
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: a.isRead ? 0.5 : 1.0),
+                              fontWeight: FontWeight.w600,
+                              color: a.isRead
+                                  ? theme.flashColors.onSurfaceRead
+                                  : theme.colorScheme.onSurface,
                             ),
                           ),
                           subtitle: Text(
                             a.feedTitle ?? '',
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                              color: a.isRead
+                                  ? theme.flashColors.onSurfaceMuted
+                                  : theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           onTap: () => _open(a),

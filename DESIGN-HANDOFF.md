@@ -6,6 +6,11 @@ frames live in the canvas files, but nothing here depends on opening them.
 Section 6 answers `HANDOFF-quiet-ink.md`'s seven open questions and says which
 ones stay open.
 
+**If you are new to this document, read section 15 first.** It is the exit
+inventory: what is still open at the end of the redesign, and why each thing
+was left. Everything above it is the record of how the work was decided;
+section 15 is the only part that tells you what to do next.
+
 Two invariants everything below obeys:
 
 - **The list never moves under the reader.** No element changes weight, size,
@@ -77,6 +82,23 @@ Tints the small icon only (`ic_stat_flash.xml`, shipped, unchanged). On Android
 12+ the shade's app-name label takes the system's ink, not this constant, which
 is why 3:1 is the applicable bar. See task 5.1.
 
+> **Both halves of 5.1, recorded together because either alone misleads.**
+>
+> 1. `flutter.minSdkVersion` resolves to **24**, so the API<=30 window
+>    where `Notification.color` also tints the app name **is live**. The
+>    app installs on Android 7.0 through 11.
+> 2. **Nothing sets `Notification.color` anywhere.** Neither
+>    `AndroidNotificationDetails` passes a `color:`, and `#15868E` appears
+>    in no file under `lib/` or `android/`. The constant is orphaned, not
+>    at risk.
+>
+> Reading (1) alone says there is a contrast problem on old shades; reading
+> (2) alone says the question is closed. Together: the question is real and
+> unarrived. **Pass 9 is where it gets a consumer**, and that is the moment
+> the 4.5:1 on a ~12sp app name stops being hypothetical. The answer then
+> is that old shades get a slightly quiet app name, not that the token
+> moves.
+
 ### 1.4 Newspaper's ink levels, authored
 
 | role | value | was |
@@ -85,10 +107,41 @@ is why 3:1 is the applicable bar. See task 5.1.
 | `onSurfaceRead` | `#92928F` | `lerp(ink, paper, 0.55)` |
 | `illustration` | `#C3C2BF` | `lerp(ink, paper, 0.78)` |
 
-Exactly what the shipped lerps produce, so **this changes no pixel**. Approved
-as values so a future edit to `_npPaper` cannot silently move newsprint's ink
-hierarchy. Keep the lerp expressions if you prefer them readable; the point is
-that the hexes are now specified. Nothing else in Newspaper changes.
+> **SUPERSEDED for the two ink levels.** The table above is kept as the record
+> of what was decided and why it was wrong.
+>
+> `onSurfaceMuted` and `onSurfaceRead` are now **`#686765` (lerp 0.35, 5.00:1)**
+> and **`#5D5D5A` (lerp 0.30, 5.85:1)**. `illustration` is unchanged at 0.78 —
+> it is decoration, not text.
+>
+> The 0.62 / 0.55 pair was chosen to correct an inverted hierarchy, checked
+> against each other and never against paper. It put body text at **2.31:1 and
+> 2.76:1**, where 4.5 is the bar. For scale, the value it replaced — `onSurface`
+> at 0.6 alpha, before Quiet Ink — was lerp 0.40 and **4.27:1**, so the pair
+> was a regression against what already shipped, and the correction lands
+> slightly above it rather than merely back at it. The 0.62 pair never shipped;
+> it existed only on this branch.
+>
+> **The "changes no pixel" guarantee is deleted from the comment, and that is
+> the lesson rather than the footnote.** It was true. It was also the reason
+> nobody looked: a promise that nothing moved is a promise that nothing was
+> examined, and it is exactly the kind of reassurance that ends a review.
+> `flash_colors_resolution_test.dart` now asserts every ink role that carries
+> text clears 4.5:1 against its own theme's surface — a ratio against a
+> surface, not a comparison between two roles, because comparing the two roles
+> is what produced this. Mutation-tested: restoring the old pair fails with
+> 2.31 and 2.76 named.
+>
+> **It flags two Quiet Ink light roles as known exceptions**, not one:
+> `onSurfaceMuted` at **3.15:1** and `onSurfaceRead` at **3.99:1**. Both are
+> Design's authored values and both are deliberate — a timestamp and a read
+> headline are meant to recede. They are pinned to their measured ratios rather
+> than excluded, so drift in either direction fails.
+
+Approved as values so a future edit to `_npPaper` cannot silently move
+newsprint's ink hierarchy. Keep the lerp expressions if you prefer them
+readable; the point is that the hexes are now specified. Nothing else in
+Newspaper changes.
 
 ### 1.5 Android res — four widget colours
 
@@ -119,6 +172,69 @@ meanings rather than one strained metaphor:
 A saved article is *kept*, not pending, so "in your queue" never covered both.
 Any future site is judged against these two meanings instead of amending a list.
 
+> **SUPERSEDED for the action rail’s saved state.** The two meanings
+> above stand; the rail is no longer painted the way this row describes.
+> The row is kept as the record of what was decided.
+>
+> **The rail’s lower half no longer fills.** It is
+> `primaryContainer` in both states, and the saved signal is the glyph:
+> `bookmark_border_rounded` in `onSurfaceVariant` unsaved,
+> `bookmark_rounded` in **`secondary`** saved. `savedFill` and
+> `onSavedFill` are consequently unpainted — see below.
+>
+> Design 2a justified the fill by feed-scannability: a saved article
+> should be findable down the column. That is the Bookmarks
+> destination’s entire job, one tap from every screen, so the feed was
+> carrying a solid orange block on every saved row to duplicate a screen
+> that already exists — on the quietest surface in the app, and against
+> both of the rules 1.6 sets out.
+>
+> **The shape swap is load-bearing now and must not be tidied away.**
+> Outline-to-solid was decoration on top of a colour change while the
+> fill existed. With the fill gone it is one of exactly two things
+> separating the states; removing it would leave a colour-only
+> distinction.
+>
+> **Contrast.** A glyph is a graphical object, so the bar is WCAG
+> 1.4.11’s 3:1, not the 4.5:1 `summary_button_contrast_test.dart`
+> holds the summary glyph to — the two halves of one control now
+> answer to different bars, which is deliberate: the summary glyph’s
+> colour is the whole of its identity, and this one also changes shape.
+> Measured, `secondary` on `primaryContainer`:
+>
+>   | theme | ratio | headroom over 3:1 |
+>   |---|---|---|
+>   | Quiet Ink light | **3.36:1** | 0.36 |
+>   | Quiet Ink dark | **6.88:1** | 3.88 |
+>   | Newspaper | **5.97:1** | 2.97 |
+>
+> Light is the near thing and is pinned to its measured value, not just
+> to the threshold. It replaced a pair that measured **4.12:1 against a
+> 4.5 bar** — white `onSecondary` on the orange — which was a
+> recorded shortfall, so the treatment moved from under one bar to over
+> a lower one. Both facts belong in the record.
+>
+> **Newspaper is red, and it had to be.** `secondary` there is `_npRed`
+> at 5.97:1. The alternative considered was `_npInk`, which is not
+> viable rather than merely worse: Newspaper’s `onSurfaceVariant` —
+> the unsaved glyph — is `#1D1D1B`, and `_npInk` is the same
+> `#1D1D1B`. An ink saved glyph would be pixel-identical to an unsaved
+> one, leaving the shape swap as the sole signal. Red is the only
+> colour Newspaper has to carry a state with, and a small glyph shown
+> only when saved is a different proposition from the solid red block
+> that was rejected.
+>
+> **Transition unchanged.** The glyph colour already cross-faded over
+> `kReadDimDuration` through the same `TweenAnimationBuilder` the fill
+> used, so the tempo carried over with no edit.
+>
+> **Two roles are now unpainted:** `savedFill` and `onSavedFill` have no
+> call site in `lib/` — the same condition 7.7 found `alertsFilterAll`
+> in. They are still declared, still lerped, still compared in
+> `FlashColors`, and three tests still assert their values. Reported,
+> not deleted: the judgement about whether a role is worth keeping for a
+> future consumer is not one to make inside a correction pass.
+
 **Neither meaning is faults.** Invalid-URL text and the stale-feed glyph are
 `error`. Error's ramp is unchanged (`#BA1A1A` / `#FFB4AB`) and its scope is
 inline validation, the stale-feed glyph, and the radial menu's Delete — never a
@@ -128,19 +244,60 @@ confirmation button.
 
 Three SegmentedButtons ship (sort order in the filter bubble; theme and summary
 length in Quick Settings), all stock M3 capsules at radius 20 — the only
-capsules left beside r9 chips and r9 nav pills.
+capsules left beside r9 chips and **r14** nav pills.
+
+> **Corrected from the code.** This said "r9 nav pills". The pill is r14
+> (`flash_bottom_nav.dart`, `pillRadius = 14`), which is the value the mock's
+> own markup gave and what ships. The chip half is right: `folder_tab_bar.dart`
+> is r9. Documentation error only — no code change.
 
 Height **40**, radius **9** outer / **0** between, 1dp `outlineVariant` border
 and divider, selected `primaryContainer` under `onPrimaryContainer` at 13/w600,
 unselected `onSurfaceVariant` at 13/w500, `showSelectedIcon: false`. One theme
 entry, three surfaces fixed, no widget changes.
 
+> **SUPERSEDED for the height. It stays at 48.** The rest of the row is
+> shipped as written; the line is kept as the record of what was asked
+> for.
+>
+> **A decision reversed on the spec, not a miss.** 1.7 names a visual
+> height and does not address touch targets, and on this widget the two
+> are the same number: the segment paints at 48 rather than wearing a
+> 40dp body inside a tap halo, because `_SegmentedButtonRenderObject`
+> lays every segment out at a uniform tight height and Material’s tap
+> padding ends up inside the paint. Reaching 40 means `tapTargetSize:
+> shrinkWrap` or a negative `visualDensity`, and both take the target
+> down with the paint.
+>
+> This app has gone under 48 exactly twice — the 36dp folder chip and
+> the 36dp rail halves — each with an explicit sign-off and each time
+> because the shape itself was the design. Here the 40 is a number on a
+> low-frequency control in Settings and a bubble. It does not earn a
+> third exception.
+>
+> Pinned at the real 48 in `segmented_button_theme_test.dart` so the gap
+> is visible rather than implied, and so applying it later has to be a
+> deliberate edit there.
+
 ---
 
 ## 2. ARB changes
 
 Three new keys, four changed values, two description-only fixes. **Every new or
-changed value needs de, es, fr, it or the parity test fails.**
+changed value needs de, es, fr, it** — but see the limitation below, because
+the test does not enforce the second half.
+
+> **KNOWN LIMITATION, not fixed before launch.** `arb_parity_test.dart`
+> enforces **key** parity, not **value** freshness. A key missing from a locale
+> fails (`:78-88`). But the only value-level check (`:90-102`) fails when the
+> English and translated strings are *identical* — so changing an English value
+> while leaving the four translations stale passes silently, and changing it
+> makes that collision **less** likely, never more.
+>
+> So for the four changed values in 2.2, no de/es/fr/it edit is required for
+> the suite to stay green. Re-translating them is still right; the test just is
+> not what will catch it. David writes all five languages himself and will
+> catch it there. Recorded rather than fixed.
 
 ### 2.1 New keys
 
@@ -154,6 +311,20 @@ Banner after unsaving in Bookmarks, where the row then leaves the list. Pairs
 with the existing `alertsRemovedBanner`. No undo — it would need the row's index
 and saved timestamp held after deletion, and re-saving from the reader is one
 tap.
+
+> **SUPERSEDED for the English value.** The block above is kept as the
+> record of what was specified.
+>
+> English is **"Removed from Bookmarks"**, not "Bookmark removed". The
+> four other locales were written first and independently converged on
+> "Removed from &lt;place&gt;" — `Aus Gespeichert entfernt`,
+> `Eliminado de Guardados`, `Retiré des enregistrés`,
+> `Rimosso dai salvati` — because **none of them has a bookmark noun**
+> to build a state out of, only the verb *save* (see 7.10). English does
+> have the place noun, in its own nav label, so writing it as a state
+> would have made English the only locale describing a condition where
+> the other four describe a location. The row leaves the list; the
+> string says so. The four locale values are unchanged.
 
 **`alertNotificationSummary`**
 
@@ -192,6 +363,33 @@ so locales with different casing rules are unaffected.
   article *is* saved, where a place-noun reads slightly oddly against a state.
   If it grates, the fix is a separate tooltip key, not a retreat to "Saved" for
   the destination.
+
+> **SUPERSEDED. `saved` stays "Saved" in all five locales.** The row and
+> the reasoning above are kept as the record of what was decided and why
+> it was wrong.
+>
+> **The premise is false.** This row justifies the change by saying the
+> nav label already uses this key in five locales. It does not. The nav
+> label is `bookmarks` — `app.dart:354`, `:1329`, `:1566` and
+> `bookmarks_screen.dart:200` — a different key, which has read
+> "Bookmarks" in English all along. So the change achieves nothing for
+> the destination it was argued for.
+>
+> What it would have done instead is put a place-noun on two **state**
+> labels. `l10n.saved` has exactly two call sites and both describe one
+> article’s condition: the action rail’s tooltip
+> (`article_card.dart:871`), which this row flags, and the radial
+> menu’s **visible label** (`radial_menu.dart:244`), which it misses
+> entirely — a rendered label rather than a tooltip, and
+> unconditionally visible on long-press.
+>
+> And in the four other locales it would have been a grammar error. They
+> have no bookmark noun (7.10), so the only "same direction" edit
+> available is singular → plural — "Guardados" against a single
+> saved article — at two sites that each describe exactly one.
+>
+> The tooltip was confirmed reachable on device before the revert (7.11),
+> so the concern the row raises was real. It was the fix that was wrong.
 - **`markAllRead`** — matches `markAllReadConfirm`, whose value is unchanged.
   **Keep both keys** with identical text: different widgets read them, and the
   dialog's confirm button must not depend on the FAB's tooltip key. On the
@@ -264,17 +462,35 @@ and a 300×250 media slot — total **306dp**. Insertion: first no earlier than
 index 8, one per 10 after, never directly under a day header, never last, never
 two in a viewport. **No fill renders nothing at all** and the slot is not
 retried in the same list. The ad's height must be known to the scroll
-read-marking walk — see task 5.2.
+read-marking walk — see task 5.2, **which is a prerequisite: `FeedRow` is
+sealed and four unguarded casts throw on a third subtype. Those come first,
+before any ad widget exists.**
 
 **B7 · Grouped alert notifications get a summary.** Shared `groupKey` plus a
 summary notification carrying `alertNotificationSummary`. The per-notification
 ids stay minted from the sorted keyword set, so no two sets can collapse into
 each other — that is the fix this must not undo.
 
-**B8 · The unread notification is silent and ongoing**, in its own
-`IMPORTANCE_LOW` channel — never sharing a channel with keyword alerts. One is a
-number that changes constantly; the other is the thing the user asked to be
-interrupted for.
+**B8 · The unread notification is silent**, in its own `IMPORTANCE_LOW`
+channel — never sharing a channel with keyword alerts. One is a number that
+changes constantly; the other is the thing the user asked to be interrupted
+for.
+
+> **Not ongoing. `ongoing: false` stays, and this note exists so it is not
+> re-proposed.** B8 asked for "silent and ongoing"; the channel half was right
+> and the ongoing half reverses a considered decision that predates this
+> document. `unread_badge_service.dart` already says why, quoted in full so the
+> reasoning travels with the ruling:
+>
+> > ```
+> > // Not ongoing. An un-dismissible notification for a count the user
+> > // may not care about right now is worse than one they can swipe
+> > // away; it comes back on the next count change either way.
+> > ongoing: false,
+> > ```
+>
+> An unread count the user cannot dismiss is hostile, and it returns on the
+> next count change regardless, so the un-dismissible version buys nothing.
 
 **B9 · Widget count clamp and autosize.** Clamp to `999+` in the provider, and
 add `android:autoSizeTextType="uniform"` with min 18sp / max 28sp to the
@@ -304,6 +520,16 @@ on, and someone in Newspaper mode should not get newsprint on their wallpaper.
 - **Missing-thumbnail letter** to `onSurfaceMuted`.
 - **Bookmarks' separator** becomes the feed's full-bleed hairline. Panel
   dividers stay inset — they are not article lists.
+
+  > **Resolved, and it was not the no-op it looked like.** Both were already
+  > identical at `indent: 16, endIndent: 16`, so "becomes the feed's" changed
+  > nothing — but the feed's own hairline was specified full-bleed two batches
+  > earlier, and had drifted. **Bookmarks was matching a feed that was itself
+  > wrong.** Five dividers moved, not one: the feed's two, Bookmarks, search
+  > and Alerts, all of which separate article rows. The three panel dividers
+  > stay inset. `divider_scope_test.dart` guards both directions, because a
+  > later sweep making every divider full-bleed would satisfy the first half
+  > and break the second.
 - **Categories' header delete icon** to `onSurfaceVariant`, so deleting a
   category does not rank equal to renaming it.
 - **Four widget colours** (1.5).
@@ -326,6 +552,18 @@ Nothing in sections 1–3 is in this list.
   Proposed: `onSurfaceVariant` on a neutral `surfaceContainerHighest` circle, no
   tint. Delete, in Alerts only, keeps `error`. Not in the locked set, but not
   ruled on either.
+
+  > **Clarified, because that sentence reads two ways.** "Delete, in Alerts
+  > only, keeps `error`" is about **the radial menu's Delete** — the
+  > subject of the bullet it sits in, and the only Delete `app_theme.dart`
+  > blesses by name among error's three jobs. "In Alerts only" describes
+  > when that button exists, not a scope being introduced.
+  >
+  > It does **not** reach an `IconButton` in a panel. Pass 7 moved the
+  > keyword alerts and blocklist bins to `onSurfaceVariant` on that reading,
+  > matching the Categories header restyle in section 3, and
+  > `pass7_sweep_test.dart` guards it with the radial menu as the one named
+  > exemption. Recorded so the next person does not re-red a bin.
 - **PROPOSAL · The ad's dark media well, `#1E2524` — a new value** I would
   rather not add. It exists only so a creative with a dark background still has
   a visible edge. To hold the line at zero new surface values, use `placeholder`
@@ -367,17 +605,105 @@ Nothing in sections 1–3 is in this list.
 or it is moot — it should not stay unknown. If live, the answer is that old
 shades get a slightly quiet app name, not that the token changes.
 
+> **ANSWERED, and the question closes for a reason neither branch
+> anticipated.**
+>
+> `flutter.minSdkVersion` resolves to **24** — Flutter 3.41.6,
+> `FlutterExtension.kt:26`. `build.gradle.kts` no longer inherits it: the
+> SDK pinning commit wrote `minSdk = 24` out explicitly, so the value is
+> unchanged and is now visible in review. **The API≤ 30 window is
+> therefore live** — the app installs on Android 7.0 through 11.
+>
+> But it is moot anyway, and not because of an API level: **nothing sets
+> `Notification.color` at all.** Neither `AndroidNotificationDetails` —
+> `refresh_service.dart:176` for keyword alerts, `unread_badge_service
+> .dart:215` for the count — passes a `color:`, and `#15868E` appears
+> nowhere in `lib/` or `android/`. The constant has no consumer yet, so
+> the system draws both the small icon and the app name in its own ink on
+> every API level.
+>
+> So the conclusion stands as 1.3 wrote it, just further off: when the
+> constant IS wired, old shades get a slightly quiet app name at ~12sp,
+> and that is the cost of the value rather than a reason to move it. It
+> is a fact about Android 7–11, not a fact about `#15868E`.
+>
+> **This question is closed.** The open item it leaves behind is a
+> different one and belongs to whoever wires the accent: there is no
+> notification colour in the app today.
+
 **5.2 · Confirm the day-header sum still balances once the ad row exists.**
 `kDayHeaderHeight` is load-bearing because `FeedScreen._onScroll` walks row
 heights to decide what has passed the viewport midpoint. A 306dp row the walk
 does not know about puts every mark-read below it at the wrong offset,
 compounding down the list.
 
+> **ANSWERED, and it is a prerequisite rather than a caveat.**
+>
+> Two corrections to the question first. The walk uses the viewport **top**,
+> not the midpoint — `final offset = _scrollController.offset` at
+> `feed_screen.dart:1102`, with the code's own comment at `:1106` reading "a
+> guessed row puts the viewport top at the wrong article". The consequence is
+> as described; the threshold is not.
+>
+> And the sum does not go out of balance, because **the walk never runs.**
+> `FeedRow` is a `sealed class` with exactly two subtypes, `DayHeaderRow` and
+> `ArticleRow` (`lib/utils/day_grouping.dart:17-35`). Every consumer branches
+> on the header and then *casts* everything else:
+>
+> | | |
+> |---|---|
+> | `feed_screen.dart:872` | `_rowHeight` — used by the read walk **and** the retirement planner |
+> | `feed_screen.dart:1117` | `_onScroll`'s accumulate loop |
+> | `feed_screen.dart:1685` | the three-column list builder |
+> | `feed_screen.dart:1830` | the phone list builder |
+>
+> Each reads `if (row is DayHeaderRow) … ; final x = (row as ArticleRow)…`. A
+> third subtype does not mis-measure — it throws a `TypeError`, in the scroll
+> listener, on every frame of a scroll, and at paint in both list builders.
+>
+> **So B6 has three prerequisites before any ad widget exists:**
+>
+> 1. **Open the sealed type.** Add `AdRow` to `day_grouping.dart`. Being
+>    `sealed`, this turns all four sites into non-exhaustive-switch problems
+>    the analyser can point at, which is the good version of this — do it
+>    first so the compiler enumerates the work rather than a scroll gesture.
+> 2. **Give `_rowHeight` a branch** returning the ad's height as a constant,
+>    exactly as it returns `kDayHeaderHeight`. An ad is not measurable from a
+>    `_cardKeys` entry, because it has no article id.
+> 3. **`continue` past it in `_onScroll`**, as headers already do. An ad is
+>    not something a reader can have read, so it must contribute height
+>    without ever deciding the cutoff.
+>
+> The header is the working precedent for all three. Note the scale difference
+> though: a header is 36dp and the ad is 306, roughly eight and a half headers,
+> so an off-by-one in the accumulate loop that is invisible today becomes a
+> third of a screen.
+>
+> The scroll and retirement code has a documented regression history, which is
+> why this is listed as a prerequisite: the ad row is a change to the read
+> walk that happens to have a widget attached, not a widget that happens to
+> sit in a list.
+
 **5.3 · Check `folder_tab_bar_test.dart` and `action_rail_test.dart` against
 this document.** Both pin geometry the redesign has now settled. The rail
 numbers here match what ships; the chip test pinned the old round pill and
 should be updated to the 36dp / radius 9 / separate-numeral form rather than
 deleted.
+
+> **ANSWERED — both were already done, in earlier passes.**
+>
+> `folder_tab_bar_test.dart` was rewritten for the chip redesign, not
+> deleted: `kChipHeight = 36`, `kChipRadius = 9`, a whole group named
+> "the count is its own numeral now", and a per-theme test reading
+> "corners are 9dp, not a full pill". The r999 pill it warns about is
+> gone from the file and from the widget.
+>
+> `action_rail_test.dart` was updated twice since — once when the
+> saved fill was removed, once when its tooltip finders stopped carrying
+> English literals.
+>
+> Pass 7 added six tests to the chip file for B3 rather than changing
+> any geometry. Nothing in 5.3 was outstanding.
 
 **5.4 · Portrait tablet has a deadline, not just a decision.** `CLAUDE.md`
 records that the orientation lock stops working at **API 37**. "Decided, not
@@ -475,6 +801,10 @@ stays.
 
 ### 6.6 Newspaper's derived values — authored, see 1.4.
 
+> **See the superseded block in 1.4.** The two ink levels moved again after
+> this was written, because authoring them at 0.62 / 0.55 preserved a contrast
+> regression rather than a correct value. They are 0.35 and 0.30 now.
+
 `onSurfaceMuted` `#A1A09E`, `onSurfaceRead` `#92928F`, `illustration`
 `#C3C2BF` — the values the 0.62 / 0.55 / 0.78 lerps already produce, so no
 pixel moves. Authored so an edit to `_npPaper` cannot silently move the
@@ -511,3 +841,2242 @@ that needs a real database, or outside the app entirely:
 - **Tablet → open an article.** The list row highlights `surfaceContainer`, the
   rail inside it is unchanged, and swapping sides mid-read does not reload the
   page (B2).
+
+---
+
+## 6.8 Newspaper renders Quiet Ink's category hues — PARKED, awaiting values
+
+**Known, reproduced, and deliberately not fixed.** Design is speccing a
+monochrome treatment; this is recorded so it is not "fixed" into something
+else in the meantime.
+
+The mechanism: `_flashColorsNewspaper` declares `brightness: Brightness.light`,
+and `FlashColors.category(int)` forwards that straight to
+`categoryPalette(colorIndex, brightness)`. The hue table in
+`category_colors.dart` has only light and dark columns, so Newspaper gets the
+light column — Quiet Ink's six tinted chips, on newsprint.
+
+Visible wherever a category hue is painted, which since the chip rewrite means
+the folder chip bar on every screen with one.
+
+Not fixed because the fix is a value decision, not a code one: a monochrome
+Newspaper needs six values (or a rule that collapses all six to one), and
+inventing them to close a visual bug would be exactly the kind of guess the
+rest of this document exists to avoid.
+
+---
+
+## 7. Corrections from the code (added by implementation)
+
+Findings from cross-checking every claim in this document against `lib/`. Each
+is a place the document and the code disagree; none is blocking.
+
+**Rulings applied.** 7.1 stands, arbitrated below. 7.2's `outlineVariant` and
+7.4's badge colour are fixed in code. 7.5 is a documentation error, corrected
+in 1.7. 7.6 and the `ongoing` half of 7.8 are recorded as limitations in place.
+7.7's dead key is deleted.
+
+### 7.1 Newspaper `illustration` is `#C3C2C0`, not `#C3C2BF`
+
+Printed as `#C3C2BF` in 1.1, 1.4 and 6.6, under the guarantee that authoring
+these values **changes no pixel**. Those two statements disagree by one unit of
+blue, and the document settles it against itself.
+
+On the blue channel, `lerp(_npInk, _npPaper, t)` gives:
+
+| t | exact | rounded | truncated | document |
+|---|---|---|---|---|
+| 0.62 | 157.82 | `9E` | `9D` | `9E` — **rounded** |
+| 0.55 | 143.05 | `8F` | `8F` | `8F` — rounded |
+| 0.78 | 191.58 | `C0` | `BF` | `BF` — **truncated** |
+
+Two of the three are rounded; only this one is not. One value converted the
+other way from its neighbours, under a promise of no pixel change, reads as a
+transcription slip rather than an override — so **the code keeps `#C3C2C0`**
+and the document is the thing to correct. **Arbitrated.** The test now checks all three authored values against
+`Color.lerp` at 8-bit, not only the disputed one. **All three pass**, which
+settles it: Flutter's `lerp` rounds to the byte, so `9E` and `8F` are correct
+and `#C3C2BF` is the only value the document got wrong. One slip, not two.
+
+### 7.2 Two alpha ink sites survived the "allowlist is empty" claim
+
+`_NewspaperMasthead` (`feed_screen.dart`) bound `final ink =
+theme.colorScheme.onSurface` and then thinned that local twice — a 0.4 divider
+and a 0.55 dateline. The guard looks for `onSurface` immediately followed by
+`.withValues`, so a variable in between hid both for four passes.
+
+Fixed: the rule takes `outline`, the dateline takes `onSurfaceMuted`, and the
+guard now also bans binding `onSurface` to a local at all, since aliasing is
+the mechanism rather than the symptom.
+
+**Related: Newspaper's `outlineVariant` resolves to pure black** (`#000000`).
+It is never declared and does not fall back to anything sensible. Nothing in
+`lib/` reads it today, so nothing is broken — but the next widget that reaches
+for the standard hairline role will draw a hard black line on newsprint.
+Newspaper should declare it.
+
+### 7.3 The threshold is the row's midpoint against the viewport top
+
+An earlier version of this note said "the viewport top, not the midpoint",
+which over-corrected. Both terms are in play and they belong to different
+things:
+
+```dart
+final offset = _scrollController.offset;   // the viewport TOP
+...
+if (cumulative + h / 2 < offset) {          // the ROW's midpoint
+```
+
+So a row is marked read once **its own midpoint** passes the **top of the
+viewport**. 5.2 put the midpoint on the viewport; the correction put it
+nowhere. This is the accurate statement.
+
+### 7.3b What `_onScroll` actually assumes about row heights — 5.2 downgraded
+
+Asked in pass 5 section 4, reported without changing anything.
+
+**It measures. It does not calculate.** Article rows go through a three-tier
+source, and `_rowHeight` uses the same one so the read walk, the retirement
+planner and the height cache agree by construction:
+
+| tier | source | when |
+|---|---|---|
+| 1 | `_cardKeys[id]` → `RenderBox.size.height` | the row is laid out; the result is cached |
+| 2 | `_measuredHeights[id]` | the row has scrolled out and has no live context |
+| 3 | the constant `120.0` | never measured — and this sets `extentsStable = false` |
+
+Day headers are the exception: they are **calculated**, `kDayHeaderHeight`, and
+`continue`d past so they contribute height without deciding the cutoff.
+
+**So the ad row's height is a non-problem, and 5.2 can be closed on its own
+terms.** A variable-height row participates honestly the moment it is
+measurable — give it a key, let tier 1 read its box, and the walk is correct
+without knowing what the row contains. It does not need 306 hard-coded
+anywhere, and it would not need re-tuning if a creative came back a different
+size.
+
+What survives from 5.2 is **not** the arithmetic. It is the type system: the
+four unguarded `as ArticleRow` casts throw before any of this machinery runs.
+The prerequisite block above stands; the height-walk warning does not.
+
+**5.2 is closed. What replaces it is a two-line prerequisite:**
+
+1. **Give the ad row a key**, so tier 1 measures it like any card. It does not
+   need `306` written down anywhere, and a creative that comes back a different
+   size needs no re-tuning. The height machinery already does this correctly;
+   the ad just has to opt in.
+2. **Handle the four casts** — `feed_screen.dart` 872, 1117, 1685 and 1830 —
+   which throw before any of that machinery runs. This is the whole remaining
+   blocker, and it is a type problem rather than an arithmetic one.
+
+**The tier-3 caveat stays visible, because it is harmless today and will not
+be.** The `120.0` fallback is roughly a card, so an unmeasured card is
+understated by ~30dp. An unmeasured ad row would be understated by **~186dp**,
+six times the error. `extentsStable` already goes false in that case and is the
+existing safety valve — but a valve sized for a 30dp mistake is being asked to
+absorb a 186dp one. Worth deciding whether the ad gets its own fallback
+constant at the point it gets its key, rather than after the first report of
+articles being marked read that nobody saw.
+
+### 7.4 1.6's site lists do not match the code
+
+- **The unread dot does not exist.** `colorScheme.secondary` has exactly two
+  consumers in `lib/`, both the swipe reveal on the article card. B1 builds
+  the dot; until then, one of the three named unread sites is real.
+- **The Alerts `Badge.count` is `error` red, not orange.** `app.dart:319` and
+  `:1294` pass no `backgroundColor`, and there is no `badgeTheme`, so it takes
+  Material's default — which is `error`. That quietly contradicts 1.6's own
+  "neither meaning is faults", since a fault colour is painting an unread
+  count. Needs either a `badgeTheme` entry or an explicit colour at both call
+  sites; neither is mentioned in 1.6 or 1.7.
+- **The reader's filled bookmark glyph does not exist.** There is no bookmark
+  control in `article_detail_pane.dart` or the clean view; the proposal in
+  section 4 is what would add it.
+- **`error`'s scope is wider than the three named items.** Also
+  `keyword_alerts_panel.dart:557`, `keyword_group_panel.dart:388` (delete icon
+  buttons) and `settings_screen.dart:160` (a red `backgroundColor`). The last
+  is a button background and worth a look against "never a confirmation
+  button".
+
+> **Three of these four are closed. Marked rather than deleted, so the list
+> stays readable as a record of what 1.6 claimed against what shipped.**
+>
+> - The unread dot **exists** — B1 shipped in pass 5, with
+>   `unread_dot_geometry_test.dart` pinning the reserved 12dp.
+> - The Alerts badge **is the orange** — a `badgeTheme` entry landed in batch 4.
+> - `error`'s scope **is now the three named items** — pass 7 moved both delete
+>   bins to `onSurfaceVariant` and took the red off the restore-backup confirm.
+>   `pass7_sweep_test.dart` guards all three.
+> - **The reader's filled bookmark glyph still does not exist**, and pass 8
+>   confirmed it: `article_detail_pane.dart` carries a close button and an
+>   open-in-browser button and nothing else. Section 4's proposal is what would
+>   add it, and it is deliberately still out — see 11.7 for the recommendation
+>   it is waiting on.
+
+### 7.5 1.7's "only capsules left beside r9 chips and r9 nav pills"
+
+The chip half is right (`folder_tab_bar.dart`, `_radius = 9`). **The nav pill
+is r14**, not r9 — `flash_bottom_nav.dart`, `pillRadius = 14`, which is the
+value 1.7's own sibling sections specify. There is no `BorderRadius.circular(9)`
+anywhere in `lib/` outside the chip constant.
+
+### 7.6 The ARB parity test does not do what 2.1 assumes
+
+2.1 says "every new or changed value needs de, es, fr, it or the parity test
+fails". True for **new keys** — `arb_parity_test.dart:78-88` fails on a key
+missing from a locale. Not true for **changed values**: the only value-level
+check (`:90-102`) fails when the English and translated strings are *identical*,
+so changing an English value makes that collision less likely, never more.
+Re-translating the four changed values may still be editorially right; the
+stated enforcement mechanism just is not there.
+
+### 7.7 `alertsFilterAll` is a dead key
+
+2.4 describes it as one of "two chip bars that now render identically". There is
+only one chip bar. `alertsFilterAll` has no call site in `lib/` — only the
+generated accessors — and `alerts_screen.dart` contains no `Chip` at all. Its
+description documents a filter control that was never built.
+
+**Deleted** from all five locales, and the generated accessors regenerated.
+
+Pass 6 section 4 then asked for a test pinning `allTab` == `alertsFilterAll`
+in every locale. There is nothing left to compare. `pass6_strings_test.dart`
+guards the deletion instead — the key is absent from all five .arb files and
+unreferenced in `lib/` — so it cannot come back by someone reading 2.4 at face
+value. If the second chip bar is ever built, that test goes in the same commit
+as the call site.
+
+### 7.8 Three B-items already disagree with shipped code
+
+- **B8 "silent and ongoing"** — `unread_badge_service.dart:236` sets
+  `ongoing: false` deliberately, with a comment explaining why an
+  un-dismissible notification was wrong. B8 would reverse a considered
+  decision; worth confirming that is intended.
+- **B9 "clamp to 999+"** — a clamp exists in `UnreadWidgetProvider.kt:39` but
+  at a different threshold. The autosize half is genuinely missing.
+- **Bookmarks' separator** — already identical to the feed's, and neither is
+  full-bleed. Nothing to adopt.
+
+### 7.9 `saved` is never the destination — both its call sites are states
+
+2.2 changes `saved` from "Saved" to "Bookmarks" because "the nav label already
+says it in five locales". **The nav label is a different key.** `l10n.bookmarks`
+is the destination — `app.dart:354`, `:1329`, `:1566` and
+`bookmarks_screen.dart:200` — and it has read "Bookmarks" in English all along.
+
+`l10n.saved` has exactly two call sites, and both describe the state of one
+article rather than a place:
+
+- `article_card.dart:871` — the action rail's tooltip when the article is saved
+- `radial_menu.dart:244` — the radial menu's **visible label** when it is saved
+
+2.2 flags the first and asks it be checked on device. It does not mention the
+second, which is a rendered label rather than a tooltip, is unconditionally
+visible on long-press, and will read "Bookmarks" beside a bookmark glyph as the
+name of the state the article is in.
+
+**Reverted.** `saved` is "Saved" in all five locales again, and the 2.2
+row is marked superseded rather than edited. The change was applied in
+English for one commit (21c8975) and taken back in the next; it never
+reached a release outside this branch.
+
+### 7.10 Four locales have no bookmark noun, and never had one
+
+The lookup rule assumes each locale already has a word for the bookmark. None of
+de/es/fr/it does — all four are built on the verb *save*:
+
+| key | de | es | fr | it |
+|---|---|---|---|---|
+| `bookmarks` (destination) | Gespeichert | Guardados | Enregistrés | Salvati |
+| `saved` (state) | Gespeichert | Guardado | Enregistré | Salvato |
+| `bookmark` (action) | Speichern | Guardar | Enregistrer | Salva |
+| `noBookmarks` | …gespeichert | …guardado | …enregistré | …salvato |
+
+They do not disagree with each other, so there is **no pre-existing drift to
+report** — but the noun the lookup was meant to find is not there.
+
+The English edit aligns two different words. In the other four they are already
+the same word, separated only by grammatical number, which is the state/place
+distinction English does not mark. The only "same direction" edit available is
+singular → plural at two sites that each describe a single article: a grammar
+error in four languages, three of which would then be wrong in a way David can
+see and one in a way nobody here can.
+
+**Left unchanged, pending a ruling.** Note also that the four `noBookmarks`
+values now name the control by what it does ("das Speichern-Symbol", "el icono
+de guardar") rather than introducing Lesezeichen / marcador / marque-page /
+segnalibro, so no new noun enters the app in this pass.
+
+### 7.11 The action rail tooltip is reachable
+
+Measured rather than reasoned. Long-press on the rail's bookmark half renders
+the tooltip and does **not** open the radial menu; the same gesture on the card
+body does open it, which is the control that makes the first result mean
+something. The rail's `Tooltip` is the inner long-press recognizer and takes the
+gesture arena from the card's `GestureDetector`.
+
+So the concern 2.2 raises is real — confirmed on the M51, where the
+tooltip rendered "Bookmarks" against the orange saved bookmark. It is the
+fix that was wrong, not the worry: see the superseded block on 2.2. The
+tooltip reads "Saved" again.
+
+Worth keeping even though the string reverted, because it answers a
+question that will come back the next time anything is put on the rail:
+the rail's own long-press wins, and the card's radial menu does not fire
+from there.
+
+### 7.12 `onSurfaceRead` does not qualify for WCAG's large-text bar
+
+Both sites render at **14.0 logical px, `FontWeight.w600`** — `article_card
+.dart:357` and `search_screen.dart:160`, measured off the rendered
+`RenderParagraph` in all three themes.
+
+Worth knowing for any future measurement here: reading `flashQuietInkTheme(...)
+.textTheme.bodyMedium.fontSize` reports **null**. Sizes arrive from the text
+geometry that `Theme.of` merges in, not from the `ThemeData` object, so the
+theme has to be measured through a widget tree or it reports nothing at all.
+
+WCAG 1.4.3 sets the large-text floor at 18.66px bold or 24px regular. 14px
+clears neither at any weight, so the 4.5:1 bar stands and the 3.99:1 entry in
+`flash_colors_resolution_test.dart` stays exactly as it is. The question of
+whether `w600` counts as "bold" never arises — the size fails first.
+
+Separately, and answering a narrower question than it looks like: the large-text
+exemption is a compliance floor, not a statement that the text is comfortable.
+3.99:1 at 14px is a deliberate recession, not a comfortable read.
+
+### 7.13 An unused ARB key breaks nothing
+
+Checked for `adSponsored`, which ships with no call site. `arb_parity_test.dart`
+is the only thing in the repo that reads the .arb files, and it compares locales
+against the template in both directions — never against `lib/`. There is no
+unused-key lint, and `flutter gen-l10n` emits a public getter, which the
+analyzer does not report as unused. `flutter analyze` is clean with the key in.
+
+### 7.14 `alertNotificationSummary` has no call site either
+
+There is no group summary notification in the app. `groupKey` is set on the
+children (`refresh_service.dart:182`, `unread_badge_service.dart:233`) but
+nothing calls `setAsGroupSummary`, so the whole key is unreachable, not just its
+`one` branch. Written correctly regardless — how Android treats a group with a
+single child is version-dependent, and that is not worth betting a wrong string
+on.
+
+The French `one` branch takes `{count}`, not a literal 1, because CLDR routes
+**0 and 1 both** through `one` in French. That is already the house style in
+`alertNotificationCount` and `deleteAlertKeywordBody`.
+
+It is **not** the style in `unreadCountNotification`, whose French `one` branch
+hardcodes "1". Latent rather than live: `unread_badge_service.dart:149` clears
+at `safe == 0` and never posts, so the only way to reach it is to call
+`unreadBadgeText(0)` directly. Worth fixing when something else opens that file.
+
+---
+
+## 8. Pass 9 scope — recorded, not started
+
+Two items found during the pass 6 strings work that are **behaviour, not
+copy**, and were deliberately left alone.
+
+### 8.1 The notification stack has no summary at all
+
+`setAsGroupSummary` is never called. `kFlashNotificationGroupKey` is set on
+every child — `refresh_service.dart:182` and `unread_badge_service.dart:233`
+— but a group with no summary notification is only half the feature: Android
+will auto-bundle children on its own terms, with its own heading, instead of
+the one the app would write.
+
+This is **why `alertNotificationSummary` is unreachable**, and the distinction
+matters for whoever picks it up: the key is not waiting on a call site that was
+forgotten, it is waiting on a notification that was never built. The string is
+already written, in five locales, and is not the work.
+
+Note also `notification_group.dart`, which is worth reading first: keyword
+alerts and the unread count sit on channels of different importance, so Android
+puts them in different sections of the shade and **will not group them with each
+other whatever this key says**. A summary would cover the keyword alerts only.
+
+### 8.2 `unreadCountNotification` fr carries the plural trap, and a guard is
+holding it
+
+French routes **0 and 1 both through the ICU `one` branch**. The French
+`unreadCountNotification` hardcodes "1":
+
+```
+{count, plural, one{1 article non lu} other{{count} articles non lus}}
+```
+
+so it renders "1 article non lu" at a count of zero. The house style elsewhere
+— `alertNotificationCount`, `deleteAlertKeywordBody`, and the new
+`alertNotificationSummary` — uses `{count}` in the `one` branch for exactly
+this reason.
+
+**It cannot fire today, and the reason it cannot is load-bearing.**
+`unread_badge_service.dart:149` reads:
+
+```dart
+if (safe == 0) {
+  await _clear();
+  return;
+}
+```
+
+That early return exists to dismiss the badge, not to protect a translation,
+and it is the only thing standing between the French build and "1 article non
+lu" on an empty feed. The next person to simplify that branch — to post a
+"you are all caught up" line, say — will ship the bug without touching the
+ARB and with every test green, because no test renders `unreadBadgeText(0)`.
+
+Fix the string, then the guard is free to change. Not the other way round.
+
+---
+
+## 9. Pass 7: the consistency sweep
+
+Not a redesign. Section 4 lists most of these screens as NOT DRAWN, so the work
+was finding the places where a screen had stopped inheriting the theme and
+closing them. Every change below is a swap to a role that already existed.
+
+### 9.1 What each surface turned out to be
+
+| surface | verdict |
+|---|---|
+| Categories | role substitution — one chevron |
+| Alerts | role substitution — two |
+| Keyword alerts panel | role substitution (one auditor said "needs a mock"; see 9.3) |
+| Keyword blocklist panel | role substitution — one |
+| Quick Settings | role substitution — one scrim |
+| Settings | role substitution — one confirm button |
+| Onboarding + starter pack | role substitution — one radius override |
+| Add-feed sheet | **already correct** |
+
+**The eight changes, all one-liners:**
+
+- `feeds_screen.dart` — the folder chevron was `primary` at **alpha 0.7**.
+  Alpha-faked ink one role over from the one the guard watches, and it made the
+  header read as three different teals. Now `onSurfaceVariant`, which is what
+  the alerts and blocklist chevrons already use — and their comments cite
+  *this* chevron as the original they match, so Categories was the drifted copy
+  of its own precedent.
+- `bubble_panel.dart` and `radial_menu.dart` — `Colors.black` at 0.28 and
+  0.6 became `scrim`. Byte-identical today, since neither scheme declares a
+  scrim and both take ColorScheme's black. That is the argument *for* it: it
+  costs nothing and gives a theme that wants a warmer wash somewhere to say so.
+  **The two opacities are left different on purpose** — one isolates a menu
+  over the whole screen, the other blurs behind a panel that is still part of
+  its screen. One number for both is a design call.
+- `settings_screen.dart` — the restore-backup confirm was a `FilledButton`
+  in `error` under `onError`. The same red on a question that B5 removed from
+  mark-all-read and `confirm_sheet_no_red_test.dart` records for the two
+  sheets. `restoreConfirmMessage` already says what restoring does.
+- `keyword_alerts_panel.dart` — the inline "this destroys N cards" prompt
+  was `errorContainer` at **35% alpha**. Both halves wrong: alpha over a role
+  is a colour nobody authored, and error on a confirmation reads as though
+  something had already gone wrong. Now `surfaceContainerHighest`.
+- `keyword_alerts_panel.dart` and `keyword_group_panel.dart` — two delete
+  bins in `error`, now `onSurfaceVariant`, matching the Categories header
+  restyle in section 3. **On section 4's "Delete, in Alerts only, keeps
+  `error`":** that sentence is inside the radial-menu bullet and is about the
+  radial menu's Delete, which is also the only Delete `app_theme.dart` blesses
+  by name. It does not reach an IconButton in a panel. Recorded because the
+  sentence is easy to read the other way.
+- `onboarding_screen.dart` — the Start-reading CTA carried its own
+  `RoundedRectangleBorder` at radius **14**, the *card* radius applied to a
+  button, making the first screen a new user sees the only one whose primary
+  action is a different shape. Deleted; it inherits `filledButtonTheme` at r20.
+  The full-width 52dp minimum stays — that is the button being a CTA.
+
+### 9.2 What was NOT done, and is listed rather than built
+
+Everything here would have meant inventing a value, a component or a decision.
+None of it is a defect; it is the boundary of a sweep.
+
+- **Two drop-target washes disagree** in `feeds_screen.dart`: `primary` at 0.08
+  for the header hover, 0.12 for the drop slot, while `article_card.dart` and
+  `radial_menu.dart` wash at 0.15. Picking one is a value decision and
+  `FlashColors` has no wash role to swap to.
+- **The empty-state caption is split 2–2** across the app between
+  `onSurfaceVariant` and `onSurfaceMuted`. Both are legal roles. Choosing is a
+  cross-surface call.
+- **`EmptyState`'s brand mark is `primary`** at 80dp while every other
+  empty-state glyph is `illustration`. Arguably correct — it is the app's
+  mark, not a decorative glyph — and arguably the last unswept one.
+- **The Alerts empty state is text-only**, where every other empty state in the
+  app pairs a large `illustration` glyph with muted copy. That is a missing
+  component, not a wrong colour.
+- **Disabled states do not use `inert` anywhere.** The OPML and backup buttons,
+  the add-feed search field and chips, and the starter-pack checkboxes all fall
+  to Flutter's framework default when disabled. 6.5 says "one role, four sites
+  close" — those four are closed; these are a different, larger set.
+- **Quick Settings expresses a disabled block as `Opacity(0.4)`** around an
+  `IgnorePointer` when Newspaper mode is on. That is a disabled state written
+  as a filter rather than as `inert`, and unpicking it is a component change.
+- **Two hardcoded `TextStyle`s survive**: `onboarding_screen.dart`'s CTA label
+  (16/w600) and `feed_card.dart`'s monogram (16). Both are sizes, not colours,
+  and both were out of a colour sweep's scope.
+- **`feed_card.dart`'s unread count is `primary`.** Proposed as `secondary`
+  and **rejected on measurement**: Quiet Ink light `secondary` is 4.12:1 on
+  white for an 11px label where `primary` is 6.34:1 — a light-mode
+  regression, and the only theme it would change.
+
+### 9.3 1.7 asks for two things a theme cannot carry
+
+`segmentedButtonTheme` ships. Radius **9** outer / 0 between, one 1dp
+`outlineVariant` `side` serving as both border and divider, selected
+`primaryContainer` under `onPrimaryContainer` at 13/w600, unselected
+`onSurfaceVariant` at 13/w500. Shared by both themes so they cannot drift on
+geometry, and derived from each theme's own `labelLarge` so Newspaper keeps PT
+Serif.
+
+Two things did not land, and neither is a slip:
+
+1. **`showSelectedIcon: false` is not a theme property, and did not need to
+   be.** `SegmentedButtonThemeData` has exactly two fields, `style` and
+   `selectedIcon`; the flag is a `SegmentedButton` constructor argument. That
+   reads like an unclosable item — until you open the call sites, where
+   **all three already pass it**: `filter_bubble.dart` once and
+   `quick_settings_bubble.dart` twice. The app was never wrong here; only the
+   mechanism was missing.
+
+   The guard is therefore on the **call sites**, not on a rendered widget. A
+   widget test can only prove things about the SegmentedButton it built
+   itself, and the risk is a fourth one added elsewhere inheriting a default
+   of `true`. `segmented_button_theme_test.dart` asserts the count is three
+   and that every one carries the flag, plus a tripwire confirming the
+   framework default really is the checkmark — so if Material ever flips
+   it, the guard is deleted rather than left reading as protection.
+
+2. **"Height 40" costs 8dp of touch target.** Measured: the segment paints at
+   **48**, and that is the painted fill, not a tap halo around a 40dp body —
+   `_SegmentedButtonRenderObject` lays every segment out at a uniform tight
+   height, so Material's tap padding ends up inside the paint. Reaching 40
+   means `tapTargetSize: shrinkWrap` or a negative `visualDensity`, and both
+   take the **touch target** to 40 with it. The two places this app already
+   goes under 48 — the 36dp folder chip, the 36dp rail halves — each
+   carry a written justification and a test. 1.7 does not mention touch targets
+   at all, so the number is reported rather than applied. Pinned at the real 48
+   so the gap is visible.
+
+### 9.4 B3 landed; the chip reads as one node
+
+`Semantics(label: "$name, ${l10n.articlesCount(n)}")` inside the `InkWell`,
+with the painted text under `ExcludeSemantics`. Inside rather than around,
+because wrapping the chip takes the button role and the tap action with it.
+
+**At a count of zero the label is the name alone.** Nothing is painted at zero,
+and "Tech, 0 articles" describes a numeral that is not on screen.
+
+### 9.5 The app bar band — logged for Design, not a defect
+
+Not a bug and nothing was changed. `height - toolbarHeight == inset` exactly at
+insets of 0, 24 and 48, and the body reads `padding.top = 0`, so the status bar
+inset is consumed once, by the `AppBar` at `primary: true`. The band is the
+status bar drawn over the same white as the app bar, plus 14dp of title
+centring — a 28dp text line inside a 56dp toolbar.
+
+**The design question behind it**, which is Design's and is not actioned here:
+should the app bar carry a different tint from the status bar so the band stops
+reading as empty? The device numbers that motivate it, since the Pixel is the
+case that makes it visible:
+
+| device | status bar | density | dp | total above the title |
+|---|---|---|---|---|
+| Lenovo Tab M11 | 59px | 1.5 | 39.3 | 53.3 |
+| Samsung M51 | 91px | 2.625 | 34.7 | 48.7 |
+| Pixel 11 Pro | 172px | 2.625 | **65.5** | 79.5 |
+
+The Pixel's band is nearly twice the Samsung's, and it is the system's number,
+not the app's.
+
+### 9.6 An ad-privacy row with nothing behind it
+
+Serving ads in the EEA and the UK needs a Google-certified CMP, and consent
+that can be given has to be withdrawable afterwards — a permanent entry
+point, not a first-launch dialog.
+
+The row ships now because **Settings was being touched tonight and will not be
+touched again before the ads pass.** It sits directly under the privacy policy
+and last in About: the policy says what is collected, this changes what the
+reader agreed to, and nothing legal sits below it.
+
+`enabled: false`, so it is reviewable in place and cannot reach a form that
+does not exist. `_onAdPrivacy()` is an empty method carrying its own
+explanation, because an empty method with no comment is indistinguishable from
+an unfinished one.
+
+**The copy is an English-only constant, not an ARB key**, and deliberately:
+the real wording ships with the ads pass, and five locales now means paying for
+the same row twice — with `arb_parity_test.dart` then holding four
+translations of a sentence nobody has agreed to. `kAdPrivacyRowLabelEn` and
+`kAdPrivacyRowSubtitleEn` are marked for deletion in that pass.
+
+No UMP SDK, no ad code, no new strings. A test asserts all three absences.
+
+### 9.7 `savedFill` and `onSavedFill` are deleted
+
+Two roles with no call site in `lib/` — the same condition 7.7 found
+`alertsFilterAll` in — left behind when the action rail’s saved fill
+became a glyph.
+
+**Why deleted rather than kept warm for a future consumer.** A role with no call
+site is still lerped on every theme animation, compared in every `==` and
+hashed in every `hashCode`. That is the cheap part. The expensive part is
+that it reads as an available answer: the next person needing a saved treatment
+would find two roles sitting in `FlashColors` and reasonably assume the
+decision had been made. It had been, and it was reversed. Restoring the fill now
+means restoring these two deliberately, which is the right amount of friction.
+
+`_qiOnSavedFill` went with them. It was `#0D1211` and it existed only
+because `onSecondary` gave 4.12:1 on the orange, under the 4.5:1 this app
+holds a lone glyph to — an authored constant written to solve a contrast
+problem the fill had created.
+
+**The three tests that went, and what each asserted:**
+
+| test | asserted | replaced by |
+|---|---|---|
+| `flash_colors_resolution` · *Newspaper does not fill it red* | `savedFill` was `_npInk`, not `_npRed` | **inverted** — the glyph IS `_npRed`, see below |
+| `flash_colors_resolution` · *Quiet Ink fills it with the unread orange* | `savedFill == secondary` in both brightnesses | `batch4_ink_test.dart`, on the glyph |
+| `flash_colors_resolution` · *every theme keeps a legible glyph on the saved fill* | `onSavedFill` on `savedFill` ≥ 4.5:1 | `summary_button_contrast_test.dart`, glyph on tint, 3:1 |
+
+A fourth assertion went too, a line inside `batch4_ink_test.dart`’s "error
+is not the orange" reading `expect(scheme.error, isNot(flashColors.savedFill))`.
+It asked the same question as the line beside it, since `savedFill` resolved
+to `secondary` in both Quiet Ink brightnesses.
+
+**The first row is the one worth reading.** Its argument — `_npRed` is
+already the nav selection, the FAB, the switch and the masthead, so a red saved
+block competes with all of them — was correct about a BLOCK and was overturned
+for a GLYPH by measurement, not by this deletion: Newspaper’s
+`onSurfaceVariant` and its `_npInk` are the same `#1D1D1B`, so an
+ink saved glyph would be pixel-identical to an unsaved one. The claim that test
+made is now true in reverse, which is exactly the kind of thing that gets lost
+when a test is deleted without a note.
+
+---
+
+## 10. Standing rules for tests in this repo
+
+All of these were bought with an incident. None is a style preference.
+
+### 10.1 Assert the mutation landed before running the test
+
+A mutation test is only evidence if the mutation happened. Change the code,
+**assert the change is in the file**, and only then run the suite.
+
+Bought by a mutation that silently did nothing: a `str.replace` targeting
+`
+
+` against text that Python had already normalised to `
+`. It matched
+zero times, the file was untouched, the test passed, and that was read as "the
+parity gate does not catch a missing key— " a conclusion about a gate that was
+in fact working perfectly. Every mutation in passes 6 to 8 prints a VERIFIED
+line before the test runs.
+
+### 10.2 A test that constructs its own subject proves a fact about the test
+
+If the app never builds the widget that way, the coverage is shaped like
+coverage and covers nothing. **Assert against the call sites, or assert that
+the call sites pass what you think they pass.**
+
+Bought by `showSelectedIcon`. Handoff 1.7 asks for `showSelectedIcon: false`,
+`SegmentedButtonThemeData` has no such field, and that was written up as an
+unclosable gap — with a test asserting the selected checkmark **is** shown, to
+pin the gap. The test built its own `SegmentedButton`, which of course inherits
+the framework default of `true`. Every SegmentedButton in the app already
+passed `false`. The assertion was true of the widget in the test and false of
+all three that ship.
+
+**A screenshot caught it, not the suite.** The filter bubble rendered with no
+checkmark, which is what sent me to the call sites. Worth recording plainly:
+the suite was green, and green was wrong.
+
+The replacement reads `lib/` — the count of SegmentedButtons is three, every
+one carries the flag — plus a tripwire confirming the framework default really
+is the checkmark, so the guard deletes itself rather than lingering as
+protection if Material ever flips it.
+
+This is the fifth harness-blindness incident in the project and the first of
+this exact shape. The others, for pattern-matching: the alpha-ink allowlist
+reported empty while two aliased sites sat in the file; a wrapped call chain
+the guard's regex could not see; `find.byType(Image)` finding nothing on a card
+that renders no Image, so the finder was empty exactly when it mattered; and
+22 nav tests pumping into a `Scaffold` with no `body:`, which is how a total
+render failure reached a device.
+
+### 10.3 The test font's measurements cut one way only
+
+`flutter_test` substitutes a font whose every glyph is a full em, so text
+measures roughly twice as wide there as in a real proportional face. That
+asymmetry is easy to flatten into "the test proves it", and it does not:
+
+- **fits under the stub** implies **fits on a device**. Sound. Lean on this.
+- **overflows under the stub** implies **nothing** about a device.
+
+An assertion of the second shape can still earn its place — proving that an
+ellipsis path is exercised rather than passing because everything fits — but
+it is evidence about the test, not about the product. When a truncation claim
+matters, the evidence is a screenshot.
+
+Bought in pass 8c, measuring whether a source name truncates in the reader's
+bar.
+
+### 10.5 A green suite says nothing about a release build
+
+The sibling of 10.3, and bought far more expensively.
+
+`flutter test` runs a debug VM on the host. R8 runs only on a release build.
+So the suite is **structurally incapable** of seeing anything R8 does — a
+stripped generic signature, a renamed class, a shrunk resource — in exactly
+the way the stub font is incapable of measuring a real glyph. The asymmetry
+runs the same direction:
+
+- **fails in the suite** implies **broken**. Sound.
+- **passes in the suite** implies **nothing** about the APK a tester installs.
+
+That gap shipped a data-loss-adjacent bug to 25 testers for the entire life of
+the app. `plugin.cancel()` threw on every release build, the unread
+notification could never be dismissed, and 1672 passing tests had nothing to
+say about it. Nobody was looking at a debug build except us.
+
+**What follows from it.** Anything that only exists in a release build —
+ProGuard rules, `keep.xml`, signing, `minSdk`/`targetSdk` behaviour, anything
+resolved by reflection or by string name — is verified on a device with a
+release APK or it is not verified. The suite's job for that class is to guard
+the *artifact*: `proguard_rules_test.dart` cannot prove the rules work, but it
+fails loudly if the file that buys them is deleted, which is the realistic
+regression.
+
+**And a corollary that cost an hour here.** When testing a release-only bug,
+confirm the trigger actually ran before reading silence as success. An early
+`if (_cleared) return;` and a toggle that was not in the state assumed both
+produced a clean log from a code path that never executed. Absence of an
+exception is only evidence once the call is known to have happened — 10.1,
+wearing different clothes.
+
+### 10.4 A check that reads source must strip comments as blocks
+
+Three separate assertions in pass 9 failed on correct code because they matched
+prose in a comment rather than behaviour in a line:
+
+- "the keyword path must not post to the unread channel" matched the summary's
+  own doc comment, which names both channels while explaining the lazy-creation
+  hazard.
+- "none of the palette-era widget colours survives" matched the comment
+  directly above the new colours, which names the hexes it replaced.
+- "no assertion here renders a RemoteView" matched the string `testWidgets(`
+  inside its own `reason:`.
+
+A line-prefix filter is not enough: an XML or Kotlin block comment opens on one
+line and continues on lines that begin with nothing in particular. Strip
+`<!--...-->` and `/*...*/` as blocks, drop `//` lines, and anchor a
+self-referential search to the start of a line.
+
+The same rule already applies to the six-term scroll grep, where prose hits are
+reported and not counted. It is the same mistake with a different subject.
+
+### 10.6 Verify a control against a rendered call site, never against the theme
+
+A theme entry is a request, not a result. Between the two sits a widget that
+may read the value, transform it, or ignore it — and the three outcomes look
+identical from the theme object.
+
+`SegmentedButton` does all three at once, which is why this rule is written
+here rather than somewhere gentler. The group's outer shape resolves
+`widget ?? theme ?? default` and honours the theme's radius 9. Each segment's
+shape does not: `segmentStyleFor` hardcodes
+`shape: WidgetStatePropertyAll(RoundedRectangleBorder())` and drops
+`style?.shape` on the floor, so segments are square whatever the theme says.
+One `SegmentedButtonThemeData.style.shape`, two unrelated fates.
+
+A test that asserts the theme holds radius 9 passes in both worlds. So does one
+that asserts the segments render square. Neither tells you what the control
+looks like, and reading either alone leads to the opposite of the truth.
+
+**What to do instead.** Pump the real call site, or screenshot it on a device,
+and assert against what came out. Keep the theme-value assertion only as a
+statement about the number Design specified — labelled as that, not as proof of
+a render. `test/segmented_shape_probe_test.dart` is the worked example: it
+holds all three assertions and says which is which.
+
+The same shape has now appeared three times on this control — `showSelectedIcon`,
+the `secondary` colour trap, and this. When a theme "does nothing", the call
+site and the widget source are the first two places to look, not the last.
+
+### 10.7 Drive a device by content, never by coordinate
+
+A screenshot is a photograph of a moment. A tap is an event in a later one,
+and nothing guarantees the two describe the same screen.
+
+**What this cost.** Removing a test feed from the Categories screen: screenshot,
+read the row position, tap it. Between the two the list collapsed by one row,
+so the identical coordinates landed on the row below and opened **"Delete
+category — Travelling?"** — a real category, with real feeds, on David's own
+device. It was cancelled, and only because the confirmation happened to be
+read before it was dismissed. Nothing about the tap was wrong except that the
+screen had moved under it.
+
+**The rule.** Find the element, or re-screenshot in the same breath as the
+action and verify the row you are about to touch is still the row you meant.
+Never carry a coordinate across an app state change — a delete, an insert, a
+collapse, a refresh, a keyboard appearing. Coordinates are only safe within a
+screen that has demonstrably not changed since it was read.
+
+**And the destructive case has its own floor:** before any tap that can delete,
+overwrite or send, re-read the screen immediately beforehand and confirm the
+target by its text. A confirmation dialog is not the safety net — it is the
+last one, and it works by being read, which is exactly what a fast sequence of
+coordinate taps does not do.
+
+This is the device-facing twin of 10.1. There, a mutation was assumed to have
+landed and had not; here, a screen is assumed to have held still and did not.
+Both are the same mistake: acting on a fact that was true when it was read and
+is not being checked at the moment it is used.
+
+
+---
+
+## 11. Pass 8: the reading surfaces
+
+Deliberately small. Most of these took their ink roles in passes 2 and 4 and
+Design never mocked them in detail, so this is one type change, verification,
+and two consistency items.
+
+### 11.1 The clean view reads in Literata now
+
+Body, quotes, list items and list markers at **17 / 1.62**; h3 off the sans
+`titleMedium` onto the reading face at 17 / w700; captions unchanged. h1 and h2
+were already serif and did not move.
+
+**The family is taken from `titleLarge`, not from `kSerifFamily`.** Both themes
+put their reading serif there — Literata in Quiet Ink, PT Serif in Newspaper —
+while `bodyLarge` is the *operating* face in Quiet Ink. Hardcoding the constant
+would have put Literata into Newspaper, which has its own type system.
+
+Worth knowing for anyone touching headings: **Newspaper has two serifs.**
+Playfair Display for display and headline, PT Serif for title and body. A test
+asserting h1 matches the reading face would demand Newspaper give that up; the
+assertions are each against their own theme entry instead.
+
+`kCleanBodySize` and `kCleanBodyHeight` live in `app_theme.dart`, and
+`clean_view_type_test.dart` pins 1.62 with an explicit `isNot(1.6)` — it is a
+value that looks like a rounding artefact and is not one.
+
+### 11.2 Literata's subset, and what can fall outside it
+
+The subset is documented in `pubspec.yaml`: **Latin-1, Latin Extended-A and
+Extended-B, general punctuation, currency, plus U+2122 and U+2212**. No
+Cyrillic, Greek, Vietnamese, CJK, Arabic, Hebrew, or emoji.
+
+**Yes, content can reach it outside that range, and the path is the obvious
+one:** the clean view renders article bodies from whatever RSS feed the user
+adds, and nothing restricts a feed's language. Emoji in body text and headlines
+are ordinary in feeds. This is not a hypothetical about an unusual locale — it
+is any user who subscribes to a Russian, Greek or Japanese source.
+
+What happens is fallback rather than tofu: Flutter consults the platform's
+fallback fonts for a codepoint the family does not carry. So the failure is not
+missing glyphs, it is **a reading view that silently stops being Literata** for
+those feeds, with a line height tuned for one face applied to another. Smaller
+than tofu, and real.
+
+**Not verified on device in this pass.** The fallback claim is Flutter's
+documented behaviour; confirming it needs a non-Latin article in a real feed,
+and `flutter_test` substitutes its own font so the host suite cannot see it.
+Worth ten seconds with a Russian feed before the ads pass.
+
+### 11.3 Verification results
+
+| surface / state | verdict |
+|---|---|
+| Reader app bar: `surface`, `titleSmall`, `onSurfaceVariant` attribution | **correct** |
+| Reader action ink (close, open-in-browser) | **correct** — inherits, no overrides |
+| Reader bookmark glyph, filled, in `secondary` | **does not exist**, see 7.4 |
+| Summary: reading / writing status line | **correct**, `onSurfaceMuted` |
+| Summary: the result | **correct** |
+| Summary: unavailable | **correct**, muted glyph + variant message |
+| Summary: show / hide details | **correct**, `onSurfaceVariant` |
+| Summary: copy | **correct** |
+| Summary: on-device disclaimer | **correct**, muted + italic |
+| Summary: teaser-only | **correct** by reading; shares the disclaimer's style |
+| Summary: failed (cloud) | **unreachable from a test** |
+| Summary: cloud disclaimer | **unreachable from a test** |
+| Clean view: offered / active / unavailable / extracting | **correct**, covered by `article_detail_pane_clean_mode_test.dart` |
+
+The two unreachable states both hang off `useCloud`, which the sheet resolves
+internally from the summary tier and exposes no seam for. Adding one would be a
+production change made for a test's convenience, which this project has turned
+down before. Both were verified by reading: each is the other half of a ternary
+whose on-device branch is now pinned, so a drift would have to be written
+deliberately into a line whose twin fails.
+
+**One finding worth acting on eventually.**
+`article_summary_sheet.dart:449` reads
+`final secondary = theme.colorScheme.onSurfaceVariant;` — a local named
+`secondary` that is **not** `colorScheme.secondary`, in an app where 1.6
+reserves that role for unread and saved. The value is correct; the name is a
+trap, and "fixing" it to `theme.colorScheme.secondary` would turn the control
+orange while looking like a tidy-up. Not renamed, because this was a
+verification pass — but the resolved colour is now pinned, so that edit fails
+rather than ships.
+
+### 11.4 Empty states: the structure, and the one exclusion
+
+The split was not 2—2, it was three shapes:
+
+| site | copy | was | now |
+|---|---|---|---|
+| Categories, no feeds | one piece | `onSurfaceVariant` | unchanged |
+| Feed, caught up | one piece | `onSurfaceVariant` | unchanged |
+| Bookmarks | one piece | `onSurfaceMuted` | **`onSurfaceVariant`** |
+| Alerts | one piece, no glyph | `onSurfaceMuted` | **`onSurfaceVariant`** + glyph |
+| Keyword alerts panel | two pieces | muted + muted | **variant** + muted |
+| Keyword blocklist panel | two pieces | variant + muted | unchanged |
+
+Note the newline trap: Bookmarks and Alerts each render **two lines** from one
+string. The rule is about pieces of copy, not rendered lines — you cannot give
+two roles to halves of one `Text` without splitting it, which would be a
+structural change nobody asked for.
+
+**`empty_state.dart` is exempt from the shape, not the rule.** It is the
+first-run state: an 80dp brand mark, a `headlineSmall` w700 heading and a
+button. Its one line of body copy is already `onSurfaceVariant`. Forcing the
+rule onto it would demote its heading to a caption.
+
+**The tablet's idle reading pane is exempt outright, and a test said so before
+I did.** It was swept into the rule and reverted when `ink_roles_test.dart`
+failed in both brightnesses. The rule rests on the copy being the only content
+on the screen; nothing is empty there — the middle column is full of articles
+and the right-hand one is waiting to be told which. Pass 2 gave it
+`onSurfaceMuted` deliberately. The exclusion is now asserted in
+`empty_state_roles_test.dart` rather than merely absent.
+
+### 11.5 Alerts' glyph matched a pattern; it was not invented
+
+Five of the six empty states already pair `flashColors.illustration` with their
+copy, and three use the same three numbers: **48dp glyph, 12dp gap, then the
+text**. Alerts takes the destination's own bell,
+`Icons.notifications_none_rounded`, at exactly those numbers.
+
+It is the same glyph the keyword alerts panel's empty state uses. Both are about
+alerts and both are bells; flagged rather than treated as a collision.
+
+### 11.6 Notification channels, for pass 9
+
+**Two channels, and they are already separate.**
+
+| id | name | importance | declared in |
+|---|---|---|---|
+| `flash_keyword_alerts` | Keyword alerts | `Importance.defaultImportance` (3) | `refresh_service.dart:21-22`, posted at `:177` |
+| `flash_unread_count` | Unread count | `Importance.low` (2) | `unread_badge_service.dart:11-12`, posted at `:216` |
+
+**They do not share one, and the unread count is already IMPORTANCE_LOW.** So
+**B8 is already done** — there is nothing to migrate. Verified live on the
+Lenovo: `NotificationChannel{mId='flash_unread_count', mName=Unread count,
+mImportance=2, mOriginalImp=2, mUserLockedFields=0, mDeleted=false}`.
+
+Three facts pass 9 should hold onto:
+
+1. **Channels are created lazily, on the first `show()` for that id** — nothing
+   calls `createNotificationChannel` explicitly. The Lenovo has
+   `flash_unread_count` and **not** `flash_keyword_alerts`, because no keyword
+   alert has ever fired on it. So the 25 testers do not have a uniform set:
+   each has whichever channels their own usage has triggered.
+2. **`mUserLockedFields=0`** on the one channel observed, meaning nothing had
+   been customised there. That is one device and does not generalise.
+3. **If a migration ever is needed**, it is a new id plus
+   `deleteNotificationChannel` on the old one, and the user-visible cost is
+   that anyone who had customised the old channel — sound, importance, dot,
+   lock-screen visibility — silently loses all of it and gets the app's
+   defaults, with no notice and nothing to restore from. That is the reason to
+   avoid needing one, and the reason this was worth checking before writing the
+   pass rather than after.
+
+### 11.7 The reader action bar — a recommendation, REVERSED on new
+### information
+
+> **Read this section knowing the layout it judges is not the one that was
+> built.** It is kept in full, and kept accurate, because it is still the
+> best case against four visible buttons and somebody should be able to
+> find it.
+>
+> The recommendation below chose between section 4's two options, and
+> **both of them keep the title line**. David chose a third afterwards:
+> the title goes entirely and the bar carries the source alone. Under
+> that, the central premise — 160dp leaves roughly twenty characters
+> of headline — simply disappears. There is no title to truncate, the
+> source fits 160dp comfortably, and four visible buttons cost nothing.
+>
+> The secondary point survives and was **overruled deliberately**:
+> open-in-browser is indeed considered rather than reflexive, but the
+> moment it is needed is the moment a page has failed to render and the
+> reader is already annoyed. Making the escape hatch two taps deep to save
+> space that is no longer scarce is the wrong trade.
+>
+> **Reversed on new information, not rejected.** The reasoning was sound
+> about the question it was asked; the question changed.
+
+Not started, not threaded. Handoff 4's proposal stays out.
+
+**I would take the overflow.** Four 48dp actions leave the title 160dp at
+360dp, roughly twenty characters of a headline — enough to read "Microsoft
+proposes limits o" and stop, on the one surface where knowing which article you
+are in matters most. Moving open-in-browser into an overflow buys back 48dp to
+208dp, and it is the right action to demote on the evidence already in the app:
+the reader opens in the embedded WebView by default, clean mode is one tap from
+the FAB, and open-in-browser is the escape hatch for the minority of pages that
+do not render — a considered act rather than a reflex, which is what an overflow
+is for. The three that stay, bookmark, share and close, are all one-tap
+reflexes. The counter-argument is real and worth holding a phone for: an
+overflow is two taps and a menu for something some readers use constantly, and
+160dp of title is only cramped if headlines are long, which on this feed list
+they mostly are.
+
+---
+
+## 12. Pass 8b: the reader's actions, and sharing a summary
+
+### 12.1 The bar: one line of text, four buttons
+
+`[close] [source] [open in browser] [bookmark] [share]`. The article title line
+is gone; the attribution is promoted from a `labelSmall` second line to
+`titleSmall` as the only one. It still carries publisher **and** date, which
+Play policy requires of a news app.
+
+**56dp before, 56dp after** — measured in both layouts before anything was
+built. The four `IconButton`s set a 48dp floor and the 4dp vertical padding
+takes it to 56, which is exactly what the two-line column already measured.
+That is a coincidence of Material's defaults rather than a guarantee, which is
+why `reader_action_bar_test.dart` pins the literal in all three themes plus the
+no-bookmark and no-attribution layouts. A bar that shrank would resize the
+platform view mid-read on the tablet, reflow the page and lose the scroll
+position.
+
+**The attribution can be empty and now falls back to the host.** `feedTitle`
+and `publishedAt` are both nullable on `Article`, so the join really can come
+out empty — and with the title gone that would leave four buttons and nothing
+saying where you are. The host is stripped of `www.`, which is four characters
+of nothing in a bar this narrow, and is what Chrome shows in the same position.
+Only a *wholly* empty join reaches it: an article with a date and no publisher
+still shows the date.
+
+**Long source names keep the ellipsis.** The longest in the starter pack is
+`The New York Times (World)` at 26 characters, which fits at 360dp. A publisher
+long enough to truncate loses the tail of its own name rather than the date,
+because the date is joined after it.
+
+### 12.2 The bookmark is owned by the pane, not threaded
+
+`openArticle()` is a free function with **two positional parameters and no
+optionals**, and it is one of five call sites. Threading a callback would mean
+editing all five plus both `ArticleDetailPane` constructions — and two of the
+five, the search screen and the keyword group panel, render plain `ListTile`s
+with no saved-state code at all, so each would have to invent a bookmark
+implementation purely to pass one down.
+
+The pane already constructs `SettingsRepository()` inline twice and calls
+`launchUrl` directly, so owning an `ArticleRepository` is the established shape
+here rather than a new one. `ArticleCard` taking `onBookmark` is the
+counter-precedent and it is a different case: the card lives inside a screen
+that already owns the list and its repository.
+
+**It listens to `SavedStateNotifier`**, because a bookmark that lies about
+state is worse than no bookmark: the same article can be unsaved from the
+card's rail or the radial menu while the reader sits open over them. Three
+things about that notifier are load-bearing and are written into the code:
+
+- The payload is read **synchronously** inside the listener. The notifier holds
+  only the last change and the next broadcast overwrites it, so deferring
+  across an await would act on a different article.
+- Every listener does its **own** id comparison; the notifier does no
+  filtering. Without it this pane would repaint whenever any row anywhere was
+  bookmarked.
+- The pane's own write broadcasts too, and the same comparison is what makes
+  that self-cancelling.
+
+**No bookmark button at all when the article has no id.** An article opened
+from the Alerts tab is built by `AlertEntry.toArticle()` and carries a null id
+on purpose — identity there is (feedId, guid), not an article id. Nothing can
+be written without one, so the button is **absent rather than present and
+inert**: a control that does nothing when pressed is a worse answer than one
+that is not offered. `feed_screen._toggleSaved` guards the same way.
+
+### 12.3 Sharing a summary, and copy changing with it
+
+A share button beside copy, same 18px glyph in a standard `IconButton`, so it
+inherits the same 48dp target and raises no geometry question.
+
+Both build **one payload**, through `buildSummaryShareText` in
+`summary_formatter.dart`:
+
+```
+<article title>
+
+<summary>
+
+<AI disclaimer>
+<url>
+```
+
+Subject is the article title, matching `shareArticle`.
+
+**Copy changed, and that is the point rather than a side effect.** It used to
+put the bare summary on the clipboard — no title, no link, no sign a machine
+wrote it — so pasted into a chat it read as the publisher's own words. If
+share carried attribution and copy did not, copy would become the button people
+use to strip it, and the inconsistency would be the bug rather than the
+feature. `summary_share_payload_test.dart` pins the byte-equality and, per the
+standing rule in 10.2, also asserts the two **call sites** share one builder
+rather than each calling it.
+
+Neither the link nor the disclaimer is decoration. Flash's supply depends on
+publishers continuing to offer feeds, and an app that circulates their content
+with no traffic back is the thing publishers close feeds over. And these
+summaries are sometimes wrong: without the label the mistake is attributed to
+the publisher rather than to the app that generated it.
+
+**Both buttons stay.** Android's share sheet offers copy-to-clipboard, so there
+is mild redundancy — but copy is one tap and share-then-pick-copy is two, and
+this app already accepts two routes to one action on the bookmark. A decision,
+not an oversight.
+
+### 12.4 No new ARB keys, and why the existing disclaimers travel
+
+`aiSummaryDisclaimer` and `aiSummaryDisclaimerCloud` both work standing alone
+in a message, so this pass added **zero strings**. Checked in all five locales:
+
+| | en |
+|---|---|
+| on-device | "Generated on-device by Gemini Nano. May not be fully accurate." |
+| cloud | "Generated by Gemini in the cloud. May not be fully accurate." |
+
+**Neither uses deixis.** No "this", no "above", no "the summary below— " so
+neither needs the UI around it to make sense. Each names its generator, which
+is the whole job: it puts the mistake on an AI rather than on the publisher.
+Pinned in the payload test, so a future edit that adds "the summary above" to
+either string fails there rather than shipping a sentence that points at
+nothing.
+
+**One limitation, stated rather than fixed:** neither names Flash, so a
+recipient cannot tell which app produced the summary. That is not required for
+the disclaimer's purpose and adding it would be a new key across five locales.
+Recorded as a known gap.
+
+### 12.5 The clean view toggle is untouched, and was verified rather than
+### assumed
+
+Still a `FloatingActionButton.extended` inside `Positioned(right: 16, bottom:
+16)` in the pane's body `Stack` — **not** a `Scaffold` FAB — with a text
+label, conditional on `_cleanBlocks != null`, and nowhere near the bar.
+
+`git diff` from the commit that introduced it to HEAD shows **not one line of
+the FAB block has changed** since the day it was written. The five commits that
+have touched this file since changed imports, the attribution argument, and the
+placeholder's ink.
+
+Two details worth having, since neither is what the shorthand implies:
+
+- The condition is `_cleanBlocks != null`, not "a clean version exists". Three
+  distinct causes make the toggle absent and look identical on screen: the
+  setting is off, extraction is in flight, and extraction failed.
+- "Does not move" is true of its **anchor**, not its width. An extended FAB
+  sizes to its label, and the two English labels differ in length, so the left
+  edge shifts on every toggle.
+
+`heroTag: 'clean_mode_toggle'` is load-bearing: on the tablet the middle
+column's screens and this pane share one Navigator, and 'refresh', 'search' and
+'mark_all_read' are already taken.
+
+---
+
+## 13. Pass 8c: the bar's second line, and two things found on the way
+
+### 13.1 The date has its own line again
+
+Source on line 1 at `titleSmall` in `onSurface`; date on line 2 at
+`labelSmall` in `onSurfaceMuted`.
+
+**Not a reversal of dropping the article title.** The title went because 160dp
+of *headline* is a stub; 160dp of *source name* is a whole name. The second
+line was never the thing short of room — joining the two into
+`publisher · date` is what made the date the half that got cut, and it got cut
+on every article rather than on long ones: `Sky Sports · Sep 15, 2026 9:44 ...`
+is a ten-character publisher already overflowing.
+
+**Height is still 56dp**, pinned in all three themes plus the no-bookmark and
+no-attribution layouts. The four `IconButton`s set the 48dp floor and the 4dp
+padding takes it to 56, which is what the column measured with a title and a
+date, then with a source alone, and now with a source and a date.
+
+One behaviour changed with the split and is worth recording, because a test
+changed with it: while the two were joined, an article with a date and **no
+publisher** showed the date alone and never reached the host fallback. Split,
+line 1 is the source slot, so that article now shows its host there and keeps
+the date below — which is more useful than a date floating on its own.
+
+### 13.2 English is the longest date, not German
+
+The assumption going in was that German dates are longest. They are not, and
+the reason is worth keeping:
+
+| locale | worst case | chars |
+|---|---|---|
+| **en** | `Sep 25, 2026 10:48 PM` | **21** |
+| de | `25. Sept. 2026 22:48` | 20 |
+| fr | `25 sept. 2026 22:48` | 19 |
+| es | `25 sept 2026 22:48` | 18 |
+| it | `25 set 2026 22:48` | 17 |
+
+German has the longer month names and loses it all again on the clock: a
+24-hour time costs nothing where English pays for " PM". The test scans all
+five rather than hardcoding a winner, so the next locale added cannot quietly
+become the longest.
+
+### 13.3 What truncates, and what survives
+
+The longest starter-pack source is `The New York Times (World)` at 26
+characters, and it **does** truncate at 360dp. What survives is the masthead:
+the assertion measures `The New York Times` against the width the bar actually
+gives the column, so the test says what is kept rather than that something was.
+
+Worth knowing about how those measurements are read, because it is easy to
+claim more than they support. `flutter_test` substitutes a font whose every
+glyph is a full em, so text measures roughly twice as wide there as in
+Instrument Sans. That cuts one way only:
+
+- *fits under the stub* implies *fits on a device*. Sound, and every assertion
+  the group relies on has that shape.
+- *overflows under the stub* implies nothing about a device. The one assertion
+  of that shape exists solely to prove the ellipsis path is exercised. The
+  evidence that a real bar truncates is a screenshot from the M51.
+
+### 13.4 An Alerts article CAN be bookmarked from the radial menu, and cannot
+### from the reader
+
+Reported, not fixed.
+
+**The radial menu can.** `alerts_screen.dart:236` does not touch the snapshot's
+id at all:
+
+```dart
+final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
+if (row?.id == null) { ...alertsArticleGone banner...; return; }
+await _articleRepo.setSaved(row!.id!, saved: !row.isSaved);
+```
+
+It resolves (feedId, guid) to the real `articles` row, writes against that id,
+and shows `alertsArticleGone` when the row has been retired. Exactly the
+tolerant lookup `alert_entry.dart:55-63` prescribes.
+
+**The reader cannot.** `article_detail_pane` checks `article.id == null`
+directly and omits the button. Correct as far as it goes — absent beats inert
+— but it is the *snapshot's* id, and the snapshot never has one.
+
+**So the two disagree, and the reader is the poorer of the two.** The fix is
+known and is the one Alerts already uses: resolve by (feedId, guid) rather than
+trusting `article.id`, and fall back to hiding the button only when the lookup
+comes back empty. That is a behaviour change with a database read in it, so it
+is logged rather than slipped into a layout pass.
+
+**A second finding inside the first.** `AlertEntry.toArticle()`
+(`alert_entry.dart:64-80`) sets `id: null` deliberately and **never sets
+`isSaved` at all**, so it defaults to `false`. The radial menu takes its glyph
+from `widget.article.isSaved`, which means an already-saved article opened from
+Alerts shows an *unsaved* bookmark. The write is still right — `_toggleSaved`
+reads `row.isSaved` from the real row — so the glyph lies while the action
+behaves. Same class as the reader bookmark this pass was built around: a
+control that misreports state.
+
+### 13.5 For Design: two timestamp formats, neither chosen
+
+Log only, nothing done.
+
+The feed list shows **relative** timestamps — "2h ago", tabular mono, tuned so
+the meta line does not shift as they tick. The reader now shows an **absolute**
+date on its own line, "Sep 15, 2026 9:44 PM".
+
+Both are defensible and the split even has a rationale available: a list is
+scanned, where "2h ago" answers the question being asked, and a reader is
+committed, where the exact time is what you want if you are deciding whether a
+story is stale. But **nobody chose it.** The relative format arrived with the
+feed row and the absolute one with the reader's Play-policy attribution, and
+they have never been looked at together.
+
+Flagging rather than resolving, because picking one is a product decision and
+changing either has consequences the other does not: the relative format is
+load-bearing for the feed's layout stability, and the absolute one is what
+satisfies the "show a publication date" requirement.
+
+---
+
+## 14. Pass 9: alerts, notifications, the widget
+
+### 14.1 The Alerts glyph lied, and the lie destroyed bookmarks
+
+A live data-loss bug predating this redesign, shipped to 25 testers.
+
+`AlertEntry.toArticle()` never set `isSaved`, so it defaulted to `false` and
+every card in Alerts drew an **unsaved** bookmark. `_toggleSaved` did not read
+the snapshot: it resolved the real `articles` row by (feedId, guid) and flipped
+**that**. A user who had saved an article, met it again in Alerts and tapped
+what looked like "save this" ran a toggle that found the row saved and unsaved
+it. The bookmark was gone and nothing said so.
+
+**The invariant: the glyph and the write read the same source, and that source
+is the real row.** A snapshot cannot know its own saved state — `is_saved` is a
+column on `articles`, which is exactly what a snapshot does not have.
+
+**Resolved once for the visible set, not per row.**
+`ArticleRepository.savedArticleKeys()` is one query returning the
+(feedId, guid) of every saved article; the `itemBuilder` does a set lookup.
+Deliberately not a `WHERE ... IN` over the visible guids: SQLite caps bound
+variables at 999 and an alerts list can pass that, while saved articles are the
+user's own bookmarks and are inherently few.
+
+**Query count, measured rather than reasoned.** The test wraps the factory in
+`SqfliteDatabaseFactoryLogger` and tallies every statement: **two for the whole
+screen** — the entries and the saved keys — identical for 1 entry and for 12.
+The build itself issues none.
+
+Alerts also listens to `SavedStateNotifier` now, so saving from the reader
+opened out of that list updates the list behind it. It re-reads the one query
+rather than translating an `articleId` it has no id to compare against.
+
+### 14.2 The reader had the mirror bug
+
+It hid the bookmark whenever `article.id` was null — which is every article
+opened from the Alerts tab — while the Alerts list bookmarked the same article
+successfully. **"Absent beats inert" was the right principle on a wrong
+premise:** the action was available and the id was merely somewhere else.
+
+The pane resolves by (feedId, guid) on open, one indexed read, and only when
+the id is missing. `isSaved` is taken from the resolved row rather than the
+snapshot, which matters because the pane can also be reached from a
+notification, where nothing resolved anything.
+
+Absence now means the row genuinely is not there, which is still right.
+
+One consequence worth knowing: the button arrives a frame late for an
+Alerts-sourced article, because the lookup is async. Drawn optimistically and
+withdrawn on failure would be worse — a button that vanishes is a worse answer
+than one that arrives.
+
+### 14.3 B7: the group summary
+
+Shared `groupKey` plus a summary carrying `alertNotificationSummary`, the key
+pass 6 added and correctly called unreachable.
+
+**Per-notification ids stay minted from the sorted keyword set.** That is the
+fix this must not undo — it is what stops two different keyword sets collapsing
+into each other. The summary takes a fixed id of its own,
+`kAlertSummaryNotificationId = 3`, outside the minted range: 1 is the unread
+badge and 2 was the old hardcoded keyword id that every alert collided on, so
+leaving it empty means an upgrade cannot land a summary on a stale alert.
+
+**The channel is created explicitly at the summary, and that is the ordering
+hazard from pass 8 recon closed.** `flutter_local_notifications` creates a
+channel lazily, on the first `show()` naming it — verified on the Lenovo, which
+holds `flash_unread_count` and **not** `flash_keyword_alerts`, because no
+keyword alert has ever fired there. A summary inheriting the channel's
+existence from a child would depend on a child having fired on that device,
+ever. Creating a channel that already exists is a no-op, and an existing
+channel's importance cannot be raised in code, so this cannot disturb a channel
+a user has tuned.
+
+**Nothing is summarised below two alerts.** Android hides a single-child
+summary on some versions and shows a redundant card on others; either way one
+alert plus "1 keyword alert" is two notifications for one event.
+
+### 14.4 B8 is CLOSED, and was already done
+
+`flash_keyword_alerts` at `Importance.defaultImportance` (3) and
+`flash_unread_count` at `Importance.low` (2), already separate, verified live
+on the Lenovo in pass 8 (`mImportance=2`, `mOriginalImp=2`,
+`mUserLockedFields=0`). **There is nothing to migrate**, which matters because
+a channel's importance cannot be changed in code once it exists — a migration
+would mean a new id plus deleting the old one, and every tester who had tuned
+the old channel would silently lose it.
+
+Pinned in `notification_accent_and_summary_test.dart` so B8 stops reading as
+outstanding work.
+
+### 14.5 §1.3's accent has a consumer, and §5.1 is CLOSED
+
+`Notification.color` is set to `#15868E` on both notifications, from one
+constant. `ic_stat_flash.xml` ships unchanged.
+
+**Measured independently and it agrees with 1.3 to the digit:**
+
+| surface | ratio |
+|---|---|
+| `#FFFFFF` light shade | **4.35:1** |
+| `#1B1B1B` dark shade | **3.96:1** |
+| `#1F2223` shade card | **3.69:1** |
+
+`#12787F` measures 5.23 / 3.30 / **3.06**, which confirms the rejection: it
+buys 0.88 on a light shade and gives back 0.66 and 0.63 on the two dark ones,
+landing at a 0.06 margin against a surface nobody controls.
+
+**5.1, closed.** `minSdkVersion` is 24, so the API<=30 window where
+`Notification.color` also tinted the ~12sp app-name label **is live**, and this
+constant gives 3.96 and 3.69 there against a 4.5 bar. **The answer is that old
+shades get a slightly quiet app name, not that the token changes.** The tinted
+small icon itself is a graphical object at 3:1, which all three clear. Both
+facts are pinned, including the shortfall, so the 3:1 test cannot be misread as
+a clean pass.
+
+### 14.6 B9: the clamp and the autosize only work together
+
+The clamp moves from **99 to 999**. The 99 was borrowed from `kMaxBadgeCount`,
+which caps a small circle the OS draws over an icon; this is a TextView we draw
+in a 1x1 cell and three digits fit. At 99 it told a reader with 400 unread the
+same thing it told one with 100.
+
+`autoSizeTextType="uniform"`, 18sp to 28sp. **Without it the clamp alone
+ellipsises** — "999+" at a fixed 28sp overflows 64dp of usable width, so the
+widget would read "99" while meaning "999+", which is worse than either number.
+
+**Not in conflict with 1.5.** 1.5 says the count stays 28sp bold and no layout
+edit is needed *for the colour change*. Autosize makes 28 a maximum rather than
+a fixed size, so one to three digits still render at exactly 28sp. Both are
+asserted in the same test so they cannot later read as contradicting.
+
+The zero state stays as shipped: `android:text="0"` is the widget-picker
+preview and the pre-first-update value, a real default rather than placeholder
+text.
+
+### 14.7 B10 is a decision. Do not "fix" it.
+
+`RemoteViews` resolves `values-night/` against the **system** uiMode, so a
+reader running Flash in Dark on a Light OS gets a light tile.
+
+That is correct. The tile lives on the launcher and should match the launcher,
+and it is the same reason someone in Newspaper mode does not get newsprint on
+their wallpaper. **Do not add app-theme plumbing to the widget.** Recorded in
+the `values-night/` file itself, where the next person to wonder will be.
+
+### 14.8 What the host suite proves about the widget, and what it does not
+
+Stated because it would otherwise be assumed.
+
+**Real:** the four colour values in both directories, the autosize attributes
+and their bounds, the clamp threshold and its "+" form, that the layout reads
+resources rather than literals, that the radius is untouched at 16dp.
+
+**Device only:** whether "999+" actually fits and at what size it settles,
+whether the tile reads correctly beside the app on a home screen, and whether
+`values-night/` resolves the way 14.7 describes. All three are on the morning
+list, and `widget_resources_test.dart` carries a test asserting it contains no
+`testWidgets` — so a future rendering assertion has to argue with that first.
+
+---
+
+## 15. Exit inventory
+
+**The redesign ends here.** Ten passes, from the palette to the widget. The
+work after this is advertising and the premium tier, which start somewhere else
+and will not have this document open.
+
+So this section answers one question for someone who was not here: **what is
+still open, and why was it left.** Nothing below is a bug list. Several of
+these are decisions that look like omissions, and the point of writing them
+down is that a decision without its reasoning gets overturned by the next
+person who has the same idea.
+
+---
+
+### 15.1 Parked deliberately
+
+Each with the reason and, where it is known, who decided.
+
+**The in-feed ad row (B6), and the sealed-type work behind it.** Parked until
+after launch, David's call. It is not a widget with a list around it: 7.3b
+found that `FeedRow` is a `sealed class` — in `lib/utils/day_grouping.dart`,
+not in the screen — with two subtypes and **four unguarded `as ArticleRow`
+casts** in `feed_screen.dart`. (Line numbers are deliberately not given; they
+moved once during pass 10 alone. Grep the cast.) A third subtype does not
+mis-measure, it throws a `TypeError` in the
+scroll listener on every frame of a scroll. Three prerequisites, in order:
+open the sealed type so the analyser enumerates the work, give `_rowHeight` a
+constant branch for the ad's height, and `continue` past it in `_onScroll` as
+headers already do. A header is 36dp and the ad is 306, so an off-by-one that
+is invisible today becomes a third of a screen.
+
+**The premium tier.** Not started, not designed, not in this document.
+
+**The two Quiet Ink light contrast exceptions.** `onSurfaceMuted` at
+**3.15:1** and `onSurfaceRead` at **3.99:1** on white, both under the 4.5:1
+body-text bar. Design's authored values across the whole app, and a deliberate
+recession: a timestamp and a read headline are meant to fall back. Pinned to
+their measured ratios in `flash_colors_resolution_test.dart` rather than
+excluded, so quieter is a regression and louder means somebody changed an
+authored decision without recording it.
+
+> **One gap in this entry.** The pass 10 brief refers to "David's November
+> framing" of these two. No such note appears anywhere in the work this
+> document records, so it cannot be quoted here. If it exists, it belongs in
+> this entry and should be pasted in — what is written above is the framing as
+> it was actually recorded during the passes, which may be less than what
+> David has said elsewhere.
+
+**Literata carries no Cyrillic, Greek, CJK, Arabic, Hebrew or emoji.** The
+subset is Latin-1, Latin Extended-A and B, general punctuation and currency.
+The clean view renders article bodies from whatever feed a user adds, and
+nothing restricts a feed's language. It falls back rather than drawing tofu, so
+the failure is a reading view that **silently stops being Literata** for a
+Russian or Japanese feed, with a line height tuned for one face applied to
+another. **Never verified on a device** — the host suite substitutes its own
+font and is structurally unable to see font fallback.
+
+**The reader shows an absolute date; the feed shows a relative one.** "2h ago"
+in the list, "Sep 15, 2026 12:37 PM" in the reader. Both defensible — a list
+is scanned, a reader is committed — and nobody chose it. The relative format is
+load-bearing for the feed's layout stability; the absolute one is what
+satisfies the Play requirement to show a publication date. Logged for Design
+in 13.5, not resolved.
+
+**Newspaper renders Quiet Ink's category hues.** Parked in 6.8 awaiting values
+from Design. Nothing has arrived.
+
+**The "Shared from Flash" line on shared summaries.** David has not ruled. One
+ARB key across five locales when he does, so it was not added speculatively.
+
+**The ad-privacy row's real strings.** `kAdPrivacyRowLabelEn` and
+`kAdPrivacyRowSubtitleEn` are English-only constants in `settings_screen.dart`,
+marked for deletion in the ads pass. The row is `enabled: false` with a
+documented no-op handler. It shipped early only because Settings was open and
+would not be again before that work.
+
+---
+
+### 15.2 Found and not fixed
+
+Reported during a pass rather than changed, with the reason it was out of
+scope. Where a reason has since expired, it says so.
+
+> **~~The unread notification cannot dismiss itself in a release build.~~
+> FIXED.** Recorded here for one pass only. It was found on the Pixel during
+> pass 10's install, judged out of scope for a design pass, and then fixed on
+> its own in the release-build pass that followed. **Section 16 is the entry
+> that matters** — including the part where the obvious one-line fix turned
+> out to be a no-op that was already applied.
+
+**Alerts snapshots have no saved state of their own, by design.** Fixed in
+pass 9 for the glyph, but the underlying shape remains: `AlertEntry` mirrors an
+article and `is_saved` lives on `articles`. Every consumer must resolve
+(feedId, guid). Two already do; a third would have to.
+
+**`unreadCountNotification` in French hardcodes "1" in its `one` branch.** CLDR
+routes 0 and 1 both through `one` in French, so it would render "1 article non
+lu" at a count of zero. **The only thing preventing it is
+`unread_badge_service.dart`'s `safe == 0` early return**, which exists to
+dismiss a badge and not to protect a translation. Reason it was left: pass 6
+was a strings pass and this is a live-code guard. **That reason has expired** —
+it is a one-word ARB edit and should be done in the next pass that opens those
+files.
+
+**`EmptyState`'s brand mark is `primary` at 80dp**, where every other
+empty-state glyph is `illustration`. Arguably correct — it is the app's mark,
+not decoration — and arguably the last unswept one. Nobody has ruled.
+
+**Three wash alphas disagree.** `feeds_screen.dart` washes the folder header's
+hover at `primary` 0.08 and the drop slot at `accent` 0.12, while
+`article_card.dart` (both swipe backgrounds) and `radial_menu.dart` wash at
+0.15. Picking one is a value decision and `FlashColors` has no wash role to
+swap to, so it would mean adding one.
+
+**Disabled states do not use `inert` anywhere.** The OPML and backup buttons,
+the add-feed search field and chips, and the starter-pack checkboxes all fall
+to Flutter's framework default when disabled. 6.5's "one role, four sites
+close" refers to four different sites, which are closed.
+
+**Quick Settings expresses a disabled block as `Opacity(0.4)`** around an
+`IgnorePointer` when Newspaper mode is on — a disabled state written as a
+filter rather than as a role. Unpicking it is a component change.
+
+**Two hardcoded `TextStyle`s survive**: the onboarding CTA's label (16/w600)
+and `feed_card.dart`'s monogram (16). Both are sizes rather than colours, and
+both were outside a colour sweep.
+
+**`feed_card.dart`'s unread count is `primary`.** Proposed as `secondary` and
+**rejected on measurement**: Quiet Ink light `secondary` is 4.12:1 on white for
+an 11px label where `primary` is 6.34:1. A light-mode regression, and the only
+theme it would change.
+
+**`manualOnly` has the value "Never".** Key/value drift, not user-visible.
+Left deliberately.
+
+**The two summary states that cannot be reached from a host test.**
+`aiSummaryFailed` and `aiSummaryDisclaimerCloud` both hang off `useCloud`,
+which the sheet resolves internally with no seam. Adding one would be a
+production change made for a test's convenience. Verified by reading; each is
+the other half of a ternary whose on-device branch is pinned.
+
+**The widget's rendered behaviour is unverified by any test.** Whether "999+"
+fits and at what size, whether the tile reads correctly beside the app, and
+whether `values-night/` resolves as 14.7 describes. `RemoteViews` is drawn by
+the launcher in another process. `widget_resources_test.dart` carries a test
+asserting it contains no `testWidgets`, so a future rendering assertion has to
+argue with that first.
+
+---
+
+### 15.3 Decided against, so nobody relitigates it
+
+The argument, not just the verdict.
+
+**A portrait tablet layout.** Tablets are landscape-locked in Kotlin off
+`smallestScreenWidthDp`, because the wide layouts are designed across: the
+three-column reading layout needs 840dp and a tablet held upright falls back to
+the rail tier, which is a narrower, worse version of the same screens.
+**Dated, not open-ended** — see 15.4.
+
+**The widget following the app's theme (B10).** `RemoteViews` resolves
+`values-night/` against the **system** uiMode, so a reader running Flash in
+Dark on a Light OS gets a light tile. That is correct: the tile lives on the
+launcher and should match the launcher. It is the same reason someone in
+Newspaper mode does not get newsprint on their wallpaper. Recorded in the
+`values-night/` file itself, where the next person to wonder will be.
+
+**The segmented button at 40dp (1.7).** The segment paints at 48, and that is
+fill rather than a tap halo around a 40dp body — the group's render object lays
+every segment out at a uniform tight height, so Material's tap padding ends up
+inside the paint. Reaching 40 takes the **touch target** to 40 with it. This
+app has gone under 48 exactly twice, each time with an explicit sign-off and
+each time because the shape itself was the design. A number on a
+low-frequency control in Settings does not earn a third exception.
+
+**The action rail's saved fill (design 2a).** Design justified a solid
+`secondary` block by feed-scannability. That is the Bookmarks destination's
+entire job, one tap from every screen, so the feed was carrying a solid orange
+block on every saved row to duplicate a screen that already exists. The saved
+state is a glyph now. **The shape swap from outline to solid is load-bearing**
+and must not be tidied away: with the fill gone it is one of exactly two things
+separating the states.
+
+**`#12787F` as the notification accent.** Measures 5.23 / 3.30 / **3.06**
+against `#15868E`'s 4.35 / 3.96 / 3.69. It buys 0.88 on a light shade and gives
+back 0.66 and 0.63 on the two dark ones, landing at a 0.06 margin against a
+surface nobody controls — OEM skins, One UI and Material You each draw the
+shade card differently. Neither value is a palette token, so there was never a
+fidelity case for the riskier one.
+
+**Open-in-browser behind an overflow.** Recommended, then reversed on new
+information rather than rejected — see the superseded block on 11.7, which is
+kept because it is still the best case against four visible buttons.
+
+**The article title in the reader's bar.** Four buttons leave it roughly 26
+characters at 360dp, which is a stub and not a title, and the page under the
+bar carries the real headline. The bar says where you are and how to leave.
+**The date's second line is not part of this decision** and came back in 8c.
+
+**`alertsFilterAll`.** Deleted from all five locales for having no call site.
+`pass6_strings_test.dart` guards the deletion, because 2.4 still describes it
+as one of two chip bars and reads convincingly.
+
+**`saved` renamed to "Bookmarks".** Reverted. 2.2 justified it by saying the
+nav label uses that key; the nav label is `bookmarks`, a different key. The
+premise was false, and the change would have put a place-noun on two state
+labels plus a singular/plural error in four languages.
+
+---
+
+### 15.4 Load-bearing things that look arbitrary
+
+Each of these has a comment that is the only thing standing between it and a
+tidy-up.
+
+| thing | where | what breaks |
+|---|---|---|
+| `kDayHeaderHeight`, 36dp | `day_header.dart` | `_onScroll` sums row heights to decide what has passed the viewport top. A wrong constant puts every mark-read below it at the wrong offset, compounding down the list. |
+| The title's constant `w600` | `article_card.dart`, `search_screen.dart` | A lighter weight is a narrower glyph, so a title near a wrap boundary reflows and every card below slides up under the reader mid-scroll. Refused once already. |
+| Title `fontSize` 14, anchored | `article_card_read_colour_test.dart` | Same reflow, by size instead of weight. Pinned to a literal because comparing two values from one source passes when both are null. |
+| The unread dot's reserved 12dp | `article_card.dart` | The slot is laid out whether or not the dot paints. Releasing it shifts the meta line left the instant mark-read-on-scroll fires. |
+| `kNumeralTimestampStyle`'s tabular figures | `app_theme.dart` | A proportional "1" is narrower than a "4", so a ticking timestamp changes width and drags the meta line with it. No test watches a card for an hour. |
+| `kCleanBodyHeight = 1.62` | `app_theme.dart` | Looks like a rounding artefact. At 17px it is 27.5 against 27.2 — nothing on one line, a third of a line over forty. |
+| The shell's fixed `LayoutId` order | `app.dart` | It is what stops the feed, the open article and the reading pane being torn down and rebuilt on every swap. Reordering the list is the remount, even when the rendered layout looks identical. **Verified on device: swapping mid-read does not reload the page.** |
+| `heroTag: 'clean_mode_toggle'` | `article_detail_pane.dart` | On the tablet the middle column's screens and this pane share one Navigator, and 'refresh', 'search' and 'mark_all_read' are already taken. |
+| `AlertEntry.toArticle()`'s `id: null` | `alert_entry.dart` | Inventing an id points every id-keyed operation at whatever article holds that rowid now. It is also why Alerts disables swipe: `Dismissible` would key every card on `article_null`. |
+| The summary's fixed id, 3 | `refresh_service.dart` | Per-alert ids are minted from the sorted keyword set so two sets cannot evict each other. The summary is the opposite case and needs one id forever, clear of the badge at 1 and the old colliding id at 2. |
+| `safe == 0` early return | `unread_badge_service.dart` | Written to dismiss a badge; currently the only thing stopping the French plural bug shipping. See 15.2. |
+| `targetSdk = 36`, pinned | `build.gradle.kts` | Inherited from the Flutter SDK it could move in a toolchain upgrade and silently take the tablet orientation lock with it. **API 37 makes adaptive UI mandatory**, at which point a portrait tablet layout stops being optional. Dated line in `PRD-Flash.md`, recorded 2026-09-14. |
+| `savedArticleKeys()` reads every saved row | `article_repository.dart` | Deliberately not a `WHERE ... IN` over visible guids: SQLite caps bound variables at 999 and an alerts list can pass it. |
+
+**5.4 is closed**, and was closed before pass 10: `targetSdk` pinned at 36 with
+its reasoning in `build.gradle.kts`, and the dated PRD line at
+`PRD-Flash.md:480`.
+
+---
+
+### 15.5 The harness rules, in one place
+
+Written out in full in section 10. Collected here because they are the part of
+this document most likely to be useful to someone working on something else
+entirely.
+
+1. **Assert the mutation landed before running the test** (10.1). A mutation
+   test is only evidence if the mutation happened. Bought by a `str.replace`
+   that matched nothing and was read as a gate failing.
+2. **A test that constructs its own subject proves a fact about the test**
+   (10.2). If the app never builds the widget that way, the coverage is shaped
+   like coverage and covers nothing. Assert against the call sites. Bought by a
+   `showSelectedIcon` "gap" that did not exist — and **a screenshot caught it,
+   not the suite**.
+3. **The test font's measurements cut one way only** (10.3). Fits under the
+   stub implies fits on a device; overflows under the stub implies nothing.
+4. **A check that reads source must strip comments as blocks** (10.4). Three
+   assertions in one pass failed on correct code by matching their own prose.
+   A line-prefix filter does not see the middle of an XML or Kotlin block
+   comment.
+
+A fifth, implied by all four: **when a test fails, find out whether the code or
+the test is wrong before changing either.** Across these ten passes the test
+was wrong roughly as often as the code, and twice the test was right and a
+change was reverted because of it — most recently the tablet's idle reading
+pane in pass 8, which `ink_roles_test.dart` correctly refused to let become an
+empty state.
+
+---
+
+## 16. The release-build ProGuard fix
+
+Not part of the redesign. A launch blocker found on the way out of pass 10 and
+fixed on its own, because it had shipped to every tester in every build.
+
+### 16.1 What was broken
+
+`plugin.cancel()` threw on **every release build**:
+
+```
+PlatformException(error, Missing type parameter., null,
+    java.lang.RuntimeException: Missing type parameter.
+      at H2.a.<init>
+      at FlutterLocalNotificationsPlugin.loadScheduledNotifications
+      at FlutterLocalNotificationsPlugin.removeNotificationFromCache
+      at FlutterLocalNotificationsPlugin.cancelNotification
+      at FlutterLocalNotificationsPlugin.cancel)
+```
+
+`H2.a` is the R8-renamed anonymous `new TypeToken<ArrayList<NotificationDetails>>() {}`.
+
+**What it cost a reader.** The unread-count notification could not be dismissed
+by the app. Read everything and the stale count stayed; open Settings and turn
+the feature off and it *still* stayed, because `onSettingChanged(false)` runs
+the same `_clear()`. The only way out was swiping a notification the app's own
+settings could not remove. `_cleared` and `_postedCount` never updated, because
+the exception aborted `_clear` before them.
+
+**Not a regression from Quiet Ink.** The call dates to `f95bb51`. Pass 9
+touched only the *post* path, which always worked.
+
+### 16.2 The obvious fix was already applied, and was a no-op
+
+Worth its own subsection, because the first guess was wrong and the evidence
+that killed it is reproducible.
+
+`-keepattributes Signature` is the rule everyone reaches for, and it was
+**already in the build** — it arrives inside AGP's own
+`proguard-android-optimize.txt`, and sat at line 125 of
+`build/app/outputs/mapping/release/configuration.txt` in a build that crashed
+anyway. Adding it would have changed nothing and looked like a fix.
+
+The real cause is **R8 full mode**, the AGP 8 default, which this project does
+not opt out of (`android.enableR8.fullMode` is unset). Full mode honours
+`-keepattributes` only for classes **also matched by a `-keep` rule**. The
+anonymous TypeToken subclass matched none, so its signature was stripped,
+`getGenericSuperclass()` returned a raw `Class`, and Gson threw.
+
+`configuration.txt` is the artefact that settles arguments like this: it is the
+complete merged rule set R8 actually received, AAR consumer rules included.
+Before the fix it contained **zero** occurrences of `TypeToken`.
+
+### 16.3 Why this project and not every Flutter app
+
+Four things had to line up, and all four are invisible in the repo:
+
+1. **Flutter turns R8 on.** `FlutterPlugin.kt` sets `isMinifyEnabled = true`
+   and `isShrinkResources = true` for release. Nothing in
+   `android/app/build.gradle.kts` says so. (`res/raw/keep.xml` already existed
+   because this project was bitten by the *resource* half of the same
+   invisibility earlier.)
+2. **R8 full mode** is the AGP 8 default.
+3. **Gson ships its own consumer rules only from 2.11.0.**
+   `flutter_local_notifications` 18.0.1 pins **2.8.9**, so none arrive.
+4. **The plugin ships no consumer rules of its own**, in any version.
+
+The version arithmetic also explains a red herring: `Missing type parameter.`
+was removed from Gson in 2.10. It is reachable here **because 2.8.9 predates
+that too**.
+
+### 16.4 The fix
+
+`android/app/proguard-rules.pro`, a new file. **No `build.gradle.kts` change** —
+Flutter already wires that exact path:
+
+```kotlin
+if (File("${project.projectDir}/proguard-rules.pro").exists()) {
+    proguardFile("proguard-rules.pro")
+}
+```
+
+`proguardFile()` **appends**, so Flutter's defaults survive. Declaring
+`proguardFiles` in the release block instead could *replace* them — a much
+larger and quieter breakage than the one being fixed. `proguard_rules_test.dart`
+asserts nobody ever adds one.
+
+The load-bearing lines:
+
+```
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
+```
+
+`allowobfuscation,allowshrinking` is deliberate: R8 may still rename and remove
+these, only the signature is retained. Not `-keep class com.google.gson.** { *; }`.
+
+Sources, since the plugin README's link is dead: the README points at Gson's
+`examples/android-proguard-example/proguard.cfg`, **deleted upstream on
+2025-04-14 for being outdated**. The live authority is Gson's shipped
+`META-INF/proguard/gson.pro`, plus the plugin's own example app, plus
+`MaikuB/flutter_local_notifications#2223`.
+
+**Cost: 16,384 bytes.** 64,501,792 → 64,518,176. (R8 off entirely would be
+71,578,850, so shrinking is worth ~7 MB and is not the enemy here.)
+
+**This becomes unnecessary at flutter_local_notifications 19.0.0**, which bumps
+Gson to 2.12 so the rules arrive by themselves. That upgrade is breaking
+(Flutter >= 3.22, Dart >= 3.4, minSdk 21, Java 11, and an iOS `zonedSchedule`
+signature change) and was deliberately not taken here.
+
+### 16.5 The audit: what else an unconfigured shrinker was eating
+
+The real question was never the one crash. **The app had no ProGuard
+configuration at all**, so nothing had ever been kept, and this was simply the
+first stripped thing anyone noticed. All 15 Android plugins were audited for
+reflection, Gson, runtime generics and string-named resource lookup.
+
+**Nothing else is broken.** Two plugins ship their own consumer rules
+(`flutter_inappwebview_android`, `flutter_plugin_android_lifecycle`); the rest
+need none, or are covered by rules arriving from their own transitive AARs.
+
+Three are worth knowing about because they are protected *by accident*:
+
+| plugin | mechanism | why it survives |
+|---|---|---|
+| `workmanager_android` | `WorkManager` persists `BackgroundWorker`'s **class name** into its Room DB and later does `Class.forName` + 2-arg constructor. A rename would silently stop background refresh, most visibly *after an app update*. | Covered twice over, neither by us: `androidx.work`'s AAR ships `-keepnames class * extends androidx.work.ListenableWorker`, **and** Flash's own `AndroidManifest.xml` declares `<service android:name="dev.fluttercommunity.workmanager.BackgroundWorker" tools:ignore="Instantiatable"/>`, which makes AGP emit a hard `-keep`. That declaration is semantically bogus — a worker is not a Service, hence the lint suppression — but it is load-bearing for R8 **by accident**. Do not tidy it away. |
+| `firebase_*` | Reflection and runtime resource lookup | Firebase AARs ship their own consumer rules. |
+| the widget | `UnreadWidgetProvider` is named only from the manifest | Manifest-derived keep. Verified live: `dumpsys appwidget` reports the provider with `zombie=false` on both devices. |
+
+**The residual risk is that all of this is inherited.** If a dependency bump
+ever drops `androidx.work` below the version shipping `proguard.txt`, or if
+that odd `<service>` stanza is cleaned up as dead config, background refresh
+becomes a release-only silent failure with no crash to point at. One line —
+`-keep class dev.fluttercommunity.workmanager.BackgroundWorker { *; }` — would
+make it independent. **Not added**: it is outside the notification path this
+pass was scoped to, and it is a decision for David rather than a fix to slip in.
+
+### 16.6 Verified on device, because nothing else can verify it
+
+See 10.5. The suite cannot see this class of bug; the test only guards the file.
+
+Controlled before/after on the Lenovo, identical action, release builds both:
+
+| | R8 on, no rules | R8 **off** | R8 on **+ rules** |
+|---|---|---|---|
+| toggle the setting off with a notification live | **threw**, notification stayed | clean, dismissed | **clean, dismissed** |
+
+Also confirmed on the fixed build: keyword alerts post (ids 2001/2002) with
+`color=0xff15868e`; the **group summary forms** (id 3, `GROUP_SUMMARY`,
+`android.text` = "2 keyword alerts"); both channels exist at the right
+importances (`flash_keyword_alerts` 3, `flash_unread_count` 2); the
+package-replaced receiver path — which `ScheduledNotificationBootReceiver`
+walks on **every** `adb install -r` and which has no MethodChannel to turn a
+throw into a `PlatformException` — is clean on both devices; and the app
+starts and the feed loads.
+
+One thing this pass got for free: `flash_keyword_alerts` had **never existed**
+on the Lenovo, because no keyword alert had ever fired there. It was created
+correctly at the summary, which is pass 9's explicit `createNotificationChannel`
+ordering fix validated on hardware for the first time.
+
+**A caveat from the plugin's maintainer that applies to testers.** The fix is
+not retroactive. A `scheduled_notifications` blob already written by a broken
+build stays corrupt in SharedPreferences, so a device could still throw once
+until that entry is rewritten. Flash never schedules anything, so its list is
+always empty — but this is why the first launch after updating is the one to
+watch.
+
+---
+
+## 17. Pre-launch rulings
+
+Design decisions David made after the redesign closed, in the pass that
+precedes the QA. Recorded here because they change authored values and 15.3
+exists so nobody relitigates that kind of thing from memory.
+
+### 17.1 The two contrast exceptions are gone
+
+15.1 parked `onSurfaceMuted` at 3.15:1 and `onSurfaceRead` at 3.99:1 as
+deliberate recessions. **David ruled they clear the bar before launch.** Both
+darkened by the least that does it, because quietness is what these roles are
+for and overshooting satisfies the test while discarding the intent.
+
+| role | was | now |
+|---|---|---|
+| Quiet Ink light `onSurfaceMuted` | `#8A9391` 3.15:1 | `#717877` **4.51:1** |
+| Quiet Ink light `onSurfaceRead` | `#79817F` 3.99:1 | `#6A7270` **4.94:1** |
+
+`onSurfaceMuted` is the true minimum: one step lighter, `#727978`, measures
+4.45 and fails.
+
+**`onSurfaceRead` could not stop at its own minimum, and the reason is worth
+keeping.** Scaled down to the bar it lands on `#717877` — the *same colour* as
+muted. That would collapse the two roles into one grey and reintroduce exactly
+the inverted hierarchy this document's own `app_theme.dart:381` comment exists
+to prevent: a read title receding behind the timestamp beneath it. So read goes
+one visible step further. The separation is 7 units where the original was 17.
+
+Dark and Newspaper do not move, and that is now asserted rather than assumed.
+
+**Flash now has no text contrast exceptions at all.** The `known` map in
+`flash_colors_resolution_test.dart` is emptied rather than deleted — an
+exception list that no longer describes anything is a lie in the suite, but the
+machinery should stay so the next role to fall short has to be written down
+with a number and a reason instead of having the bar lowered around it. Its
+tripwire is inverted: it used to allow exactly two, it now allows none.
+
+### 17.2 Newspaper has no category colour. 6.8 is CLOSED.
+
+Parked since pass 7 waiting on Newspaper hues from Design. **They were never
+going to arrive, because the right answer was that there should not be any.**
+
+A newspaper identifies its sections by name, not by colour. Six greys standing
+in for six hues would be a colour system with the colour removed — worse than
+no colour system, because it keeps the machinery and loses the meaning.
+
+So in Newspaper a chip carries the **paper tint with ink text**, and the
+selected one inverts to **ink fill with paper text**. Every tone is one the
+theme already owns:
+
+| state | fill | text | measured |
+|---|---|---|---|
+| unselected | `surfaceContainerHighest` `#E7E7E3` | `onSurface` `#1D1D1B` | 13.62:1 |
+| selected | `onSurface` `#1D1D1B` | `surface` `#F2F1EE` | 14.95:1 |
+
+**Selected is deliberately not `primary`.** In Newspaper `primary` is the red
+spot colour, already carrying the nav selection, the FAB and the masthead tint;
+a red chip row on top of that is the loudest thing on the screen while buying
+nothing.
+
+Implemented as `FlashColors.monochromeCategories`, a flag rather than a colour,
+because there is no token meaning "this theme is Newspaper" and inferring it
+from a font family or a spot colour would be a guess that silently changes
+meaning the first time either is edited. It defaults to **false**, so a theme
+that forgets the extension keeps its hues rather than silently losing them.
+
+**One thing found on the way and not changed:** the "All" chip falls back to
+`scheme.surfaceContainer`, which Newspaper never authors — it inherits
+Material's derived value. It is only reachable in the hued path now, so it no
+longer affects Newspaper, but `surfaceContainer` being unauthored there is a
+loose end somebody will meet again.
+
+### 17.3 The banner has a role of its own
+
+It painted `inverseSurface`. **That was semantically correct, which is exactly
+why this is a new role and not a substitution** — `inverseSurface` means a full
+inversion, the banner is no longer asking for one, and borrowing a role you do
+not mean is how the next person inherits a wrong answer that tests green.
+
+`FlashColors.bannerSurface`, one step above `surface` and nowhere near
+`inverseSurface`:
+
+| theme | fill | source | text on it |
+|---|---|---|---|
+| Quiet Ink light | `#F1F5F5` | `surfaceContainer` | `onSurface`, **16.92:1** |
+| Quiet Ink dark | `#161D1C` | `surfaceContainer` | `onSurface`, **14.24:1** |
+| Newspaper | `#E7E7E3` | `_npSurface2` | `onSurface`, **13.62:1** |
+
+**No new hex anywhere.** Each is the tone that theme already authors as
+one-step-off-the-page. Newspaper is pinned explicitly rather than read from
+`surfaceContainer`, which it never authors — see the loose end in 17.2.
+
+**It is deliberately quiet: about 1.10:1 against the page.** A banner *slides
+in*, and motion is what catches the eye; something that moves does not need
+contrast shock as well. The 1dp `outlineVariant` hairline underneath is what
+keeps the edge legible once it has settled, and it is load-bearing — at this
+fill weight, removing it leaves the strip with no edge against the list.
+
+Dark stays the paler of the two, which the old treatment also got right: a
+dark strip on a near-black page vanishes into it.
+
+**It appears in eight places**, not one: the feed, Alerts, Feeds, Settings, the
+summary sheet, the reading pane, and both keyword panels.
+
+### 17.4 The open question this raised: one banner, two meanings
+
+**Reported, not built.** `NotificationBanner` carries **18 distinct messages,
+and they split almost evenly between confirmation and failure**:
+
+- **Confirmations (10):** `allMarkedRead`, `backupSuccess`, `restoreSuccess`,
+  `feedRemoved`, `keywordRemoved`, `opmlImportedBanner`,
+  `starterPackAddedBanner`, `summaryCopied`, `alertsMarkAllReadBanner`,
+  `alertsRemovedBanner`
+- **Failures and refusals (8):** `refreshFailed`, `opmlImportFailed`,
+  `invalidBackupFile`, `moveFeedFailed`, `cleanModeUnavailable`,
+  `alertsArticleGone`, `alertKeywordExists`, `opmlExportEmpty`
+
+So `backupSuccess` and `invalidBackupFile` are the same strip in the same
+colour, and the only difference is whether you read it before it slides away
+after four seconds. That is not a near-miss case — it is half the widget's
+traffic.
+
+**Why it is not fixed here.** Two variants is a design decision with real
+consequences: an error variant that borrows `error` puts red into Quiet Ink,
+where red currently means exactly one thing (broken), and into Newspaper,
+where red is already the spot colour doing four other jobs. A quieter
+differentiator — an icon, a weight, a leading rule — is a different answer with
+a different cost. Both are David's call, and 1.5's brief was a weight change,
+not a semantics change.
+
+**One thing worth knowing if it is taken up:** the fill is now quiet enough
+that a variant does not have to shout. The old `inverseSurface` treatment had
+no headroom to add emphasis to; this one does.
+
+---
+
+## 18. Two bugs, then the square toggles
+
+### 18.1 The disappearing category — the fix, and the fix that would have been wrong
+
+Create a category, put a feed in it, go back to the article list: the library
+has not changed there until a pull to refresh.
+
+**The wrong fix is a reload when the Categories route pops.** The right shape
+is "something every interested listener hears, wherever it is mounted", and it
+was already in the repo.
+
+> **Correction, made in pass 19.** The original reasoning here, and in commit
+> `7774db0`, said a tablet can show the Categories screen and the article list
+> at the same time. **It cannot, in any tier.** There is one `IndexedStack`
+> (`app.dart:1266`) showing one child, and all three layouts put that single
+> stack in one slot. The wide tier's three columns are *sections bar | one
+> section screen | article detail pane* — the third column is the reader, not
+> a second section. Verified by grep: `FeedScreen(` and `FeedsScreen(` each
+> appear exactly once in `lib/`, adjacent, inside that stack.
+>
+> The fix is still right and the wrong fix is still wrong, for a reason that
+> survives: **Settings is a pushed route, not a tab.** An OPML import or a
+> backup restore writes from a route sitting *over* a live screen, with no tab
+> switch and no pop of the Categories route to hang a reload on. And the busy
+> guard defers a change to a transition that may never arrive. Both are cases
+> a navigation-wired reload misses. The claim that needed correcting was the
+> example, not the conclusion — which is its own small lesson about how
+> comfortable a plausible mechanism feels once it has explained something.
+
+`FeedsChangedNotifier` does two jobs and only one of them was fully wired.
+It **records** a change, for a single consumer that decides whether to fetch,
+and it **broadcasts**, for anything mounted that is displaying the structure.
+`FeedsScreen` has listened to the broadcast since the OPML work. `FeedScreen`
+never did: it had the pull half and not the push half, and its only route in
+was an `isVisible` transition.
+
+A second hole closed with it: `_consumeFeedsChange` bails while a fetch is in
+flight and leaves the change queued, and nothing came back for it — the
+broadcast had already fired and a transition might never happen.
+`_backgroundRefresh` now takes a second look when it finishes.
+
+`consume()` stays single-consumer. The new handler re-enters the existing path
+rather than re-querying, because a second consumer would swallow the pending
+change and the new feed would arrive with no articles.
+
+**Not reproduced on 0.9.5+30**, on either form factor, and the sweep for the
+same shape elsewhere found no third site. The fix is the shape being made
+whole, not a repair of an observed failure — worth knowing if it ever comes
+back.
+
+#### And then, on the way out, the thing that is probably the actual bug
+
+**Found on 0.9.6+31 on the Lenovo, after the fix shipped.** The folder bar is
+horizontally scrollable, chips are in the user's own category order, and a new
+category is appended to the **end**. `ZedQA`, the most recently created
+category here, holds two feeds and 18 unread — and it is not on screen. Three
+chips fit on the tablet before the fold and about three and a half on the M51;
+there are six categories. Reaching the new one takes a deliberate sideways
+swipe that nothing invites.
+
+So a user makes a category, adds a feed, comes back, and the library looks
+unchanged — **exactly the report** — while the data underneath is completely
+correct. Which is why it never reproduced from a database check or from the
+Categories screen: both of those show the category, because it is there.
+
+The stale-listener bug in 18.1 was real and is fixed. This is a second,
+likelier cause of the same sentence, and 18.1 alone does not resolve it: the
+chip now appears the instant the category is made, at a scroll offset nobody
+is looking at.
+
+**Not fixed, because the fix is a decision.** The candidates, cheapest first:
+bring a newly created category into view (`Scrollable.ensureVisible` on the
+chip, on the notifier's broadcast); insert new categories at the front rather
+than the end; or show an edge affordance so the bar reads as scrollable. The
+first is the smallest and matches what the user just did. David chooses.
+
+### 18.2 Names capitalise as names
+
+`TextCapitalization.sentences` on three fields that take proper nouns —
+category name, feed title, and the rename dialog. A category called "Travel"
+typed as "travel" is a keyboard that disagrees with the thing being named.
+**The class, not the instance: three fields, all three changed**, and the grep
+that found them is the one to rerun when a fourth is added.
+
+### 18.3 The segmented buttons — see 10.6
+
+Not reproduced, no change to the control, and the investigation produced a
+harness rule instead. The short version: one
+`SegmentedButtonThemeData.style.shape` has two unrelated fates, the group's
+outer shape honours it and each segment's does not, and neither a theme
+assertion nor a segment-render assertion describes what the user sees.
+
+### 18.4 The switch is the only control here that had to be built
+
+**Verified against the pinned SDK before a line was written**, because the
+cheap outcome was a theme entry. `SwitchThemeData` in Flutter 3.41.6 has ten
+properties and no shape; `Switch` takes no `ShapeBorder`; `_SwitchPainter`
+paints the track as `RRect.fromRectAndRadius(trackRect,
+Radius.circular(trackHeight / 2))` — a stadium derived from the height, with
+no way in. So: `lib/widgets/flash_switch.dart`, no package.
+
+**`kFlashSwitchCornerRatio` is the one number to tune.** The corner as a
+proportion of track height — 0.5 is the stadium, 0.0 is a hard rectangle, 0.32
+ships. The thumb takes the same proportion of its own height, so both curves
+stay in one family at any value. A ratio rather than an absolute radius
+because no screenshot or mock reading gives a radius anyone can trust.
+
+The three ways a custom toggle is worse than the stock one it replaced, each
+asserted in `test/flash_switch_test.dart`:
+
+- **It announces itself as a button.** `Semantics(toggled:)` is what makes a
+  reader say "switch, on". Disabled advertises no tap action.
+- **It shrinks to the size of the art.** Track 26dp, box 48 with
+  `HitTestBehavior.opaque`, so the empty target above the track is live.
+- **It only takes taps.** Drag is **distance**-based — a quarter of the track
+  — not velocity. A slow deliberate drag has almost no velocity, and velocity
+  makes the behaviour depend on how fast someone moves.
+
+1.4.11 at 3:1 is measured in all three themes, both live states, four pairs.
+**The OFF track is `onSurfaceMuted`, not a pale grey, because of one of them**:
+a Material-style pale track measures about 1.1:1 against white and relies on
+an outline to be visible at all. Disabled is exempt from the floor and is
+asserted distinct from both live colours instead.
+
+200ms, matching `folder_tab_bar`'s chip selection and the banner slide.
+
+**8 stock `SwitchListTile`s before — settings 3, filter bubble 1, quick
+settings 4 — and 0 after.** If this is ever backed out, it is one commit and
+the call sites revert with it.
+
+---
+
+## 19. The last pass before the testers
+
+### 19.1 Two mechanisms, one symptom — and that is now a pattern
+
+**Say it plainly: both category bugs were real.** The stale view was genuine,
+which is exactly why pull-to-refresh fixed it. Underneath it sat a second
+problem wearing the same costume, and fixing the first stopped being
+sufficient the moment it stopped being the only one.
+
+This is the **second** time in three passes. Mark-all-read (17, and
+`PRELAUNCH-QA.md` 1.4) needed three separate fixes — one-shot suppression, a
+serialised update queue, and a caught badge failure — for what arrived as one
+sentence from one user. The category bug needed two.
+
+**So treat it as expected rather than as a coincidence.** A symptom is a
+report about what a person saw; it is not a count of causes. The failure mode
+it produces is specific and cheap to avoid: fix the mechanism you found,
+verify the *symptom* rather than the mechanism, and when the symptom survives,
+believe it. The tell in both cases was the same — a fix that was demonstrably
+correct in a test and a report that did not go away.
+
+The corollary for a non-reproduction: "I could not reproduce it" is evidence
+about the *mechanism you were looking for*, never about whether the user saw
+something. The folder-bar cause was found by walking the actual screen on the
+actual device after the first fix had already shipped.
+
+### 19.2 Selecting a new category: when it fires is the design
+
+The scroll was already written. `FolderTabBar._scrollToSelected` has existed
+since the chip redesign, and had never once worked for a newly created
+category, for two reasons that are each sufficient:
+
+- **`didUpdateWidget` watched only `selectedIndex`.** A bar that grew a chip
+  was not a reason to scroll anywhere.
+- **`didUpdateWidget` runs before `build`,** and `_tabKeys` is populated inside
+  `build`. For a chip that has just appeared, the lookup returns null,
+  `ensureVisible` is never called, and the method returns having done nothing
+  — silently, past a guard that reads as a defensive null check. It is now
+  deferred to a post-frame callback.
+
+Both leave source that looks correct, which is why both are pinned by driving
+the widget and reading the real scroll offset. Against the old implementation
+the new chip's right edge measured **976.75 in a 400-point viewport**.
+
+**The part that needed care was not the scrolling.**
+`FolderRepository.insert` is the choke point all four creation paths go
+through, and wiring the selection there would have been one line and wrong
+four times out of five: it sees a row, not an intent. An OPML file of fifty
+folders would have yanked the article list into an arbitrary one of them.
+
+So the intent is **declared**, by `categoryCreatedByUser`, at the single call
+site that has it (`feeds_screen.dart`, the add sheet's inline creator).
+`_record` — the path every other fire takes — never touches the field. The
+article list takes it single-consumer and **before** the early return, because
+both signals ride the same 300ms debounce and either can land first.
+
+`category_selection_test.dart` drives the real import, the real starter pack
+and the real restore over sqflite FFI rather than asserting the source lacks a
+string: five folders from OPML select none, one folder from OPML selects none
+either, the pack selects none, a restore selects none.
+
+**And what you land on.** A category with no feeds is not caught up — there
+is nothing to be caught up with. It was showing `Icons.done_all_rounded` and
+"No new articles. You're all caught up.", which is now the first thing a
+person sees after naming their first category. `nothingHereYet` plus an
+**Add a feed** button; deliberately not `addFirstFeed`, which is a lie to
+someone with twenty filed elsewhere. Both strings already exist in all five
+locales, so this adds none.
+
+### 19.3 The renderer, and the font
+
+Both are recorded where they belong rather than here: **Impeller** in the PRD
+at 4.4, moved out of "Decided, not built"; **the Literata subset** in
+`pubspec.yaml` beside the regeneration command.
+
+One thing worth keeping in this file, because it is a method rather than a
+fact: **the recorded subset command was verified by reproduction, not by
+reading.** Run against Google's `Literata[opsz,wght].ttf`, the Latin-only
+command in `pubspec.yaml` produces a file with the **same SHA256** as the one
+shipping in 0.9.6. That is what licenses treating it as the procedure rather
+than as somebody's note about the procedure — and it is a cheap check to make
+any time a build artifact is supposed to be reproducible from a written
+recipe.
+
+### 19.4 Size, tracked rather than assumed
+
+| Build | APK | Change |
+|---|---|---|
+| 0.9.2, before the shrinker rules | 64,501,792 | — |
+| 0.9.2, shipped | 64,518,176 | +16,384 (ProGuard keeps) |
+| 0.9.6+31 | 64,387,196 | −130,980 |
+| **0.9.7+32** | **64,552,860** | **+165,664** |
+
+Net since 0.9.2 shipped: **+34,684 bytes**, or 0.05 percent, across five
+versions that added the shrinker rules, a custom switch, and 267 Cyrillic and
+Greek glyphs. This pass's +165,664 is the font almost exactly: the subset grew
+by 271,908 bytes raw and compresses into the APK at roughly 147,000.
+
+The drop into 0.9.6 was not planned and is worth knowing: replacing all eight
+`SwitchListTile`s with `FlashSwitch` let the tree shaker drop Material's
+switch machinery, which paid for the custom widget several times over. Nobody
+predicted that, which is the argument for measuring rather than reasoning
+about size.

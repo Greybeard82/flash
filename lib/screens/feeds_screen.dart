@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../widgets/confirm_sheet.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/notification_banner.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import '../widgets/feed_card.dart';
 import '../widgets/quick_settings_action.dart';
 import '../widgets/starter_pack_picker.dart';
 import '../l10n/app_localizations.dart';
+import '../theme/app_theme.dart';
 
 class FeedsScreen extends StatefulWidget {
   const FeedsScreen({super.key});
@@ -165,7 +167,9 @@ class _FeedsScreenState extends State<FeedsScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.moveFeedFailed,
+          kind: BannerKind.failure);
       await _load();
     }
   }
@@ -199,8 +203,8 @@ class _FeedsScreenState extends State<FeedsScreen> {
     _autoScrollTimer ??= Timer.periodic(const Duration(milliseconds: 16), (_) {
       if (!_scrollController.hasClients) return;
       final pos = _scrollController.position;
-      final next =
-          (pos.pixels + direction * 12).clamp(pos.minScrollExtent, pos.maxScrollExtent);
+      final next = (pos.pixels + direction * 12)
+          .clamp(pos.minScrollExtent, pos.maxScrollExtent);
       _scrollController.jumpTo(next);
     });
   }
@@ -234,11 +238,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
       floatingActionButton: hostedInSidebar
           ? null
           : FloatingActionButton.extended(
-            heroTag: 'add_feed',
-            onPressed: _showAddFeedSheet,
-            icon: const Icon(Icons.add),
-            label: Text(l10n.addFeed),
-          ),
+              heroTag: 'add_feed',
+              onPressed: _showAddFeedSheet,
+              icon: const Icon(Icons.add),
+              label: Text(l10n.addFeed),
+            ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),
@@ -246,13 +250,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
             child: _loading
                 ? Center(
                     child: SpinningRefreshIcon(
-                        size: 40,
-                        color: Theme.of(context).colorScheme.primary))
+                        size: 40, color: Theme.of(context).colorScheme.primary))
                 : _feedsByFolder.values.every((f) => f.isEmpty) &&
                         _folders.isEmpty
                     ? _emptyFeedsState()
-                    : RefreshIndicator(
-                        onRefresh: _load, child: _buildList()),
+                    : RefreshIndicator(onRefresh: _load, child: _buildList()),
           ),
         ],
       ),
@@ -304,7 +306,9 @@ class _FeedsScreenState extends State<FeedsScreen> {
           .run(() => _folderRepo.reorder(_folders), label: 'Reordering');
     } catch (_) {
       if (!mounted) return;
-      _bannerKey.currentState?.show(AppLocalizations.of(context)!.moveFeedFailed);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.moveFeedFailed,
+          kind: BannerKind.failure);
       await _load();
     }
   }
@@ -349,18 +353,11 @@ class _FeedsScreenState extends State<FeedsScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.rss_feed,
-              size: 64,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withValues(alpha: 0.3)),
+              size: 64, color: Theme.of(context).flashColors.illustration),
           const SizedBox(height: 16),
           Text(l10n.noFeedsYet,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   )),
           const SizedBox(height: 24),
           // The FAB above already covers "add one feed". This covers the case
@@ -396,10 +393,17 @@ class _FeedsScreenState extends State<FeedsScreen> {
     if (!mounted || result == null) return;
     await _load();
     if (!mounted) return;
+    // **One key, two opposite outcomes.** `starterPackAddedBanner` reads
+    // "5 feeds added" above zero and "No new feeds added" at zero, so a fixed
+    // tick would put a success glyph beside a message saying nothing happened.
+    // The icon follows the count rather than the call site: no new string, no
+    // ARB change, one condition.
     _bannerKey.currentState
         ?.show(AppLocalizations.of(context)!.starterPackAddedBanner(
       result.feedsAdded,
-    ));
+    ), kind: result.feedsAdded == 0
+            ? BannerKind.failure
+            : BannerKind.confirmation);
   }
 
   // ── Add feed ──
@@ -446,11 +450,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => _ConfirmSheet(
+      builder: (ctx) => ConfirmSheet(
         title: l10n.deleteCategory,
         message: l10n.deleteFolderMessage(folder.name),
         confirmLabel: l10n.delete,
-        isDestructive: true,
       ),
     );
     if (confirmed == true) {
@@ -482,11 +485,10 @@ class _FeedsScreenState extends State<FeedsScreen> {
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => _ConfirmSheet(
+      builder: (ctx) => ConfirmSheet(
         title: l10n.removeFeed,
         message: l10n.removeFeedMessage(feed.title),
         confirmLabel: l10n.remove,
-        isDestructive: true,
       ),
     );
     if (confirmed == true) {
@@ -622,9 +624,7 @@ class _FolderSectionState extends State<_FolderSection>
                     ReorderableDragStartListener(
                       index: widget.dragIndex,
                       child: Icon(Icons.drag_handle_rounded,
-                          size: 20,
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.35)),
+                          size: 20, color: theme.flashColors.onSurfaceMuted),
                     ),
                     const SizedBox(width: 8),
                     Icon(Icons.label_outline_rounded,
@@ -655,16 +655,29 @@ class _FolderSectionState extends State<_FolderSection>
                       onPressed: widget.onDeleteFolder,
                       tooltip: l10n.deleteCategory,
                       visualDensity: VisualDensity.compact,
+                      // Neutral, not teal. It was red, which made one of six
+                      // controls in the header shout for an action that only
+                      // opens a confirmation. Teal was the overcorrection:
+                      // two teal icons side by side rank deleting a category
+                      // equal to renaming it.
                       icon: Icon(Icons.delete_outline,
-                          size: 18, color: theme.colorScheme.error),
+                          size: 18, color: theme.colorScheme.onSurfaceVariant),
                     ),
                     RotationTransition(
                       turns: Tween(begin: -0.25, end: 0.0)
                           .animate(_chevronController),
+                      // Neutral, not teal at 70%. Alpha on `primary` is the
+                      // same faked ink the guard bans on `onSurface`, one role
+                      // over and out of the pattern's sight — and it made the
+                      // header read as three different teals: the label icon
+                      // and the folder name at full strength, the chevron at
+                      // seven tenths. The sibling chevrons in the alerts and
+                      // blocklist panels are already `onSurfaceVariant`; this
+                      // was the drifted copy, despite their comments citing it
+                      // as the original.
                       child: Icon(Icons.expand_more_rounded,
                           size: 18,
-                          color: theme.colorScheme.primary
-                              .withValues(alpha: 0.7)),
+                          color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -890,10 +903,25 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
   void initState() {
     super.initState();
     _localFolders = List<Folder>.of(widget.folders);
+    _controller.addListener(_clearErrorWhenEmptied);
+  }
+
+  /// An error describes the address that produced it, so it stops being true
+  /// the moment that address is gone. Emptying the field used to leave
+  /// "Could not parse feed at this URL" sitting under a blank input, which
+  /// reads as a complaint about nothing and outlives the thing it was about.
+  ///
+  /// Only on empty, deliberately: clearing on every keystroke would wipe the
+  /// message while the user was still editing the address it refers to, which
+  /// is exactly when they are most likely to be reading it.
+  void _clearErrorWhenEmptied() {
+    if (_controller.text.isNotEmpty || _error.isEmpty) return;
+    setState(() => _error = '');
   }
 
   @override
   void dispose() {
+    _controller.removeListener(_clearErrorWhenEmptied);
     _controller.dispose();
     _categoryController.dispose();
     _categoryFocus.dispose();
@@ -927,9 +955,19 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       final position = await widget.folderRepo.getNextPosition();
       final now = DateTime.now().millisecondsSinceEpoch;
       return widget.folderRepo.insert(
-        Folder(name: name, position: position, createdAt: now),
+        Folder(
+          name: name,
+          position: position,
+          createdAt: now,
+          colorIndex: await widget.folderRepo.nextColorIndex(),
+        ),
       );
     }, label: 'Adding category');
+    // Before the mounted check on purpose: the sheet being gone does not make
+    // the creation any less deliberate, and this is the only place in the app
+    // that knows a person did it. FolderRepository.insert has already fired
+    // structureChanged; this adds the intent that the repository cannot see.
+    FeedsChangedNotifier.instance.categoryCreatedByUser(created.id!);
     if (!mounted) return;
     _categoryController.clear();
     setState(() {
@@ -979,7 +1017,8 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
       return;
     }
     setState(() => _adding = true);
-    await LoadingController.instance.run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
+    await LoadingController.instance
+        .run(() => _addByUrlBody(url, l10n), label: 'Adding feed');
   }
 
   Future<void> _addByUrlBody(String url, AppLocalizations l10n) async {
@@ -998,8 +1037,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
         return;
       }
 
-      final rssService =
-          RssService(widget.articleRepo, widget.feedRepo);
+      final rssService = RssService(widget.articleRepo, widget.feedRepo);
       final info = await rssService.validateFeedUrl(url);
       if (info == null) {
         if (!mounted) return;
@@ -1101,7 +1139,11 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                // 6.1: a drag affordance is onSurfaceMuted, the same
+                // level as the resize grip in article_card.dart. It is not
+                // an illustration — it stands in for nothing — and alpha
+                // over ink gave a different grey on every surface it sat on.
+                color: theme.flashColors.onSurfaceMuted,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -1118,10 +1160,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
           // Chips rather than a dropdown so the keyboard stays open.
           Text(l10n.addToCategory,
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   )),
           const SizedBox(height: 6),
           Wrap(
@@ -1148,8 +1187,9 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
               ActionChip(
                 avatar: const Icon(Icons.add, size: 18),
                 label: Text(l10n.newCategory),
-                onPressed:
-                    (_creatingCategory || _adding) ? null : _openCategoryCreator,
+                onPressed: (_creatingCategory || _adding)
+                    ? null
+                    : _openCategoryCreator,
               ),
             ],
           ),
@@ -1162,7 +1202,7 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
                   child: TextField(
                     controller: _categoryController,
                     focusNode: _categoryFocus,
-                    textCapitalization: TextCapitalization.sentences,
+                    textCapitalization: TextCapitalization.words,
                     textInputAction: TextInputAction.done,
                     onSubmitted: (_) => _createCategory(),
                     decoration: InputDecoration(
@@ -1200,6 +1240,18 @@ class _AddFeedSheetState extends State<_AddFeedSheet> {
             // this field is always disabled on the first frame and there is
             // nothing here to focus into yet. The chips are the first step.
             autofocus: false,
+            // This field takes a name *or* a URL, and the IME was treating
+            // every URL as prose. On the Samsung, typing
+            // https://hnrss.org/frontpage and pressing the keyboard's Enter
+            // key committed https://hnrss.org/FrontPage — a predictive-text
+            // correction applied to the path on commit — and the add failed
+            // with "Could not parse feed at this URL", blaming the address
+            // rather than the correction. The same URL submitted with the
+            // search icon, which does not go through an IME commit, worked.
+            // The tablet hid this entirely: its keyboard only capitalised the
+            // scheme, and schemes are case-insensitive.
+            keyboardType: TextInputType.url,
+            autocorrect: false,
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _search(),
             decoration: InputDecoration(
@@ -1314,7 +1366,7 @@ class _FolderNameSheetState extends State<_FolderNameSheet> {
           TextField(
             controller: _controller,
             autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: l10n.categoryName,
               border: const OutlineInputBorder(),
@@ -1388,7 +1440,7 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _titleController,
-            textCapitalization: TextCapitalization.sentences,
+            textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               labelText: l10n.feedName,
               border: const OutlineInputBorder(),
@@ -1433,63 +1485,6 @@ class _EditFeedSheetState extends State<_EditFeedSheet> {
   }
 }
 
-class _ConfirmSheet extends StatelessWidget {
-  final String title;
-  final String message;
-  final String confirmLabel;
-  final bool isDestructive;
-
-  const _ConfirmSheet({
-    required this.title,
-    required this.message,
-    required this.confirmLabel,
-    this.isDestructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(title, style: theme.textTheme.titleLarge),
-          const SizedBox(height: 12),
-          Text(message, style: theme.textTheme.bodyMedium),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(l10n.cancel),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: isDestructive
-                      ? FilledButton.styleFrom(
-                          backgroundColor: theme.colorScheme.error,
-                          foregroundColor: theme.colorScheme.onError,
-                        )
-                      : null,
-                  child: Text(confirmLabel),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-
 class _FeedActionsSheet extends StatelessWidget {
   final Feed feed;
   final VoidCallback onEdit;
@@ -1516,11 +1511,14 @@ class _FeedActionsSheet extends StatelessWidget {
               onEdit();
             },
           ),
+          // Remove was red-on-red: a red glyph beside red text, in a sheet
+          // whose other row is neutral. It read as an error state rather than
+          // a choice. The row is neutral now and the warning lives in the
+          // confirmation's copy, which is the only place it ever actually
+          // said anything.
           ListTile(
-            leading: Icon(Icons.delete_outline,
-                color: Theme.of(context).colorScheme.error),
-            title: Text(l10n.remove,
-                style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            leading: const Icon(Icons.delete_outline),
+            title: Text(l10n.remove),
             onTap: () {
               Navigator.pop(context);
               onDelete();

@@ -20,6 +20,7 @@ import '../services/loading_controller.dart';
 import '../services/alerts_changed_notifier.dart';
 import '../services/read_state_notifier.dart';
 import '../services/refresh_service.dart';
+import '../services/article_detail_controller.dart';
 import '../services/saved_state_notifier.dart';
 import '../services/settings_notifier.dart';
 import '../services/share_service.dart';
@@ -32,6 +33,7 @@ import '../reading/new_content_check.dart';
 import '../reading/read_gate.dart';
 import '../reading/scroll_anchor.dart';
 import '../utils/diag_log.dart';
+import '../widgets/fab_cluster.dart';
 import '../widgets/article_card.dart';
 import '../widgets/bubble_panel.dart';
 import '../widgets/day_header.dart';
@@ -49,6 +51,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/shimmer_card.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import 'search_screen.dart';
+import '../theme/app_theme.dart';
 
 class FeedScreen extends StatefulWidget {
   final VoidCallback onNavigateToFeeds;
@@ -70,8 +73,7 @@ class FeedScreen extends StatefulWidget {
   State<FeedScreen> createState() => _FeedScreenState();
 }
 
-class _FeedScreenState extends State<FeedScreen>
-    with WidgetsBindingObserver {
+class _FeedScreenState extends State<FeedScreen> with WidgetsBindingObserver {
   // ── Repos & services ───────────────────────────────────────────────────────
   final _articleRepo = ArticleRepository();
   final _alertMatchRepo = AlertMatchRepository();
@@ -132,7 +134,6 @@ class _FeedScreenState extends State<FeedScreen>
   UnreadCounts _counts = const UnreadCounts.empty();
   Map<int, int?> _feedFolderId = {};
   int _selectedTabIndex = 0;
-
 
   /// One page per tab, in the tab strip's order. Only the selected page holds
   /// the live list (and the one shared _scrollController); every other page
@@ -383,9 +384,21 @@ class _FeedScreenState extends State<FeedScreen>
     SettingsNotifier.instance.addListener(_onSettingsChanged);
     // Bookmarks toggles the saved flag on articles this list may be holding,
     // and it is kept alive alongside this screen, so the change would
-    // otherwise never reach here. (Feed/folder structure changes use
-    // FeedsChangedNotifier instead — see _consumeFeedsChange.)
+    // otherwise never reach here.
     SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
+    // **Feed and folder structure changes reach this screen two ways, and it
+    // needs both.** [_consumeFeedsChange] already ran from `didUpdateWidget`
+    // on an `isVisible` false→true transition, which covers walking back from
+    // the Categories tab. It does not cover a write that lands while this
+    // screen is *already* showing, and it does not cover one that arrives
+    // while a fetch is in flight, because the busy guard defers the change to
+    // a transition that may never come.
+    //
+    // FeedsScreen has listened to this broadcast since the OPML work, for the
+    // same reason and with the same shape. This screen was the half that was
+    // never wired up: the article list had the pull half and not the push
+    // half.
+    FeedsChangedNotifier.instance.addListener(_onFeedsChangedElsewhere);
     // A new blocklist keyword hides rows this list is already holding, and
     // the panel that adds one is opened from this very screen, so nothing
     // else would ever tell it to re-query.
@@ -407,6 +420,19 @@ class _FeedScreenState extends State<FeedScreen>
     }
   }
 
+  /// A feed or folder was written somewhere else, and this screen is
+  /// mounted — wherever it happens to be mounted.
+  ///
+  /// This is the half that does not depend on a visibility transition, which
+  /// is what makes it work on a tablet as well as a phone: the three-column
+  /// shell can have the structure change and the article list on screen at
+  /// the same time, with no push, no pop and no tab switch to hang a reload
+  /// on. A fix wired to navigation would work on the Pixel and silently do
+  /// nothing on the Lenovo.
+  void _onFeedsChangedElsewhere() {
+    if (mounted) unawaited(_consumeFeedsChange());
+  }
+
   /// Acts on a feed or folder change made on another tab.
   ///
   /// Nothing is consumed while a boot or refresh is already in flight — the
@@ -414,8 +440,15 @@ class _FeedScreenState extends State<FeedScreen>
   /// racing a fetch that is already running.
   Future<void> _consumeFeedsChange() async {
     if (!mounted || _booting || _refreshing || _backgroundFetching) return;
+    // Taken before the early return below, not after it. The two signals
+    // arrive on the same debounce and either can land first; reading the
+    // selection only when a change survives would drop it whenever the
+    // structure change had already been consumed by the visibility
+    // transition a moment earlier.
+    final selectFolderId =
+        FeedsChangedNotifier.instance.takeUserCreatedCategory();
     final change = FeedsChangedNotifier.instance.consume();
-    if (change == null) return;
+    if (change == null && selectFolderId == null) return;
 
     if (change == FeedsChange.needsFetch) {
       // A new feed has no articles yet. _backgroundRefresh reloads and
@@ -430,15 +463,93 @@ class _FeedScreenState extends State<FeedScreen>
       AlertsChangedNotifier.instance.alertsChanged();
       _resetScrollToTop();
     }
+    if (selectFolderId != null) _selectCreatedFolder(selectFolderId);
+  }
+
+  /// True when the selected tab is a category with **no feeds filed under
+  /// it at all** — as opposed to a category whose feeds have simply produced
+  /// nothing new.
+  ///
+  /// Not `_hasFeeds`, which is app-wide and answers a different question:
+  /// someone with twenty feeds in five categories and a sixth just created
+  /// has feeds, and has nothing in the category they are looking at.
+  ///
+  /// Read off `_feedFolderId`, which the article load already builds, so this
+  /// costs a walk of a map that is in hand rather than a query.
+  bool get _selectedFolderHasNoFeeds {
+    if (_selectedTabIndex == 0 || _selectedTabIndex > _folders.length) {
+      return false;
+    }
+    final id = _folders[_selectedTabIndex - 1].id;
+    return id != null && !_feedFolderId.containsValue(id);
+  }
+
+  /// Selects the category the user just made, so they land in the thing they
+  /// just named rather than back on All with a chip they have to go and find.
+  ///
+  /// **Only ever reached from a [FeedsChangedNotifier.takeUserCreatedCategory]
+  /// that came back non-null**, which happens for exactly one call site — see
+  /// that method. An import, a restore, the starter pack and every other
+  /// reason the notifier fires all arrive here with null and change nothing.
+  ///
+  /// Post-frame because the folder was appended by the reload immediately
+  /// above: the PageView's item count grows in that `setState`, and
+  /// `animateToPage` cannot reach a page the viewport has not built yet.
+  void _selectCreatedFolder(int folderId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final i = _folders.indexWhere((f) => f.id == folderId);
+      // Created and deleted again before this ran, or never reached the
+      // reload. Leave the selection where the user had it rather than
+      // guessing at a replacement.
+      if (i < 0) return;
+      _onTabSelected(i + 1); // 0 is All.
+    });
+  }
+
+  /// The reading pane's controller, when there is one.
+  ///
+  /// **Null on the phone, and that is the whole mechanism.**
+  /// `ArticleDetailScope` is installed by the three-column shell and by
+  /// nothing else, so `maybeOf` comes back null everywhere there is no pane
+  /// — which makes "a phone build never marks a row current" a structural
+  /// fact rather than a rule someone has to remember.
+  ArticleDetailController? _detail;
+
+  /// The URL of the article the pane is showing. Compared by URL rather than
+  /// id because that is what `ArticleDetailController.show` dedupes on, and an
+  /// Alerts-sourced article has no id at all.
+  String? _currentUrl;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribed once, here, rather than per row. A card that reached for the
+    // scope itself would be fifty widgets listening to one controller, and
+    // every one of them would rebuild on every change.
+    final detail = ArticleDetailScope.maybeOf(context);
+    if (identical(detail, _detail)) return;
+    _detail?.removeListener(_onCurrentArticleChanged);
+    _detail = detail;
+    _detail?.addListener(_onCurrentArticleChanged);
+    _currentUrl = _detail?.article?.url;
+  }
+
+  void _onCurrentArticleChanged() {
+    final url = _detail?.article?.url;
+    if (!mounted || url == _currentUrl) return;
+    setState(() => _currentUrl = url);
   }
 
   @override
   void dispose() {
+    _detail?.removeListener(_onCurrentArticleChanged);
     WidgetsBinding.instance.removeObserver(this);
     ReadStateNotifier.instance.removeListener(_onExternalReadStateChanged);
     SettingsNotifier.instance.removeListener(_onSettingsChanged);
     SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
     BlockedStateNotifier.instance.removeListener(_onBlockedStateChanged);
+    FeedsChangedNotifier.instance.removeListener(_onFeedsChangedElsewhere);
     _scrollDebounce?.cancel();
     _pageController.dispose();
     _fabFade.dispose();
@@ -469,7 +580,8 @@ class _FeedScreenState extends State<FeedScreen>
       // it is the last moment the position is definitely trustworthy.
       _captureAnchor();
     }
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
       _pausedAt = DateTime.now();
       return;
     }
@@ -508,7 +620,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// screen already owns is the natural place to say so.
   void _reportRefreshFailure() {
     if (!mounted) return;
-    _bannerKey.currentState?.show(AppLocalizations.of(context)!.refreshFailed);
+    _bannerKey.currentState?.show(AppLocalizations.of(context)!.refreshFailed,
+        kind: BannerKind.failure);
   }
 
   // ── Boot ───────────────────────────────────────────────────────────────────
@@ -554,6 +667,11 @@ class _FeedScreenState extends State<FeedScreen>
     setState(() => _backgroundFetching = true);
     await _fetchAndApply(ownLaunchReturn: ownLaunchReturn);
     if (mounted) setState(() => _backgroundFetching = false);
+    // A change that arrived mid-fetch was deferred by the busy guard rather
+    // than dropped, and nothing else would come back for it: the broadcast
+    // has already fired and a visibility transition may never happen. This is
+    // that second look, and it is a no-op when there is nothing queued.
+    if (mounted) unawaited(_consumeFeedsChange());
   }
 
   /// Fetches, deletes every read article, then decides whether anything
@@ -590,8 +708,7 @@ class _FeedScreenState extends State<FeedScreen>
     final folders = await _folderRepo.getAll();
     if (!mounted) return;
     final probe = await _articlesForTab(_selectedTabIndex, folders);
-    final hasNew =
-        NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
+    final hasNew = NewContentCheck.hasNew(beforeIds, probe.map((a) => a.id));
 
     // Two independent reasons to rebuild: something new arrived, or the
     // flush removed rows that are still on screen. Only when neither is true
@@ -648,7 +765,8 @@ class _FeedScreenState extends State<FeedScreen>
         _pageController.jumpToPage(safeTab);
       }
       _feedFolderId = {for (final f in feeds) f.id!: f.folderId};
-      _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
+      _counts =
+          UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
       _loading = false;
     });
     UnreadBadgeService.instance.update(allCount);
@@ -691,8 +809,7 @@ class _FeedScreenState extends State<FeedScreen>
 
     setState(() {
       _setArticles([
-        for (final a in _articles)
-          a.id == id ? a.copyWith(isSaved: saved) : a,
+        for (final a in _articles) a.id == id ? a.copyWith(isSaved: saved) : a,
       ]);
     });
   }
@@ -807,7 +924,10 @@ class _FeedScreenState extends State<FeedScreen>
   }
 
   void _syncCardKeys(List<Article> articles) {
-    final activeIds = {for (final a in articles) if (a.id != null) a.id!};
+    final activeIds = {
+      for (final a in articles)
+        if (a.id != null) a.id!
+    };
     _cardKeys.removeWhere((id, _) => !activeIds.contains(id));
     _measuredHeights.removeWhere((id, _) => !activeIds.contains(id));
     for (final a in articles) {
@@ -1025,7 +1145,8 @@ class _FeedScreenState extends State<FeedScreen>
   /// methods.
   Future<void> _onPageChanged(int index) async {
     if (index == _selectedTabIndex) return;
-    await LoadingController.instance.run(() => _onTabSelectedBody(index), label: 'Loading');
+    await LoadingController.instance
+        .run(() => _onTabSelectedBody(index), label: 'Loading');
   }
 
   Future<void> _onTabSelectedBody(int index) async {
@@ -1176,7 +1297,8 @@ class _FeedScreenState extends State<FeedScreen>
 
     // UI dim update is debounced.
     _scrollDebounce?.cancel();
-    _scrollDebounce = Timer(const Duration(milliseconds: 150), _flushMarkReadUI);
+    _scrollDebounce =
+        Timer(const Duration(milliseconds: 150), _flushMarkReadUI);
   }
 
   void _flushMarkReadUI() {
@@ -1242,46 +1364,6 @@ class _FeedScreenState extends State<FeedScreen>
     if (mounted) _restoreAnchor();
   }
 
-  Future<void> _markRead(Article article) async {
-    if (article.id == null || article.isRead) return;
-    DiagLog.read(
-      id: article.id!,
-      trigger: 'swipe',
-      offset: _scrollController.hasClients ? _scrollController.offset : -1,
-    );
-    await _articleRepo.markAsRead(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
-
-    HapticFeedback.lightImpact();
-    if (!mounted) return;
-    setState(() {
-      _setArticles([
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isRead: true) : a,
-      ]);
-      _counts = _counts.applyRead(_folderOf(article));
-    });
-    UnreadBadgeService.instance.update(_counts.all);
-  }
-
-  Future<void> _markUnread(Article article) async {
-    if (article.id == null || !article.isRead) return;
-    await _articleRepo.markAsUnread(article.id!);
-    // Both directions, or an article deliberately put back to unread would
-    // stay dimmed in the Alerts tab.
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
-    HapticFeedback.lightImpact();
-    if (!mounted) return;
-    setState(() {
-      _setArticles([
-        for (final a in _articles)
-          a.id == article.id ? a.copyWith(isRead: false) : a,
-      ]);
-      _counts = _counts.applyUnread(_folderOf(article));
-    });
-    UnreadBadgeService.instance.update(_counts.all);
-  }
-
   Future<void> _toggleSaved(Article article) async {
     if (article.id == null) return;
     final nowSaved = !article.isSaved;
@@ -1338,7 +1420,14 @@ class _FeedScreenState extends State<FeedScreen>
         _booting = true;
         _counts = _counts.clearedAll();
       });
-      UnreadBadgeService.instance.update(0);
+      // Awaited, so the dismiss has certainly happened before the refresh
+      // below starts producing counts. Unawaited, this raced the update at the
+      // end of _loadArticlesBody and either could land last.
+      await UnreadBadgeService.instance.update(0);
+      // The refresh is allowed to find articles; it is not allowed to
+      // interrupt about them. One shot, consumed by the next update, which is
+      // the one _loadArticles makes below.
+      UnreadBadgeService.instance.suppressNextNotification();
       try {
         await RefreshService(_settingsRepo).refreshAll(coldStart: false);
         _lastFetchAt = DateTime.now();
@@ -1382,17 +1471,27 @@ class _FeedScreenState extends State<FeedScreen>
       if (!mounted) return;
       setState(() {
         _setArticles(freshArticles);
-        _counts = UnreadCounts.fromRepository(total: allCount, byFolder: folderCounts);
+        _counts = UnreadCounts.fromRepository(
+            total: allCount, byFolder: folderCounts);
       });
       _resetScrollToTop();
-      UnreadBadgeService.instance.update(allCount);
+      // Same ruling as the All tab: this count is the product of the refresh
+      // mark-all-read started, so it may be shown but not announced. Armed
+      // immediately before the call that consumes it, so there is no window in
+      // which the flag is set and something else could eat it.
+      UnreadBadgeService.instance.suppressNextNotification();
+      await UnreadBadgeService.instance.update(allCount);
       AlertsChangedNotifier.instance.alertsChanged();
       if (!mounted) return;
       final l10n = AppLocalizations.of(context)!;
       // The mark-all-read itself succeeded either way; say so, but don't
       // claim the feeds refreshed when they didn't.
-      _bannerKey.currentState
-          ?.show(refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead);
+      // One call, either kind: mark-all-read itself succeeded even when
+      // the refresh behind it did not, so the glyph follows the message.
+      _bannerKey.currentState?.show(
+        refreshFailed ? l10n.refreshFailed : l10n.allMarkedRead,
+        kind: refreshFailed ? BannerKind.failure : BannerKind.confirmation,
+      );
     }
   }
 
@@ -1403,7 +1502,6 @@ class _FeedScreenState extends State<FeedScreen>
   /// See [_AlertPanelHost].
   Widget _alertKeywordsPanel() => AlertPanelHost(
       onClosed: () => AlertsChangedNotifier.instance.alertsChanged());
-
 
   // ── Top bubbles ────────────────────────────────────────────────────────────
 
@@ -1519,8 +1617,7 @@ class _FeedScreenState extends State<FeedScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Center(
                   child: SpinningRefreshIcon(
-                      size: 20,
-                      color: Theme.of(context).colorScheme.primary)),
+                      size: 20, color: Theme.of(context).colorScheme.primary)),
             ),
           ),
           // Quick settings and filter moved here from a floating cluster that
@@ -1533,78 +1630,75 @@ class _FeedScreenState extends State<FeedScreen>
           // all four top-level screens and sits rightmost on every one (the
           // rule is written out on its button in alerts_screen.dart). This
           // screen was the only one with the two the other way round.
-          if (_hasFeeds && !_booting) ...[
-            IconButton(
-              key: _filterFabKey,
-              onPressed: _openFilterBubble,
-              tooltip: l10n.filterTooltip,
-              icon: const Icon(Icons.filter_alt_outlined),
-            ),
-            IconButton(
-              key: _quickSettingsFabKey,
-              onPressed: _openQuickSettingsBubble,
-              tooltip: l10n.quickSettingsTooltip,
-              icon: const Icon(Icons.tune_rounded),
-            ),
-          ],
+          // Present but inert when there is nothing to act on, rather than
+          // absent. An app bar that gains two controls the moment the first
+          // feed arrives reads as the bar itself changing shape; leaving them
+          // greyed says "these are yours, there is just nothing to filter
+          // yet".
+          //
+          // The tone is the `inert` role, which currently carries the same
+          // values as `illustration` — see FlashColors.inert for why they are
+          // two roles sharing one number rather than one role meaning two
+          // things.
+          Builder(builder: (context) {
+            final live = _hasFeeds && !_booting;
+            final inert = Theme.of(context).flashColors.inert;
+            return Row(mainAxisSize: MainAxisSize.min, children: [
+              IconButton(
+                key: _filterFabKey,
+                onPressed: live ? _openFilterBubble : null,
+                tooltip: l10n.filterTooltip,
+                icon:
+                    Icon(Icons.filter_alt_outlined, color: live ? null : inert),
+              ),
+              IconButton(
+                key: _quickSettingsFabKey,
+                onPressed: live ? _openQuickSettingsBubble : null,
+                tooltip: l10n.quickSettingsTooltip,
+                icon: Icon(Icons.tune_rounded, color: live ? null : inert),
+              ),
+            ]);
+          }),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: hostedInSidebar
           ? null
           : _hasFeeds && !_booting
-          ? Padding(
-              padding: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
+              ? FabCluster(
+                  controller: _fabFade,
+                  actions: [
+                    FabAction(
                       heroTag: 'refresh',
-                      onPressed: _refreshing
-                          ? null
-                          : () => _refreshCurrentTab(),
+                      onPressed:
+                          _refreshing ? null : () => _refreshCurrentTab(),
                       tooltip: l10n.refresh,
-                      mini: true,
-                      // The same circular arrow either way — it just turns
-                      // while the refresh is in flight. Swapping in the bolt
-                      // replaced the control under the user's finger with a
-                      // different glyph.
-                      child: _refreshing
+                      // The same circular arrow either way — it just turns while
+                      // the refresh is in flight. Swapping in the bolt replaced
+                      // the control under the user's finger with a different
+                      // glyph.
+                      icon: _refreshing
                           ? const SpinningRefreshIcon()
                           : const Icon(Icons.refresh_rounded),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
+                    FabAction(
                       heroTag: 'search',
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (_) => const SearchScreen()),
                       ),
                       tooltip: l10n.searchArticles,
-                      mini: true,
-                      child: const Icon(Icons.search_rounded),
+                      icon: const Icon(Icons.search_rounded),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  ScrollFade(
-                    controller: _fabFade,
-                    child: FloatingActionButton(
+                    FabAction(
                       heroTag: 'mark_all_read',
                       onPressed: _markAllRead,
                       tooltip: l10n.markAllRead,
-                      mini: true,
-                      child: const Icon(Icons.done_all_rounded),
+                      icon: const Icon(Icons.done_all_rounded),
                     ),
-                  ),
-                ],
-              ),
-            )
-          : null,
+                  ],
+                )
+              : null,
       body: Stack(
         children: [
           Column(
@@ -1690,13 +1784,11 @@ class _FeedScreenState extends State<FeedScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             if (needsDivider)
-              const Divider(height: 1, indent: 16, endIndent: 16),
+              // Full-bleed: this is an article list.
+              const Divider(height: 1),
             ArticleCard(
               article: article,
-              enableSwipeActions: false,
               onTap: () => _openArticle(article),
-              onMarkRead: () => _markRead(article),
-              onMarkUnread: () => _markUnread(article),
               onShare: () => _shareService.shareArticle(article),
               onBookmark: () => _toggleSaved(article),
             ),
@@ -1705,7 +1797,6 @@ class _FeedScreenState extends State<FeedScreen>
       },
     );
   }
-
 
   /// Offers the starter pack without leaving the Flash tab.
   ///
@@ -1745,6 +1836,51 @@ class _FeedScreenState extends State<FeedScreen>
       );
     }
 
+    // **A category with nothing subscribed to it is not "caught up".** There
+    // is nothing to be caught up with. Before this pass the distinction cost
+    // nothing, because the only way to be looking at an empty category was to
+    // go and tap it; now creating one selects it, so this is the first thing
+    // a person sees after naming their first category, and "No new articles.
+    // You're all caught up." is a double tick congratulating them on reading
+    // a folder that has never held anything.
+    //
+    // Both strings already exist in all five locales. `addFirstFeed` is
+    // deliberately NOT used with them — "add your first feed" is a lie to
+    // someone who has twenty, filed elsewhere.
+    if (_articles.isEmpty && _selectedFolderHasNoFeeds) {
+      return RefreshIndicator(
+        onRefresh: _refreshCurrentTab,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(height: MediaQuery.of(context).size.height * 0.24),
+            Icon(Icons.rss_feed_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 16),
+            Text(
+              l10n.nothingHereYet,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: FilledButton.icon(
+                onPressed: widget.onNavigateToFeeds,
+                icon: const Icon(Icons.add),
+                label: Text(l10n.addAFeedButton),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(200, 52),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_articles.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refreshCurrentTab,
@@ -1752,15 +1888,18 @@ class _FeedScreenState extends State<FeedScreen>
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            SizedBox(height: MediaQuery.of(context).size.height * 0.35),
+            SizedBox(height: MediaQuery.of(context).size.height * 0.30),
+            // The glyph the mock asks for. Caught-up is the one empty state
+            // that is an achievement rather than an absence, and a bare line
+            // of text reads as the list having failed to load.
+            Icon(Icons.done_all_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 16),
             Text(
               l10n.noNewArticles,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
@@ -1840,14 +1979,15 @@ class _FeedScreenState extends State<FeedScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (needsDivider)
-                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      // Full-bleed: this is an article list.
+                      const Divider(height: 1),
                     ArticleCard(
                       article: article,
-                      // Horizontal drags page between category tabs here.
-                      enableSwipeActions: false,
+                      // B2. False on the phone for free: `_currentUrl` is only
+                      // ever non-null under the three-column shell.
+                      isCurrent:
+                          _currentUrl != null && article.url == _currentUrl,
                       onTap: () => _openArticle(article),
-                      onMarkRead: () => _markRead(article),
-                      onMarkUnread: () => _markUnread(article),
                       onShare: () => _shareService.shareArticle(article),
                       onBookmark: () => _toggleSaved(article),
                     ),
@@ -1866,7 +2006,6 @@ class _NewspaperMasthead extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final ink = theme.colorScheme.onSurface;
     final today = DateTime.now();
     final dateline =
         'INTERNATIONAL EDITION · ${today.day.toString().padLeft(2, '0')}.'
@@ -1881,18 +2020,28 @@ class _NewspaperMasthead extends StatelessWidget {
             fontFamily: 'Playfair Display',
             fontWeight: FontWeight.w700,
             fontSize: 26,
-            color: ink,
+            // Read at the point of use. This was bound to a local called
+            // `ink`, which is how the two alpha-thinned sites below it stayed
+            // invisible to the ink guard for four passes.
+            color: theme.colorScheme.onSurface,
             height: 1.1,
           ),
         ),
-        Divider(height: 3, thickness: 1, color: ink.withValues(alpha: 0.4)),
+        // The masthead rule takes `outline`, which Newspaper authors as
+        // _npHairline and comments "rule / outline" — literally this. Not
+        // `outlineVariant`: Newspaper never declares that one and it falls
+        // back to pure black, which would draw a hard 1dp line under the
+        // masthead instead of a newsprint rule.
+        Divider(height: 3, thickness: 1, color: theme.colorScheme.outline),
         Text(
           dateline,
           style: TextStyle(
             fontFamily: 'PT Serif',
             fontSize: 9,
             letterSpacing: 0.8,
-            color: ink.withValues(alpha: 0.55),
+            // A dateline is a caption, so it takes the caption level rather
+            // than ink thinned by hand.
+            color: theme.flashColors.onSurfaceMuted,
           ),
         ),
       ],

@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../models/content_block.dart';
+import '../theme/app_theme.dart';
 
 /// Renders extracted [ContentBlock]s as a plain, styled reading view — the
 /// clean-mode counterpart to the raw page in the WebView.
@@ -43,16 +44,47 @@ class CleanArticleView extends StatelessWidget {
     );
   }
 
+  /// The reading face, at the measure this surface is tuned for.
+  ///
+  /// **The family comes from `titleLarge`, and that is deliberate rather than
+  /// convenient.** Both themes put their reading serif there — Literata in
+  /// Quiet Ink, PT Serif in Newspaper — while `bodyLarge` is the *operating*
+  /// face in Quiet Ink and happens to be the serif in Newspaper. Hardcoding
+  /// `kSerifFamily` would put Literata into Newspaper, which has its own type
+  /// system and did not ask for ours.
+  ///
+  /// Size and line height come from the theme file. They apply in both themes:
+  /// the clean view is one widget with one job, and giving it two different
+  /// reading measures would be the odd choice, not the consistent one. The
+  /// pre-existing code applied its `height: 1.5` to both for the same reason.
+  static TextStyle _reading(ThemeData theme) =>
+      (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
+        fontFamily: theme.textTheme.titleLarge?.fontFamily,
+        fontSize: kCleanBodySize,
+        height: kCleanBodyHeight,
+      );
+
   /// Exhaustive over the sealed [ContentBlock]; no `default:` on purpose, so a
   /// sixth block type becomes a compile error here rather than a silently
   /// dropped paragraph. Same reasoning as `SummarySource.fromBlocks`.
   Widget _buildBlock(ThemeData theme, ContentBlock block) {
+    final reading = _reading(theme);
+
     switch (block) {
       case HeadingBlock():
+        // h1 and h2 were already the serif — `headlineSmall` and `titleLarge`
+        // are both serif entries in Quiet Ink — so only h3 moves. It was
+        // `titleMedium`, which is the *operating* face: a sans subhead inside
+        // a serif article, at a weight that made it look deliberate.
+        //
+        // h3 lands at the body size rather than above it. A third-level
+        // heading inside a web article is usually a paragraph label, and
+        // w700 at the reading size separates it without starting a new
+        // hierarchy under the two that already exist.
         final style = switch (block.level) {
           1 => theme.textTheme.headlineSmall,
           2 => theme.textTheme.titleLarge,
-          _ => theme.textTheme.titleMedium,
+          _ => reading,
         };
         return Padding(
           padding: const EdgeInsets.only(top: 16, bottom: 8),
@@ -63,10 +95,7 @@ class CleanArticleView extends StatelessWidget {
       case ParagraphBlock():
         return Padding(
           padding: const EdgeInsets.only(bottom: 14),
-          child: Text(
-            block.text,
-            style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-          ),
+          child: Text(block.text, style: reading),
         );
 
       case QuoteBlock():
@@ -80,10 +109,9 @@ class CleanArticleView extends StatelessWidget {
           ),
           child: Text(
             block.text,
-            style: theme.textTheme.bodyLarge?.copyWith(
+            style: reading.copyWith(
               fontStyle: FontStyle.italic,
               color: theme.colorScheme.onSurfaceVariant,
-              height: 1.5,
             ),
           ),
         );
@@ -104,14 +132,16 @@ class CleanArticleView extends StatelessWidget {
                         width: 24,
                         child: Text(
                           block.ordered ? '${i + 1}.' : '•',
-                          style: theme.textTheme.bodyLarge,
+                          // The marker takes the reading face too: a sans
+                          // bullet beside a serif line is the kind of seam
+                          // nobody names but everybody sees.
+                          style: reading,
                         ),
                       ),
                       Expanded(
                         child: Text(
                           block.items[i],
-                          style:
-                              theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+                          style: reading,
                         ),
                       ),
                     ],

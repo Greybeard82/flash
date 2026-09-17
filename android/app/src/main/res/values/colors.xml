@@ -3,11 +3,16 @@
     <!-- Matches `darkBg` in lib/theme/app_theme.dart and NormalTheme's
          windowBackground, which is already this colour in both day and night.
          MainActivity replaces it at runtime with the app's active theme. -->
-    <color name="window_background">#0D1B2A</color>
+    <color name="window_background">#0D1211</color>
     <!-- 1x1 unread-count widget. Day values; res/values-night/colors.xml holds
          the dark pair. Both the background drawable and the number read these,
          so the two can never end up resolved against different configurations
-         the way a hand-branched provider and a -night drawable could. -->
-    <color name="widget_unread_bg">#F2F1EE</color>
-    <color name="widget_unread_text">#E07A1F</color>
+         the way a hand-branched provider and a -night drawable could.
+
+         Quiet Ink tokens, not new values: `surface` and `onSurface` from
+         lib/theme/app_theme.dart. What shipped before was newsprint cream
+         (#F2F1EE) under a warm orange (#E07A1F) — leftovers from the palette
+         era, sitting on a home screen next to a teal app. -->
+    <color name="widget_unread_bg">#FFFFFF</color>
+    <color name="widget_unread_text">#0F1413</color>
 </resources>

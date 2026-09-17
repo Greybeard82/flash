@@ -72,6 +72,15 @@ class FeedsChangedNotifier extends ChangeNotifier {
   /// after a single add.
   Timer? _notifyDebounce;
 
+  /// See [categoryCreatedByUser].
+  ///
+  /// Assigned in that method, cleared in [takeUserCreatedCategory] and
+  /// [reset], and **nowhere else** — [_record] in particular never touches
+  /// it, which is what keeps every other reason this notifier fires from
+  /// moving the user's selection. "Nowhere else" is the entire guarantee, so
+  /// it is pinned by a test rather than left to this comment.
+  int? _userCreatedFolderId;
+
   /// The strongest change queued since the last [consume], or null.
   FeedsChange? get pending => _pending;
 
@@ -82,6 +91,32 @@ class FeedsChangedNotifier extends ChangeNotifier {
 
   /// Feeds or categories changed without anything new being added.
   void structureChanged() => _record(FeedsChange.structureOnly);
+
+  /// **One category was just created by a person, in the UI, on purpose.**
+  ///
+  /// A different fact from [structureChanged], and the difference is the
+  /// whole point: "the folder set changed" is true of an OPML import too, and
+  /// only "this person typed this name and pressed the button" licenses
+  /// moving the article list's selection out from under them.
+  ///
+  /// **Deliberately not called from `FolderRepository.insert`,** even though
+  /// that is the choke point every creation path goes through and would be
+  /// one line. The repository sees a row, not an intent: it cannot tell the
+  /// add sheet from an OPML file or the starter pack, so selecting from there
+  /// would make importing fifty folders yank the list into an arbitrary one
+  /// of them. That is a worse bug than the one this fixes, and it is why the
+  /// intent is declared at the single call site that actually has it.
+  ///
+  /// **If you are adding a fourth way to create a category,** the question is
+  /// not "does this change the structure" — [structureChanged] already covers
+  /// that, and `FolderRepository.insert` already fires it for you. It is
+  /// "did one person just name this one thing". Only then.
+  void categoryCreatedByUser(int folderId) {
+    _userCreatedFolderId = folderId;
+    // Recorded as well, so the article list is woken even if the creation
+    // somehow raced ahead of the repository's own ping.
+    _record(FeedsChange.structureOnly);
+  }
 
   /// [FeedsChange.needsFetch] always wins. One add anywhere in a batch means
   /// the next consume has to hit the network, however many plain edits follow
@@ -94,6 +129,17 @@ class FeedsChangedNotifier extends ChangeNotifier {
         Timer(const Duration(milliseconds: 300), notifyListeners);
   }
 
+  /// Takes the id [categoryCreatedByUser] recorded, and clears it. Null if
+  /// nothing was created by hand since the last take.
+  ///
+  /// Single-consumer like [consume] and for the same reason: two screens
+  /// acting on one creation would be two screens fighting over a selection.
+  int? takeUserCreatedCategory() {
+    final id = _userCreatedFolderId;
+    _userCreatedFolderId = null;
+    return id;
+  }
+
   /// Takes the pending change and clears it. Null if there was none.
   FeedsChange? consume() {
     final pending = _pending;
@@ -104,6 +150,7 @@ class FeedsChangedNotifier extends ChangeNotifier {
   /// Test seam.
   void reset() {
     _pending = null;
+    _userCreatedFolderId = null;
     _notifyDebounce?.cancel();
     _notifyDebounce = null;
   }

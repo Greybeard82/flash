@@ -1,15 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import '../theme/app_theme.dart';
 
 class ShimmerCard extends StatelessWidget {
   const ShimmerCard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final baseColor = isDark ? const Color(0xFF1E2E3E) : const Color(0xFFE0E0E0);
-    final highlightColor =
-        isDark ? const Color(0xFF2A3E52) : const Color(0xFFF5F5F5);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final scheme = theme.colorScheme;
+
+    // Geometry below is untouched; only the greys moved. The old pair were
+    // fixed hexes from the palette era — #1E2E3E and #2A3E52 are navy, which
+    // on Quiet Ink's near-neutral dark surface read as a blue cast on every
+    // card during boot.
+    //
+    // The base is the placeholder role, the same fill a missing thumbnail
+    // uses, so a skeleton and the thing it stands in for are the same colour.
+    // The sweep moves one step toward the page's own extreme — paper in
+    // light, ink in dark — because a highlight has to be brighter than the
+    // block it crosses, and which direction that is depends on the theme.
+    final baseColor = theme.flashColors.placeholder;
+    final highlightColor = Color.lerp(
+      baseColor,
+      isDark ? scheme.onSurface : scheme.surface,
+      isDark ? 0.10 : 0.60,
+    )!;
 
     return Shimmer.fromColors(
       baseColor: baseColor,
@@ -57,7 +74,10 @@ class ShimmerCard extends StatelessWidget {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        color: Colors.grey,
+        // Whatever this is, Shimmer's shader paints over it. Kept opaque and
+        // neutral so the boxes are visible if the package is ever swapped for
+        // something that does not.
+        color: const Color(0xFF9E9E9E),
         borderRadius: BorderRadius.circular(radius),
       ),
     );

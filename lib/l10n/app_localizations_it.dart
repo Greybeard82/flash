@@ -80,6 +80,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get editFeed => 'Modifica feed';
 
   @override
+  String get feedOptions => 'Opzioni del feed';
+
+  @override
   String get feedName => 'Nome del feed';
 
   @override
@@ -160,7 +163,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Questo sostituirà tutti i tuoi feed, categorie e parole bloccate attuali con il backup salvato. Gli articoli verranno recuperati al prossimo aggiornamento.';
+      'Questo sostituirà tutti i tuoi feed, categorie, parole bloccate e articoli salvati attuali con il backup salvato. Gli avvisi per parole chiave non fanno parte del backup e resteranno invariati. Gli articoli verranno recuperati al prossimo aggiornamento.';
 
   @override
   String get restore => 'Ripristina';
@@ -176,24 +179,6 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get themeDark => 'Scuro';
-
-  @override
-  String get colorPalette => 'Tavolozza colori';
-
-  @override
-  String get paletteGreen => 'Verde e oro';
-
-  @override
-  String get paletteBlue => 'Blu e terracotta';
-
-  @override
-  String get paletteOrange => 'Arancione e bosco';
-
-  @override
-  String get paletteRed => 'Rosso e indaco';
-
-  @override
-  String get paletteTealOrange => 'Verde acqua e arancione';
 
   @override
   String get addKeyword => 'Aggiungi parola';
@@ -324,6 +309,9 @@ class AppLocalizationsIt extends AppLocalizations {
   String get searchArticles => 'Cerca articoli…';
 
   @override
+  String get searchPrompt => 'Digita una parola per cercarla nei tuoi articoli';
+
+  @override
   String noSearchResults(String query) {
     return 'Nessun articolo corrisponde a \"$query\"';
   }
@@ -339,10 +327,13 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Niente di salvato ancora.\nTieni premuto un articolo per salvarlo.';
+      'Niente di salvato ancora.\nTocca l\'icona di salvataggio su un articolo.';
 
   @override
   String get bookmark => 'Salva';
+
+  @override
+  String get bookmarkRemoved => 'Rimosso dai salvati';
 
   @override
   String get keywordAlerts => 'Avvisi per parole chiave';
@@ -499,9 +490,6 @@ class AppLocalizationsIt extends AppLocalizations {
       'Nessun avviso ancora.\nGli articoli che contengono le tue parole chiave compariranno qui.';
 
   @override
-  String get alertsFilterAll => 'Tutti';
-
-  @override
   String get alertsManageKeywords => 'Gestisci parole chiave';
 
   @override
@@ -568,6 +556,17 @@ class AppLocalizationsIt extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count avvisi per parole chiave',
+      one: '1 avviso per parola chiave',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -578,6 +577,9 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get selectAnArticle => 'Seleziona un articolo per leggerlo qui';
+
+  @override
+  String get articlesAppearHere => 'Gli articoli che apri compaiono qui';
 
   @override
   String get builtInViewer => 'Apri gli articoli nel visualizzatore integrato';
@@ -726,6 +728,9 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Non ci sono ancora feed da esportare.';
+
+  @override
+  String get adSponsored => 'Sponsorizzato';
 
   @override
   String get swapSides => 'Inverti i lati';

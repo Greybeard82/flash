@@ -10,6 +10,7 @@ import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
 import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
+import '../theme/app_theme.dart';
 
 /// Manages the alert keywords themselves: add, edit, delete, and how many
 /// cards each one currently accounts for.
@@ -146,8 +147,9 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     // one actually stored, permanently writing match rows the configured alert
     // would never have produced ("zelda" whole-word-on matching "Zeldathon").
     if (_existingKeyword(text) != null) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertKeywordExists(text),
+          kind: BannerKind.failure);
       return;
     }
     final wholeWord = _addWholeWord;
@@ -219,8 +221,9 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
     // Caught here instead, before anything has been written.
     final clash = _existingKeyword(text);
     if (clash != null && clash.id != entry.id) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertKeywordExists(text),
+          kind: BannerKind.failure);
       return;
     }
 
@@ -243,7 +246,8 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
       if (stillClashes != null && stillClashes.id != entry.id) {
         if (mounted) {
           _bannerKey.currentState
-              ?.show(AppLocalizations.of(context)!.alertKeywordExists(text));
+              ?.show(AppLocalizations.of(context)!.alertKeywordExists(text),
+                  kind: BannerKind.failure);
         }
         return;
       }
@@ -351,7 +355,13 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: theme.colorScheme.errorContainer.withValues(alpha: 0.35),
+          // A neutral raised surface, not a 35% error wash. Two rules
+          // met at once: alpha over a role is not a colour the palette
+          // authored, and error is for faults — inline validation, the
+          // stale-feed glyph, the radial menu's Delete — never for asking a
+          // question. The consequence is carried by the sentence inside the
+          // block, which names the number of cards that disappear.
+          color: theme.colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -366,7 +376,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             Text(
               l10n.deleteAlertKeywordBody(_confirmOrphans),
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.75),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
@@ -411,7 +421,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           child: Text(
             l10n.keywordAlertsSubtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -470,13 +480,16 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.notifications_none_rounded,
-                size: 48,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                size: 48, color: theme.flashColors.illustration),
             const SizedBox(height: 12),
+            // Two pieces of copy take two roles: this one leads, so it
+            // takes `onSurfaceVariant` and the line under it stays muted.
+            // Both muted made the pair read as one grey paragraph with an
+            // arbitrary line break in it.
             Text(
               l10n.noKeywordAlerts,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 6),
@@ -484,7 +497,7 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
               l10n.keywordAlertsEmpty,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                color: theme.flashColors.onSurfaceMuted,
               ),
             ),
           ],
@@ -549,12 +562,18 @@ class _KeywordAlertsPanelState extends State<KeywordAlertsPanel> {
             Text(
               l10n.articlesCount(_counts[entry.keyword] ?? 0),
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.flashColors.onSurfaceMuted,
               ),
             ),
+            // Neutral, matching the Categories header this restyle already
+            // settled: a bin that opens a confirmation does not rank above
+            // the row it sits in. Handoff 4 keeps `error` for "Delete, in
+            // Alerts only" — that is the RADIAL MENU's Delete, which is the
+            // only Delete the theme comment blesses by name, and it is a
+            // different widget in a different file.
             IconButton(
-              icon:
-                  Icon(Icons.delete_outline, color: theme.colorScheme.error),
+              icon: Icon(Icons.delete_outline,
+                  color: theme.colorScheme.onSurfaceVariant),
               onPressed: () => _delete(entry),
             ),
           ],

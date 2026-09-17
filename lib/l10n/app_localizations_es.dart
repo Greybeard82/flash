@@ -80,6 +80,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get editFeed => 'Editar fuente';
 
   @override
+  String get feedOptions => 'Opciones de la fuente';
+
+  @override
   String get feedName => 'Nombre de la fuente';
 
   @override
@@ -160,7 +163,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Esto reemplazará todas tus fuentes, categorías y palabras bloqueadas actuales con la copia guardada. Los artículos se actualizarán en el próximo refresco.';
+      'Esto reemplazará todas tus fuentes, categorías, palabras bloqueadas y artículos guardados actuales con la copia guardada. Las alertas de palabras clave no forman parte de la copia y no se modificarán. Los artículos se actualizarán en el próximo refresco.';
 
   @override
   String get restore => 'Restaurar';
@@ -176,24 +179,6 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get themeDark => 'Oscuro';
-
-  @override
-  String get colorPalette => 'Paleta de colores';
-
-  @override
-  String get paletteGreen => 'Verde y oro';
-
-  @override
-  String get paletteBlue => 'Azul y terracota';
-
-  @override
-  String get paletteOrange => 'Naranja y bosque';
-
-  @override
-  String get paletteRed => 'Rojo e índigo';
-
-  @override
-  String get paletteTealOrange => 'Verde azulado y naranja';
 
   @override
   String get addKeyword => 'Añadir palabra';
@@ -324,6 +309,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get searchArticles => 'Buscar artículos…';
 
   @override
+  String get searchPrompt =>
+      'Escribe una palabra para buscarla en tus artículos';
+
+  @override
   String noSearchResults(String query) {
     return 'Ningún artículo coincide con \"$query\"';
   }
@@ -339,10 +328,13 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Nada guardado aún.\nMantén pulsado un artículo para guardarlo.';
+      'Nada guardado aún.\nToca el icono de guardar en cualquier artículo.';
 
   @override
   String get bookmark => 'Guardar';
+
+  @override
+  String get bookmarkRemoved => 'Eliminado de Guardados';
 
   @override
   String get keywordAlerts => 'Alertas de palabras clave';
@@ -498,9 +490,6 @@ class AppLocalizationsEs extends AppLocalizations {
       'Aún no hay alertas.\nLos artículos que coincidan con tus palabras clave aparecerán aquí.';
 
   @override
-  String get alertsFilterAll => 'Todas';
-
-  @override
   String get alertsManageKeywords => 'Gestionar palabras clave';
 
   @override
@@ -568,6 +557,17 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alertas de palabras clave',
+      one: '1 alerta de palabra clave',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -578,6 +578,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get selectAnArticle => 'Selecciona un artículo para leerlo aquí';
+
+  @override
+  String get articlesAppearHere => 'Los artículos que abras aparecerán aquí';
 
   @override
   String get builtInViewer => 'Abrir artículos en el visor integrado';
@@ -726,6 +729,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Aún no hay fuentes que exportar.';
+
+  @override
+  String get adSponsored => 'Patrocinado';
 
   @override
   String get swapSides => 'Cambiar de lado';

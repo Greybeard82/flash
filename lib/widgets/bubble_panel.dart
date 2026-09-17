@@ -259,7 +259,13 @@ class _BubblePanelState extends State<_BubblePanel>
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 6 * t, sigmaY: 6 * t),
                     child: ColoredBox(
-                      color: Colors.black.withValues(alpha: 0.28 * t),
+                      // `scrim` rather than `Colors.black`. Byte-identical
+                      // today — neither scheme declares scrim, so both take
+                      // ColorScheme's own black — which is the point: it costs
+                      // nothing now and means a theme that ever wants a warmer
+                      // scrim has somewhere to say so.
+                      color:
+                          theme.colorScheme.scrim.withValues(alpha: 0.28 * t),
                     ),
                   ),
                 ),

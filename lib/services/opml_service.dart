@@ -258,6 +258,7 @@ class OpmlService {
           // list the user has arranged.
           position: await _folderRepo.getNextPosition(),
           createdAt: DateTime.now().millisecondsSinceEpoch,
+          colorIndex: await _folderRepo.nextColorIndex(),
         ));
         existingFolders.add(folder);
         foldersCreated++;

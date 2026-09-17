@@ -15,6 +15,7 @@ import '../services/share_service.dart';
 import '../widgets/article_card.dart';
 import '../widgets/mark_all_read_confirm.dart';
 import '../widgets/quick_settings_action.dart';
+import '../theme/app_theme.dart';
 
 class BookmarksScreen extends StatefulWidget {
   const BookmarksScreen({super.key});
@@ -78,8 +79,7 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       // The alert snapshot owns its own is_read, so every place that marks an
       // article read has to mirror it or the Alerts tab keeps showing the card
       // as unread forever. A no-op when this article matched no keyword.
-      await _alertMatchRepo
-          .setRead(article.feedId, article.guid, isRead: true);
+      await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
       ReadStateNotifier.instance.articleReadStateChanged();
       if (mounted) {
         setState(() {
@@ -110,22 +110,6 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     }, label: 'Removing bookmark');
   }
 
-  Future<void> _markRead(Article article) async {
-    if (article.id == null) return;
-    DiagLog.read(id: article.id!, trigger: 'tap:bookmarks', offset: -1);
-    await _articleRepo.markAsRead(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: true);
-    ReadStateNotifier.instance.articleReadStateChanged();
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles
-            .map((a) => a.id == article.id ? a.copyWith(isRead: true) : a)
-            .toList();
-      });
-    }
-  }
-
   /// Read state only.
   ///
   /// None of Flash's retirement, cleanup or refetch: a saved article is exempt
@@ -150,33 +134,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
     ReadStateNotifier.instance.articleReadStateChanged();
 
     if (!mounted) return;
-    // Patched locally rather than reloaded, for the same instant-feedback
-    // reason _markRead does it that way.
+    // Patched locally rather than reloaded, so the rows dim at once
+    // instead of after a round trip to the database.
     setState(() {
       _articles = [
-        for (final a in _articles)
-          a.isRead ? a : a.copyWith(isRead: true),
+        for (final a in _articles) a.isRead ? a : a.copyWith(isRead: true),
       ];
     });
   }
-
-  Future<void> _markUnread(Article article) async {
-    if (article.id == null) return;
-    await _articleRepo.markAsUnread(article.id!);
-    await _alertMatchRepo.setRead(article.feedId, article.guid, isRead: false);
-    // markAsUnread clears read_at, so the article leaves the show-read window
-    // as well as the unread count. Ping so the feed's badges re-query.
-    ReadStateNotifier.instance.articleReadStateChanged();
-    HapticFeedback.lightImpact();
-    if (mounted) {
-      setState(() {
-        _articles = _articles
-            .map((a) => a.id == article.id ? a.copyWith(isRead: false) : a)
-            .toList();
-      });
-    }
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -207,14 +172,14 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
       floatingActionButton: hostedInSidebar
           ? null
           : _articles.any((a) => !a.isRead)
-          ? FloatingActionButton(
-              heroTag: 'bookmarks_mark_all_read',
-              onPressed: _markAllRead,
-              tooltip: l10n.markAllRead,
-              mini: true,
-              child: const Icon(Icons.done_all_rounded),
-            )
-          : null,
+              ? FloatingActionButton(
+                  heroTag: 'bookmarks_mark_all_read',
+                  onPressed: _markAllRead,
+                  tooltip: l10n.markAllRead,
+                  mini: true,
+                  child: const Icon(Icons.done_all_rounded),
+                )
+              : null,
       body: _loading
           ? Center(
               child: SpinningRefreshIcon(
@@ -225,13 +190,18 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.bookmark_border_rounded,
-                          size: 48,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.2)),
+                          size: 48, color: theme.flashColors.illustration),
                       const SizedBox(height: 12),
+                      // `onSurfaceVariant`, not `onSurfaceMuted`. When a
+                      // screen is empty this copy is the only content on it,
+                      // so it is not supporting text and the most recessive
+                      // role is the wrong one. One piece of copy takes the
+                      // first role; the second role exists for a second
+                      // piece, which this state does not have.
                       Text(
                         l10n.noBookmarks,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -242,14 +212,13 @@ class _BookmarksScreenState extends State<BookmarksScreen> {
                   child: ListView.separated(
                     itemCount: _articles.length,
                     separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 16, endIndent: 16),
+                        // Full-bleed: this is an article list.
+                        const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final article = _articles[i];
                       return ArticleCard(
                         article: article,
                         onTap: () => _openArticle(article),
-                        onMarkRead: () => _markRead(article),
-                        onMarkUnread: () => _markUnread(article),
                         onShare: () => _shareService.shareArticle(article),
                         onBookmark: () => _toggleSaved(article),
                       );

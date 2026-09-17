@@ -112,12 +112,16 @@ void main() {
       await _expectUnchanged(before);
     });
 
-    test('wrong version', () async {
+    test('an unsupported version', () async {
+      // Was version 2, which is now the version this build writes. Pointed at
+      // a FUTURE format instead, which is the case that still matters: a file
+      // written by a newer Flash must be refused by this one, before anything
+      // is deleted, rather than half-restored.
       final before = await _snapshot();
 
       expect(
         () => BackupSerializer.restoreFromMap(
-            {'version': 2, 'folders': [], 'feeds': []}),
+            {'version': 99, 'folders': [], 'feeds': []}),
         throwsA(isA<FormatException>()),
       );
       await _expectUnchanged(before);

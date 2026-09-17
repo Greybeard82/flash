@@ -1,21 +1,26 @@
+import 'dart:async';
 import 'dart:collection';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/article.dart';
 import '../models/content_block.dart';
+import '../repositories/article_repository.dart';
 import '../repositories/settings_repository.dart';
 import '../services/ad_blocklist.dart';
 import '../services/clean_reader.dart';
+import '../services/saved_state_notifier.dart';
+import '../services/share_service.dart';
 import '../utils/date_utils.dart';
 import 'clean_article_view.dart';
 import 'notification_banner.dart';
 import 'spinning_refresh_icon.dart';
+import '../theme/app_theme.dart';
 
 /// Overrides `Notification.requestPermission` before the page's own scripts
 /// run, so a site that asks for notification permission on load is answered
@@ -132,11 +137,154 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
 
   final _bannerKey = GlobalKey<NotificationBannerState>();
 
+  /// **The pane owns the bookmark rather than receiving a callback, and the
+  /// precedent is three lines up.**
+  ///
+  /// `openArticle()` is a free function with two positional parameters and no
+  /// repository access, and it is one of five call sites. Threading a callback
+  /// would mean editing all five plus both `ArticleDetailPane` constructions,
+  /// and two of those five — the search screen and the keyword group panel
+  /// — render plain `ListTile`s with no saved-state code at all, so they
+  /// would each have to invent a bookmark implementation to pass down.
+  ///
+  /// This pane already constructs `SettingsRepository()` inline twice and calls
+  /// `launchUrl` directly, so owning one more repository is the established
+  /// shape here, not a new one. `ArticleCard` taking `onBookmark` is the
+  /// counter-precedent and it is a different case: the card lives inside a
+  /// screen that already owns the list and its repository.
+  final _articleRepo = ArticleRepository();
+
+  /// Mirrors the article's saved state so the glyph can change without a new
+  /// `Article` arriving. The widget's own `article.isSaved` is a snapshot from
+  /// whenever the list last loaded.
+  late bool _isSaved;
+
+  /// The `articles` row id this pane writes against.
+  ///
+  /// **Usually `widget.article.id`, and resolved when that is null.** An
+  /// article opened from the Alerts tab is a snapshot: `AlertEntry.toArticle()`
+  /// leaves the id null on purpose, because identity there is (feedId, guid)
+  /// and the row it was taken from may have been retired.
+  ///
+  /// Pass 8b read that null as "this article cannot be bookmarked" and hid the
+  /// button. That was the right principle — absent beats inert — applied to a
+  /// wrong premise: the action is available, the id is just somewhere else.
+  /// The Alerts screen has always resolved it by (feedId, guid) and bookmarked
+  /// successfully while the reader opened from the same list refused to.
+  ///
+  /// Null after resolution means there genuinely is no row, and then the
+  /// button stays absent, which is still right.
+  int? _articleId;
+
   @override
   void initState() {
     super.initState();
+    _isSaved = widget.article.isSaved;
+    _articleId = widget.article.id;
+    if (_articleId == null) unawaited(_resolveArticleId());
+    // A bookmark button that lies about state is worse than no bookmark
+    // button: the same article can be unsaved from the card's rail or the
+    // radial menu while this pane is open behind them.
+    SavedStateNotifier.instance.addListener(_onExternalSavedStateChanged);
     _loadCleanVersion();
   }
+
+  @override
+  void dispose() {
+    SavedStateNotifier.instance.removeListener(_onExternalSavedStateChanged);
+    super.dispose();
+  }
+
+  /// Someone else changed this article's saved state.
+  ///
+  /// The payload is read synchronously, which is required rather than tidy:
+  /// the notifier holds only the last change and the next broadcast overwrites
+  /// it, so deferring across an await would act on a different article.
+  void _onExternalSavedStateChanged() {
+    if (!mounted) return;
+    final id = SavedStateNotifier.instance.articleId;
+    final saved = SavedStateNotifier.instance.saved;
+    // The guard is what makes this self-cancelling: this pane's own write
+    // broadcasts too, and by then `_isSaved` already agrees.
+    if (id == null || id != _articleId || saved == _isSaved) return;
+    setState(() => _isSaved = saved);
+  }
+
+  /// Writes, then tells everyone else.
+  ///
+  /// **Silently does nothing when the article has no id**, which is not a
+  /// defensive flourish: an article opened from the Alerts tab is built by
+  /// `AlertEntry.toArticle()` and deliberately carries a null id, because its
+  /// identity there is (feedId, guid). `feed_screen._toggleSaved` guards the
+  /// same way. The button is hidden in that case rather than left to do
+  /// nothing when pressed — see `_PaneTopBar`.
+  Future<void> _toggleSaved() async {
+    final id = _articleId;
+    if (id == null) return;
+
+    final nowSaved = !_isSaved;
+    await _articleRepo.setSaved(id, saved: nowSaved);
+    HapticFeedback.lightImpact();
+    if (mounted) setState(() => _isSaved = nowSaved);
+
+    // After the local patch, so this pane's own listener sees a value that
+    // already agrees and does nothing.
+    SavedStateNotifier.instance.articleSavedStateChanged(id, saved: nowSaved);
+  }
+
+  /// Looks the real row up for a snapshot that carries no id.
+  ///
+  /// One indexed read on (feed_id, guid), on open, and only when the id is
+  /// missing — which is the Alerts tab and nowhere else. The bookmark appears
+  /// once it lands rather than being drawn optimistically and taken away: a
+  /// button that vanishes is worse than one that arrives a frame late.
+  ///
+  /// **`isSaved` is taken from the resolved row, not from the snapshot.** That
+  /// is the whole invariant: the glyph and the write must read the same
+  /// source. The snapshot's `isSaved` is whatever the Alerts list resolved for
+  /// it, which is now the same value — but this pane can also be reached from
+  /// a notification, where nothing resolved anything.
+  Future<void> _resolveArticleId() async {
+    final row = await _articleRepo.findByGuid(
+      widget.article.feedId,
+      widget.article.guid,
+    );
+    if (!mounted || row?.id == null) return;
+    setState(() {
+      _articleId = row!.id;
+      _isSaved = row.isSaved;
+    });
+  }
+
+  Future<void> _share() => ShareService().shareArticle(widget.article);
+
+  /// "Publisher · date", falling back to the URL's host.
+  ///
+  /// Both halves are nullable on `Article`, so the join really can come out
+  /// empty — and with the title line gone that would leave the bar with no
+  /// text at all. The host is the fallback because it is always there (it is
+  /// the thing that was opened), it is true, and it is what Chrome puts in the
+  /// same position.
+  ///
+  /// `www.` is stripped for the same reason Chrome strips it: it is four
+  /// characters of nothing, and a bar this narrow has none to spare.
+  String _sourceFor(BuildContext context) {
+    final publisher = widget.article.feedTitle?.trim() ?? '';
+    if (publisher.isNotEmpty) return publisher;
+
+    // `feedTitle` is nullable, and this is the bar's headline text now, so it
+    // cannot be allowed to come out empty. The host is always available — it
+    // is what was opened — it is true, and it is what Chrome shows in the same
+    // position. `www.` is stripped for the same reason Chrome strips it: four
+    // characters of nothing in a line that has about 160dp.
+    final host = Uri.tryParse(widget.article.url)?.host ?? '';
+    return host.startsWith('www.') ? host.substring(4) : host;
+  }
+
+  String _dateFor(BuildContext context) => formatPublishedDate(
+        widget.article.publishedAt,
+        Localizations.localeOf(context).toLanguageTag(),
+      );
 
   @override
   void didUpdateWidget(ArticleDetailPane oldWidget) {
@@ -151,7 +299,12 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
         _loading = true;
         _cleanBlocks = null;
         _cleanMode = false;
+        // The incoming article carries its own saved state, and it is fresher
+        // than whatever the previous one left here.
+        _isSaved = widget.article.isSaved;
+        _articleId = widget.article.id;
       });
+      if (_articleId == null) unawaited(_resolveArticleId());
       _loadCleanVersion();
     }
   }
@@ -204,7 +357,7 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
       case CleanReadOutcome.unavailable:
         // First verdict for this URL this session, so say so once.
         final l10n = AppLocalizations.of(context)!;
-        _bannerKey.currentState?.show(l10n.cleanModeUnavailable);
+        _bannerKey.currentState?.show(l10n.cleanModeUnavailable, kind: BannerKind.failure);
       case CleanReadOutcome.alreadyUnavailable:
         // Already judged and already reported. Reopening an article that has
         // no clean version should be quiet, not a recurring error.
@@ -233,22 +386,28 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
     return Column(
       children: [
         _PaneTopBar(
-          title: widget.article.title,
           // Play policy: a news app must name the source of every article and
           // show its publication date. The reading pane is where an article is
           // read in full, so it is the last place either should be missing.
           // Resolved here rather than inside the bar so that stays a
           // StatelessWidget with no context-dependent work of its own.
-          attribution: [
-            widget.article.feedTitle?.trim() ?? '',
-            formatPublishedDate(
-              widget.article.publishedAt,
-              Localizations.localeOf(context).toLanguageTag(),
-            ),
-          ].where((part) => part.isNotEmpty).join(' · '),
+          //
+          // With the title line gone this is the bar's only text, so it can no
+          // longer be allowed to come out empty — `feedTitle` and
+          // `publishedAt` are both nullable, and an article with neither would
+          // leave a bar with four buttons and nothing saying where you are.
+          // The host is the fallback: truthful, always available since the URL
+          // is what was opened, and what Chrome shows in the same position.
+          source: _sourceFor(context),
+          date: _dateFor(context),
           onClose: widget.onClose,
           onOpenInBrowser: _openInBrowser,
           openInBrowserTooltip: l10n.openInBrowser,
+          onBookmark: _articleId == null ? null : _toggleSaved,
+          isSaved: _isSaved,
+          bookmarkTooltip: _isSaved ? l10n.saved : l10n.bookmark,
+          onShare: _share,
+          shareTooltip: l10n.share,
         ),
         Expanded(
           child: Stack(
@@ -405,23 +564,74 @@ class _ArticleDetailPaneState extends State<ArticleDetailPane> {
   }
 }
 
+/// The reader's chrome: where you are, and four ways to act on it.
+///
+/// **The article title line is gone, and that is a decision rather than a
+/// cut.** Four 48dp buttons leave a title roughly 26 characters at 360dp,
+/// which is a stub and not a title — and the user has just tapped the article,
+/// with the headline in front of them on the page itself. What a reader's bar
+/// is for is saying where you are and how to leave; Chrome's custom tabs show
+/// the domain for the same reason.
+///
+/// So the source is promoted to `titleSmall` in the full ink, and the date
+/// keeps the `labelSmall` second line it always had — publisher **and** date,
+/// which Play policy requires a news app to show for every article.
+///
+/// **The two were briefly one line, and that is why the second one is back.**
+/// Joined as `publisher · date` on a 360dp phone with four buttons, the text
+/// has about 160dp: enough for "Sky Sports · Sep 15, 2026 9:44 …" and no more,
+/// so the date was cut on every article. Dropping the *title* was right for a
+/// different reason — 160dp of headline is a stub — and 160dp of source name
+/// is a whole name. The second line was never the thing short of room.
+///
+/// **The bar's height does not change, and that is load-bearing.** The four
+/// `IconButton`s set a 48dp floor and the 4dp vertical padding takes it to 56,
+/// which is what the column measured with a title and a date, then with a
+/// source alone, and now with a source and a date. A bar that shrank would
+/// resize the platform view mid-read on the tablet, reflowing the page and
+/// losing the scroll position. Pinned as a number in
+/// `reader_action_bar_test.dart`.
 class _PaneTopBar extends StatelessWidget {
-  final String title;
+  /// The publisher, or the URL's host when the article carries no feed title.
+  ///
+  /// **Never empty** — this is the bar's headline text now, so the fallback is
+  /// not optional. It is resolved at the construction site rather than here,
+  /// keeping this widget free of context-dependent work.
+  final String source;
 
-  /// "Publisher · date", already joined and already localised. Empty when
-  /// the article carries neither, in which case no second line is drawn.
-  final String attribution;
+  /// The published date, already localised. Empty when the article carries no
+  /// timestamp, in which case no second line is drawn and the source sits on
+  /// its own.
+  final String date;
 
   final VoidCallback? onClose;
   final VoidCallback onOpenInBrowser;
   final String openInBrowserTooltip;
 
+  /// Null when the article has no id, which is how an article opened from the
+  /// Alerts tab arrives: `AlertEntry.toArticle()` leaves the id null on
+  /// purpose, since identity there is (feedId, guid). A bookmark cannot be
+  /// written without one, so the button is **absent** rather than present and
+  /// inert — a control that does nothing when pressed is a worse answer than
+  /// one that is not offered.
+  final VoidCallback? onBookmark;
+  final bool isSaved;
+  final String bookmarkTooltip;
+
+  final VoidCallback onShare;
+  final String shareTooltip;
+
   const _PaneTopBar({
-    required this.title,
-    required this.attribution,
+    required this.source,
+    required this.date,
     required this.onClose,
     required this.onOpenInBrowser,
     required this.openInBrowserTooltip,
+    required this.onBookmark,
+    required this.isSaved,
+    required this.bookmarkTooltip,
+    required this.onShare,
+    required this.shareTooltip,
   });
 
   @override
@@ -448,21 +658,31 @@ class _PaneTopBar extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Line 1. Promoted to `titleSmall` in the full ink when
+                    // the article title left: this is what the bar is for,
+                    // saying where you are.
+                    //
+                    // Ellipsised, and the truncation falls in the right place
+                    // because the date is no longer joined on the end of it.
+                    // The longest starter-pack source, "The New York Times
+                    // (World)", loses its qualifier and keeps the masthead.
                     Text(
-                      title,
+                      source,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall,
+                      style: theme.textTheme.titleSmall
+                          ?.copyWith(color: theme.colorScheme.onSurface),
                     ),
-                    if (attribution.isNotEmpty)
+                    // Line 2. Its own line rather than joined with a separator,
+                    // which is the whole of this fix: joined, it was the half
+                    // that got cut, on every article.
+                    if (date.isNotEmpty)
                       Text(
-                        attribution,
+                        date,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.6),
-                        ),
+                        style: theme.textTheme.labelSmall
+                            ?.copyWith(color: theme.flashColors.onSurfaceMuted),
                       ),
                   ],
                 ),
@@ -471,6 +691,35 @@ class _PaneTopBar extends StatelessWidget {
                 icon: const Icon(Icons.open_in_new_rounded, size: 20),
                 onPressed: onOpenInBrowser,
                 tooltip: openInBrowserTooltip,
+              ),
+              // Absent, not disabled, when the article has no id. See the
+              // field's doc.
+              if (onBookmark != null)
+                IconButton(
+                  // The action rail's treatment exactly, so a bookmark means
+                  // the same thing in the list and in the reader: filled in
+                  // `secondary` when saved, outline when not. 1.6 is canonical
+                  // on the saved half.
+                  //
+                  // Unsaved passes no colour, which lands on M3's
+                  // `onSurfaceVariant` default — the same ink the close and
+                  // open-in-browser glyphs beside it already take, so an
+                  // unsaved bookmark sits level with its neighbours and a
+                  // saved one is the only warm thing in the bar.
+                  icon: Icon(
+                    isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    size: 20,
+                    color: isSaved ? theme.colorScheme.secondary : null,
+                  ),
+                  onPressed: onBookmark,
+                  tooltip: bookmarkTooltip,
+                ),
+              IconButton(
+                icon: const Icon(Icons.share_rounded, size: 20),
+                onPressed: onShare,
+                tooltip: shareTooltip,
               ),
             ],
           ),
@@ -482,13 +731,40 @@ class _PaneTopBar extends StatelessWidget {
 
 /// What the right-hand column shows before anything has been picked.
 class ArticleDetailPlaceholder extends StatelessWidget {
-  const ArticleDetailPlaceholder({super.key});
+  /// Overrides the default copy for a section the pane cannot be filled from.
+  ///
+  /// The default sentence asks the user to select an article, which is
+  /// followable on Flash, Bookmarks and Alerts — all three route taps through
+  /// `openArticle`, which calls `pane.show`. Categories does not: it lists
+  /// folders and feeds, expands them in place, and never puts an article in
+  /// this column. There the instruction was an instruction you could not obey,
+  /// across half the tablet screen, so that one section passes a statement of
+  /// fact instead.
+  ///
+  /// Copy is chosen by the shell, which is the only thing that knows which
+  /// section the pane is sitting beside; the pane itself stays ignorant.
+  final String? message;
+
+  const ArticleDetailPlaceholder({super.key, this.message});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.35);
+    // **Not an empty state, and deliberately exempt from their roles.**
+    //
+    // Pass 8's rule is that empty-state copy takes `onSurfaceVariant`, because
+    // when a screen is empty that copy is the only content on it. This pane is
+    // the exception the rule's own reasoning excludes: nothing here is empty.
+    // The middle column is full of articles and this is the right-hand column
+    // waiting to be told which one — genuinely secondary to the list beside
+    // it, and the one place in the app where recessive is correct.
+    //
+    // Pass 2 decided this and `ink_roles_test.dart` has pinned it since, in
+    // both brightnesses, for the glyph as well as the text. Swept into the
+    // rule during this pass and reverted when that test said so, which is the
+    // test doing exactly what it was written for.
+    final muted = theme.flashColors.onSurfaceMuted;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -498,7 +774,7 @@ class ArticleDetailPlaceholder extends StatelessWidget {
             Icon(Icons.article_outlined, size: 44, color: muted),
             const SizedBox(height: 12),
             Text(
-              l10n.selectAnArticle,
+              message ?? l10n.selectAnArticle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(color: muted),
             ),

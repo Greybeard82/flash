@@ -80,6 +80,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get editFeed => 'Modifier le flux';
 
   @override
+  String get feedOptions => 'Options du flux';
+
+  @override
   String get feedName => 'Nom du flux';
 
   @override
@@ -160,7 +163,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Cela remplacera tous vos flux, catégories et mots bloqués actuels par la sauvegarde enregistrée. Les articles seront récupérés lors du prochain rafraîchissement.';
+      'Cela remplacera tous vos flux, catégories, mots bloqués et articles enregistrés actuels par la sauvegarde enregistrée. Les alertes par mot-clé ne font pas partie d\'une sauvegarde et resteront inchangées. Les articles seront récupérés lors du prochain rafraîchissement.';
 
   @override
   String get restore => 'Restaurer';
@@ -176,24 +179,6 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get themeDark => 'Sombre';
-
-  @override
-  String get colorPalette => 'Palette de couleurs';
-
-  @override
-  String get paletteGreen => 'Vert et or';
-
-  @override
-  String get paletteBlue => 'Bleu et terre cuite';
-
-  @override
-  String get paletteOrange => 'Orange et forêt';
-
-  @override
-  String get paletteRed => 'Rouge et indigo';
-
-  @override
-  String get paletteTealOrange => 'Sarcelle et orange';
 
   @override
   String get addKeyword => 'Ajouter un mot';
@@ -324,6 +309,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get searchArticles => 'Rechercher des articles…';
 
   @override
+  String get searchPrompt =>
+      'Saisis un mot pour le retrouver dans tes articles';
+
+  @override
   String noSearchResults(String query) {
     return 'Aucun article ne correspond à \"$query\"';
   }
@@ -339,10 +328,13 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Rien d\'enregistré pour l\'instant.\nAppuyez longuement sur un article pour le sauvegarder.';
+      'Rien d\'enregistré pour l\'instant.\nAppuyez sur l\'icône d\'enregistrement d\'un article.';
 
   @override
   String get bookmark => 'Enregistrer';
+
+  @override
+  String get bookmarkRemoved => 'Retiré des enregistrés';
 
   @override
   String get keywordAlerts => 'Alertes par mot-clé';
@@ -500,9 +492,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Aucune alerte pour le moment.\nLes articles correspondant à vos mots-clés apparaîtront ici.';
 
   @override
-  String get alertsFilterAll => 'Toutes';
-
-  @override
   String get alertsManageKeywords => 'Gérer les mots-clés';
 
   @override
@@ -570,6 +559,17 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count alertes par mot-clé',
+      one: '$count alerte par mot-clé',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -580,6 +580,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get selectAnArticle => 'Sélectionne un article pour le lire ici';
+
+  @override
+  String get articlesAppearHere =>
+      'Les articles que tu ouvres s\'affichent ici';
 
   @override
   String get builtInViewer =>
@@ -729,6 +733,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Il n’y a pas encore de flux à exporter.';
+
+  @override
+  String get adSponsored => 'Sponsorisé';
 
   @override
   String get swapSides => 'Inverser les côtés';

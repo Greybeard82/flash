@@ -47,7 +47,7 @@ Future<void> _pump(
   bool isRead = false,
 }) async {
   await tester.pumpWidget(MaterialApp(
-    theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark),
+    theme: flashQuietInkTheme(brightness: Brightness.dark),
     localizationsDelegates: const [
       AppLocalizations.delegate,
       GlobalMaterialLocalizations.delegate,
@@ -66,8 +66,6 @@ Future<void> _pump(
               article: _article().copyWith(isRead: isRead),
               alertKeywords: keywords,
               onTap: () {},
-              onMarkRead: () {},
-              onMarkUnread: () {},
               onShare: () {},
               onBookmark: () {},
             ),

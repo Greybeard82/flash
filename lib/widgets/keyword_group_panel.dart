@@ -7,6 +7,7 @@ import '../services/loading_controller.dart';
 import 'bubble_panel.dart';
 import 'spinning_refresh_icon.dart';
 import 'notification_banner.dart';
+import '../theme/app_theme.dart';
 
 /// One keyword row's identity and matching settings, independent of whether
 /// it backs a [KeywordBlock] or a [KeywordAlert] — the two models have the
@@ -246,7 +247,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
           child: Text(
             widget.subtitle,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -285,13 +286,12 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(widget.emptyIcon,
-                      size: 48,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.3)),
+                      size: 48, color: theme.flashColors.illustration),
                   const SizedBox(height: 12),
                   Text(
                     widget.emptyTitle,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -299,7 +299,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                     widget.emptyBody,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                      color: theme.flashColors.onSurfaceMuted,
                     ),
                   ),
                 ],
@@ -381,11 +381,15 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                 Text(
                   l10n.articlesCount(articles.length),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                    color: theme.flashColors.onSurfaceMuted,
                   ),
                 ),
+                // Neutral, as in the alerts panel and the Categories
+                // header. This one is the blocklist, which handoff 4's
+                // Alerts sentence does not reach at all.
                 IconButton(
-                  icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
+                  icon: Icon(Icons.delete_outline,
+                      color: theme.colorScheme.onSurfaceVariant),
                   onPressed: () => _delete(entry),
                 ),
                 AnimatedRotation(
@@ -393,7 +397,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                   duration: const Duration(milliseconds: 200),
                   child: Icon(Icons.expand_more_rounded,
                       size: 20,
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                      color: theme.colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -414,7 +418,10 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                         leading: Icon(
                           widget.matchIcon,
                           size: 20,
-                          color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+                          // 6.4: onSurfaceMuted. It is a repeated row tick,
+                          // not an illustration — the Batch 6 line putting it
+                          // under the illustration role is superseded.
+                          color: theme.flashColors.onSurfaceMuted,
                         ),
                         title: Text(
                           articles[i].title,
@@ -426,8 +433,7 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                             ? Text(
                                 articles[i].feedTitle!,
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  color: theme.colorScheme.onSurface
-                                      .withValues(alpha: 0.5),
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               )
                             : null,

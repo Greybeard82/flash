@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../utils/keyword_matcher.dart';
+import '../theme/category_colors.dart' show kCategoryHueCount;
 import 'schema.dart';
 
 class AppDatabase {
@@ -41,7 +42,7 @@ class AppDatabase {
 
     return openDatabase(
       path,
-      version: 18,
+      version: 19,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       singleInstance: _testPath == null, // fresh DB per test when testing
@@ -525,6 +526,37 @@ class AppDatabase {
         "'auto_mark_read_at_bottom_seconds')",
       );
     }
+
+    if (oldVersion < 19) {
+      // Quiet Ink gives every category a hue, shown in three places at once:
+      // the tick on a feed row, the block on the Categories screen, and the
+      // chip. It is stored rather than derived because every derivation
+      // reshuffles all three at the worst moment — a name hash on rename, a
+      // position rule on reorder — and because starter-pack names are
+      // localised at seeding time, so a name-derived rule would give an
+      // English and a German install different colours for the same pack.
+      //
+      // Same PRAGMA guard as the v2 step: ALTER TABLE ADD COLUMN throws
+      // "duplicate column name" on a second run, and a device handed the same
+      // migration twice after an interrupted upgrade has to survive it.
+      final cols =
+          await db.rawQuery('PRAGMA table_info(${TableNames.folders})');
+      if (!cols.any((c) => c['name'] == 'color_index')) {
+        await db.execute(
+          'ALTER TABLE ${TableNames.folders} '
+          'ADD COLUMN color_index INTEGER NOT NULL DEFAULT 0',
+        );
+
+        // One-time spread, not a rule. Without it an existing library comes
+        // out of the upgrade as six identical grey categories, which reads as
+        // a broken feature rather than a new one. After this the value is the
+        // category's own and reordering never touches it again.
+        await db.execute(
+          'UPDATE ${TableNames.folders} '
+          'SET color_index = position % $kCategoryHueCount',
+        );
+      }
+    }
   }
 
   Future<bool> _tableExists(Database db, String name) async {
@@ -677,7 +709,7 @@ class AppDatabase {
   /// v13 and v16 rebuild tests would otherwise find their fixture gone.
   Future<void> migrateForTesting({
     required int fromVersion,
-    int toVersion = 18,
+    int toVersion = 19,
   }) async {
     final db = await database;
     await _onUpgrade(db, fromVersion, toVersion);

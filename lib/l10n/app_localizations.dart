@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @markAllRead.
   ///
   /// In en, this message translates to:
-  /// **'Mark all as read'**
+  /// **'Mark all read'**
   String get markAllRead;
 
   /// No description provided for @refresh.
@@ -242,6 +242,12 @@ abstract class AppLocalizations {
   /// **'Edit feed'**
   String get editFeed;
 
+  /// Accessible label for the overflow button on a feed row; opens a sheet offering Edit and Remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Feed options'**
+  String get feedOptions;
+
   /// No description provided for @feedName.
   ///
   /// In en, this message translates to:
@@ -347,7 +353,7 @@ abstract class AppLocalizations {
   /// No description provided for @keywordBlocklist.
   ///
   /// In en, this message translates to:
-  /// **'Keyword Blocklist'**
+  /// **'Keyword blocklist'**
   String get keywordBlocklist;
 
   /// No description provided for @keywordBlocklistSubtitle.
@@ -383,7 +389,7 @@ abstract class AppLocalizations {
   /// No description provided for @restoreConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'This will replace all your current feeds, categories and keywords with the saved backup. Articles will be re-fetched on next refresh.'**
+  /// **'This will replace your current feeds, categories, blocked keywords and bookmarks with the saved backup. Keyword alerts are not part of a backup and are left untouched. Articles will be re-fetched on next refresh.'**
   String get restoreConfirmMessage;
 
   /// No description provided for @restore.
@@ -415,42 +421,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark'**
   String get themeDark;
-
-  /// No description provided for @colorPalette.
-  ///
-  /// In en, this message translates to:
-  /// **'Color palette'**
-  String get colorPalette;
-
-  /// No description provided for @paletteGreen.
-  ///
-  /// In en, this message translates to:
-  /// **'Green & Gold'**
-  String get paletteGreen;
-
-  /// No description provided for @paletteBlue.
-  ///
-  /// In en, this message translates to:
-  /// **'Blue & Terracotta'**
-  String get paletteBlue;
-
-  /// No description provided for @paletteOrange.
-  ///
-  /// In en, this message translates to:
-  /// **'Orange & Forest'**
-  String get paletteOrange;
-
-  /// No description provided for @paletteRed.
-  ///
-  /// In en, this message translates to:
-  /// **'Red & Indigo'**
-  String get paletteRed;
-
-  /// No description provided for @paletteTealOrange.
-  ///
-  /// In en, this message translates to:
-  /// **'Teal & Orange'**
-  String get paletteTealOrange;
 
   /// No description provided for @addKeyword.
   ///
@@ -680,6 +650,12 @@ abstract class AppLocalizations {
   /// **'Search articles…'**
   String get searchArticles;
 
+  /// Empty-state copy on the search screen before anything has been typed.
+  ///
+  /// In en, this message translates to:
+  /// **'Type a word to find it in your articles'**
+  String get searchPrompt;
+
   /// No description provided for @noSearchResults.
   ///
   /// In en, this message translates to:
@@ -707,7 +683,7 @@ abstract class AppLocalizations {
   /// No description provided for @noBookmarks.
   ///
   /// In en, this message translates to:
-  /// **'No bookmarks yet.\nLong-press any article to save it.'**
+  /// **'No bookmarks yet.\nTap the bookmark on any article to save it.'**
   String get noBookmarks;
 
   /// No description provided for @bookmark.
@@ -715,6 +691,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Bookmark'**
   String get bookmark;
+
+  /// Banner shown after unsaving an article in Bookmarks, where the row then leaves the list. Names the place rather than the state, matching de/es/fr/it, which took that shape because none of them has a bookmark noun to build a state out of. No undo: re-saving from the reader is one tap.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from Bookmarks'**
+  String get bookmarkRemoved;
 
   /// No description provided for @keywordAlerts.
   ///
@@ -944,7 +926,7 @@ abstract class AppLocalizations {
   /// **'Pick a category to continue.'**
   String get selectCategoryFirst;
 
-  /// Label of the pill that switches the feed list to the keyword-alert snapshots.
+  /// Label of the Alerts navigation destination, which opens its own screen of keyword-alert matches. Appears in the phone bottom bar, the tablet sections column and the rail.
   ///
   /// In en, this message translates to:
   /// **'Alerts'**
@@ -955,12 +937,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No alerts yet.\nArticles matching your alert keywords will appear here.'**
   String get alertsTabEmpty;
-
-  /// The keyword filter chip that clears the filter and shows every alert.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get alertsFilterAll;
 
   /// No description provided for @alertsManageKeywords.
   ///
@@ -1034,6 +1010,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{1 article triggered with the words {keywords}} other{{count} articles triggered with the words {keywords}}}'**
   String alertNotificationCombined(int count, String keywords);
 
+  /// Content text of the group summary that collapses several keyword-alert notifications into one heading. alertNotificationTitle cannot be reused there: it names one keyword when several matched.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 keyword alert} other{{count} keyword alerts}}'**
+  String alertNotificationSummary(int count);
+
   /// Joins all but the last two keywords when a notification names several.
   ///
   /// In en, this message translates to:
@@ -1057,6 +1039,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Select an article to read it here'**
   String get selectAnArticle;
+
+  /// Reading-pane placeholder on Categories, where no article can be selected from the screen beside it.
+  ///
+  /// In en, this message translates to:
+  /// **'Articles you open appear here'**
+  String get articlesAppearHere;
 
   /// Settings toggle: on opens articles in the app own reader, off opens Chrome.
   ///
@@ -1304,7 +1292,13 @@ abstract class AppLocalizations {
   /// **'There are no feeds to export yet.'**
   String get opmlExportEmpty;
 
-  /// Label under the Swap sides button in the tablet navigation bar. Mirrors the column order for right-handed use.
+  /// Disclosure label on the in-feed ad row. Rendered uppercase by style rather than by the string, so locales with different casing rules are unaffected. No call site yet: the ad row is parked until after launch.
+  ///
+  /// In en, this message translates to:
+  /// **'Sponsored'**
+  String get adSponsored;
+
+  /// Label and tooltip on the entry pinned at the foot of the tablet sections column, below the navigation destinations rather than among them. Mirrors the column order for left- or right-handed reach.
   ///
   /// In en, this message translates to:
   /// **'Swap sides'**

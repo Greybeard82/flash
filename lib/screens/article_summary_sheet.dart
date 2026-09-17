@@ -12,8 +12,10 @@ import '../services/gemini_nano_service.dart';
 import '../services/loading_controller.dart';
 import '../services/summary_cache.dart';
 import '../services/summary_formatter.dart';
+import '../services/share_service.dart';
 import '../services/summary_source.dart';
 import '../utils/date_utils.dart';
+import '../theme/app_theme.dart';
 
 class ArticleSummarySheet extends StatefulWidget {
   final Article article;
@@ -242,7 +244,11 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.2),
+                  // 6.1: a drag affordance is onSurfaceMuted, the same
+                  // level as the resize grip in article_card.dart. It is not
+                  // an illustration — it stands in for nothing — and alpha
+                  // over ink gave a different grey on every surface it sat on.
+                  color: theme.flashColors.onSurfaceMuted,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -268,7 +274,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
 
@@ -290,7 +296,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: theme.flashColors.onSurfaceMuted,
                 ),
               ),
             ],
@@ -313,8 +319,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                                 ? l10n.aiSummaryWriting
                                 : l10n.aiSummaryReading,
                             style: theme.textTheme.labelSmall?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                              color: theme.flashColors.onSurfaceMuted,
                             ),
                           ),
                         ],
@@ -336,6 +341,7 @@ class _ArticleSummarySheetState extends State<ArticleSummarySheet> {
                             done: _done,
                             teaserOnly: _teaserOnly,
                             fromCloud: _fromCloud,
+                            article: widget.article,
                             onCopied: () => _bannerKey.currentState
                                 ?.show(l10n.summaryCopied)),
               ),
@@ -440,7 +446,21 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
   Widget build(BuildContext context) {
     final theme = widget.theme;
     final l10n = widget.l10n;
-    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.5);
+    // **Named `variantInk`, and the naming has now been wrong twice.**
+    //
+    // It was `muted` while it was `onSurface` at 50% alpha, and was renamed to
+    // `secondary` to describe the ink LEVEL — second of the three, below
+    // `onSurface` and above `onSurfaceMuted`. Accurate as a description and a
+    // trap as a name: `secondary` is a `ColorScheme` role this app reserves
+    // for exactly three jobs, none of them this one, and a local carrying that
+    // word while holding `onSurfaceVariant` invites a tidy-up to
+    // `theme.colorScheme.secondary` that would turn this control orange and
+    // look like a correction.
+    //
+    // `summary_sheet_ink_test.dart` pins the resolved colour, so that edit
+    // fails rather than ships. This removes the instinct that produces it,
+    // which is the half a test cannot cover.
+    final variantInk = theme.colorScheme.onSurfaceVariant;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -450,12 +470,12 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
           Row(
             children: [
               Icon(Icons.info_outline_rounded,
-                  size: 18,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+                  size: 18, color: theme.flashColors.onSurfaceMuted),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(widget.message,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
+                    style:
+                        theme.textTheme.bodyMedium?.copyWith(color: variantInk)),
               ),
             ],
           ),
@@ -478,14 +498,14 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
                             ? l10n.aiSummaryHideDetails
                             : l10n.aiSummaryShowDetails,
                         style: theme.textTheme.labelMedium?.copyWith(
-                            color: muted, fontWeight: FontWeight.w500),
+                            color: variantInk, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(width: 2),
                       AnimatedRotation(
                         turns: _showDetails ? 0.5 : 0,
                         duration: const Duration(milliseconds: 150),
                         child: Icon(Icons.expand_more_rounded,
-                            size: 18, color: muted),
+                            size: 18, color: variantInk),
                       ),
                     ],
                   ),
@@ -499,7 +519,7 @@ class _UnavailableMessageState extends State<_UnavailableMessage> {
                 child: SelectableText(
                   widget.debugReason!,
                   style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                      color: theme.colorScheme.onSurfaceVariant,
                       fontFamily: 'monospace'),
                 ),
               ),
@@ -532,6 +552,11 @@ class _SummaryText extends StatelessWidget {
   /// (a banner at its top), not to this leaf widget.
   final VoidCallback onCopied;
 
+  /// Needed for the title and the link that leave with the summary. The
+  /// widget renders neither; it carries them so copy and share can build one
+  /// payload between them rather than two.
+  final Article article;
+
   const _SummaryText(
       {super.key,
       required this.summary,
@@ -539,6 +564,7 @@ class _SummaryText extends StatelessWidget {
       required this.l10n,
       required this.done,
       required this.onCopied,
+      required this.article,
       this.teaserOnly = false,
       this.fromCloud = false});
 
@@ -547,6 +573,19 @@ class _SummaryText extends StatelessWidget {
     final bodyStyle =
         theme.textTheme.bodyMedium?.copyWith(fontSize: 16, height: 1.8);
     final lines = summary.split('\n');
+
+    final disclaimer =
+        fromCloud ? l10n.aiSummaryDisclaimerCloud : l10n.aiSummaryDisclaimer;
+
+    // Built once and handed to both buttons, which is the whole point: the
+    // clipboard and the share sheet must receive the same bytes. See
+    // `buildSummaryShareText`.
+    final payload = buildSummaryShareText(
+      title: article.title,
+      summary: summary,
+      disclaimer: disclaimer,
+      url: article.url,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -571,29 +610,44 @@ class _SummaryText extends StatelessWidget {
             const SizedBox(height: 8),
             Text(l10n.aiSummaryTeaserOnly,
                 style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                    color: theme.flashColors.onSurfaceMuted,
                     fontStyle: FontStyle.italic)),
           ],
           const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
-                child: Text(
-                    fromCloud
-                        ? l10n.aiSummaryDisclaimerCloud
-                        : l10n.aiSummaryDisclaimer,
+                child: Text(disclaimer,
                     style: theme.textTheme.labelSmall?.copyWith(
-                        color:
-                            theme.colorScheme.onSurface.withValues(alpha: 0.35),
+                        color: theme.flashColors.onSurfaceMuted,
                         fontStyle: FontStyle.italic)),
               ),
+              // **Copy now carries what share carries**, which is a change to
+              // shipped behaviour and a deliberate one. It used to put the
+              // bare summary on the clipboard — no title, no link, no sign a
+              // machine wrote it — so pasted into a chat it read as the
+              // publisher's own words. If share attributed and copy did not,
+              // copy would become the button people use to strip it.
               IconButton(
                 icon: const Icon(Icons.copy_rounded, size: 18),
                 tooltip: l10n.copySummary,
                 onPressed: () {
-                  Clipboard.setData(ClipboardData(text: summary));
+                  Clipboard.setData(ClipboardData(text: payload));
                   onCopied();
                 },
+              ),
+              // Beside copy rather than instead of it. Android's share sheet
+              // offers copy-to-clipboard, so there is mild redundancy — but
+              // copy is one tap and share-then-pick-copy is two, and this app
+              // already accepts two routes to one action on the bookmark.
+              // Recorded as a decision, not an oversight.
+              //
+              // Same 18px glyph in a standard IconButton, so it inherits the
+              // same 48dp target as copy and raises no geometry question.
+              IconButton(
+                icon: const Icon(Icons.share_rounded, size: 18),
+                tooltip: l10n.share,
+                onPressed: () => ShareService().shareSummary(article, payload),
               ),
             ],
           ),

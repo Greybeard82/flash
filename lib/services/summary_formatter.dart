@@ -129,3 +129,54 @@ class SummaryFormatter {
   static int _wordCount(String s) =>
       s.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
 }
+
+/// The text a summary produces when it leaves the app, for **both** copy and
+/// share.
+///
+/// **One function because the two payloads must be byte-identical**, and that
+/// is the invariant rather than a tidiness preference. Copy used to put the
+/// bare summary on the clipboard: no title, no link, no sign a machine wrote
+/// it. Pasted into a chat it read as the publisher's own words. If share
+/// carried attribution and copy did not, copy would become the button people
+/// use to strip it, and the inconsistency would be the bug rather than the
+/// feature. `summary_share_payload_test.dart` pins the equality.
+///
+/// The shape:
+///
+/// ```
+/// <article title>
+///
+/// <summary>
+///
+/// <AI disclaimer>
+/// <url>
+/// ```
+///
+/// Neither the link nor the disclaimer is decoration. Flash's entire supply
+/// depends on publishers continuing to offer feeds, and an app that circulates
+/// their content with no traffic back is the thing publishers close feeds
+/// over. And these summaries are sometimes wrong — without the label the
+/// mistake is attributed to the publisher rather than to the app that
+/// generated it.
+///
+/// The disclaimer arrives already resolved because only the sheet knows
+/// whether the summary came from the cloud or from the device. It is
+/// `aiSummaryDisclaimer` or `aiSummaryDisclaimerCloud` verbatim: both were
+/// written to sit under a summary on screen and both survive the move into a
+/// message unchanged, because neither uses deixis — no "this", no "above", no
+/// "the summary below" — so neither needs the UI around it to make sense.
+///
+/// Pure, and deliberately takes strings rather than an `Article` and an
+/// `AppLocalizations`: it is the one piece of this feature worth testing
+/// exhaustively, and it should not need a widget tree or a database to do it.
+String buildSummaryShareText({
+  required String title,
+  required String summary,
+  required String disclaimer,
+  required String url,
+}) {
+  // Trimmed because the model's own output routinely carries a trailing
+  // newline, and an extra blank line before the disclaimer reads as a mistake
+  // in a chat message where it did not on screen.
+  return '${title.trim()}\n\n${summary.trim()}\n\n${disclaimer.trim()}\n$url';
+}

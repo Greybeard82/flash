@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -15,6 +16,7 @@ import '../services/saved_state_notifier.dart';
 import '../services/loading_controller.dart';
 import '../services/share_service.dart';
 import '../utils/alert_grouping.dart';
+import '../widgets/fab_cluster.dart';
 import '../widgets/article_card.dart';
 import '../widgets/spinning_refresh_icon.dart';
 import '../widgets/keyword_alerts_panel.dart';
@@ -23,6 +25,7 @@ import '../widgets/notification_banner.dart';
 import '../widgets/quick_settings_action.dart';
 import '../widgets/scroll_fade.dart';
 import '../widgets/bubble_panel.dart';
+import '../theme/app_theme.dart';
 
 /// The Alerts tab: every article any alert keyword has ever caught.
 ///
@@ -43,11 +46,13 @@ import '../widgets/bubble_panel.dart';
 ///
 /// **Identity is `(feedId, guid)`, never an article id.** `AlertEntry
 /// .toArticle()` deliberately leaves `id` null, so every operation below keys
-/// off the pair. Two consequences that look like style choices and are not:
-/// swipe actions stay off, because `ArticleCard`'s `Dismissible` keys on
-/// `ValueKey('article_<id>')` and every card here would claim the same
-/// `article_null`; and no scroll anchor is kept, because `ScrollAnchor` is
-/// keyed on the id too.
+/// off the pair. One consequence that looks like a style choice and is not:
+/// no scroll anchor is kept, because `ScrollAnchor` is keyed on the id too.
+/// This is also why the card carried no swipe actions back when `ArticleCard`
+/// still wrapped itself in a `Dismissible` — that keyed on
+/// `ValueKey('article_<id>')` and every card here would have claimed the same
+/// `article_null`. The `Dismissible` has since been removed outright, so the
+/// hazard is gone rather than avoided.
 ///
 /// **Read state lives in two tables and both are written.** The snapshot
 /// always, the `articles` row only when it still exists — which it usually
@@ -128,6 +133,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
   /// nothing collapsed is exactly "everything expanded."
   final Set<String> _collapsedKeywords = {};
 
+  /// Which entries are bookmarked, as `savedKey(feedId, guid)`.
+  ///
+  /// Resolved once per load rather than per row. A snapshot carries no
+  /// `articles` id, so the only truthful answer comes from the real row — and
+  /// asking per row inside a scrolling list build is N queries for N rows.
+  /// This is one, and the build itself stays query-free.
+  Set<String> _savedKeys = {};
+
   /// Entry order *within* each keyword section — which keyword's section
   /// comes first is a separate, unrelated ordering (see
   /// [_keywordSections]). In-memory only, same scope as
@@ -139,6 +152,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     super.initState();
     _scrollController.addListener(_fabFade.onScroll);
     AlertsChangedNotifier.instance.addListener(_onAlertsChanged);
+    SavedStateNotifier.instance.addListener(_onSavedStateChanged);
     AlertNavigationIntent.instance.addListener(_onAlertNavigationRequested);
     _load().then((_) => _consumeAlertNavigation());
   }
@@ -146,6 +160,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   @override
   void dispose() {
     AlertsChangedNotifier.instance.removeListener(_onAlertsChanged);
+    SavedStateNotifier.instance.removeListener(_onSavedStateChanged);
     AlertNavigationIntent.instance.removeListener(_onAlertNavigationRequested);
     if (_openPanel?.mounted ?? false) _openPanel!.remove();
     _fabFade.dispose();
@@ -188,31 +203,34 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   Future<void> _load() async {
     final entries = await _alertMatchRepo.getEntries();
+    // Read alongside the entries, not lazily per row. Two queries for the
+    // screen, regardless of how many alerts are in it.
+    final savedKeys = await _articleRepo.savedArticleKeys();
     if (!mounted) return;
     setState(() {
       _entries = entries;
+      _savedKeys = savedKeys;
       _loading = false;
     });
   }
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  /// Re-reads saved state after someone else changes it.
+  ///
+  /// The notifier carries an `articleId`, and this screen has none to compare
+  /// it against — its entries are keyed by (feedId, guid). Rather than
+  /// translating, it re-reads the one query. That costs a single indexed read
+  /// on an event that happens when a person taps a bookmark, and it is what
+  /// keeps the glyph honest when the same article is saved from the reader
+  /// opened out of this very list.
+  void _onSavedStateChanged() => unawaited(_refreshSavedKeys());
 
-  /// Writes the read flag to both tables, in that order and independently.
-  Future<void> _setEntryRead(Article snapshot, {required bool isRead}) async {
-    await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid,
-        isRead: isRead);
-    final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
-    if (row?.id != null && row!.isRead != isRead) {
-      if (isRead) {
-        await _articleRepo.markAsRead(row.id!);
-      } else {
-        await _articleRepo.markAsUnread(row.id!);
-      }
-      ReadStateNotifier.instance.articleReadStateChanged();
-    }
-    HapticFeedback.lightImpact();
-    if (mounted) await _load();
+  Future<void> _refreshSavedKeys() async {
+    final savedKeys = await _articleRepo.savedArticleKeys();
+    if (!mounted) return;
+    setState(() => _savedKeys = savedKeys);
   }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
 
   Future<void> _openEntry(Article snapshot) async {
     await _alertMatchRepo.setRead(snapshot.feedId, snapshot.guid, isRead: true);
@@ -235,13 +253,26 @@ class _AlertsScreenState extends State<AlertsScreen> {
     final row = await _articleRepo.findByGuid(snapshot.feedId, snapshot.guid);
     if (!mounted) return;
     if (row?.id == null) {
-      _bannerKey.currentState
-          ?.show(AppLocalizations.of(context)!.alertsArticleGone);
+      _bannerKey.currentState?.show(
+          AppLocalizations.of(context)!.alertsArticleGone,
+          kind: BannerKind.failure);
       return;
     }
     final nowSaved = !row!.isSaved;
     await _articleRepo.setSaved(row.id!, saved: nowSaved);
     HapticFeedback.lightImpact();
+    // Patched locally as well as re-read through the notifier below, so the
+    // glyph turns under the finger rather than after a round trip.
+    if (mounted) {
+      final key = savedKey(snapshot.feedId, snapshot.guid);
+      setState(() {
+        if (nowSaved) {
+          _savedKeys = {..._savedKeys, key};
+        } else {
+          _savedKeys = {..._savedKeys}..remove(key);
+        }
+      });
+    }
     // Bookmarks is kept alive and loads only in initState, so without this the
     // bookmark does not appear there until a pull-to-refresh.
     SavedStateNotifier.instance
@@ -360,41 +391,31 @@ class _AlertsScreenState extends State<AlertsScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: hostedInSidebar
           ? null
-          : Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ScrollFade(
-                controller: _fabFade,
-                child: FloatingActionButton(
-                  key: _addKeywordKey,
+          : FabCluster(
+              controller: _fabFade,
+              actions: [
+                FabAction(
+                  buttonKey: _addKeywordKey,
                   heroTag: 'alerts_add_keyword',
                   onPressed: _openKeywordPanel,
                   tooltip: l10n.keywordAlerts,
-                  mini: true,
-                  child: const Icon(Icons.add),
+                  icon: const Icon(Icons.add),
                 ),
-              ),
-              const SizedBox(height: 8),
-              ScrollFade(
-                controller: _fabFade,
-                child: FloatingActionButton(
+                FabAction(
                   heroTag: 'alerts_mark_all_read',
                   onPressed: _markAllRead,
                   tooltip: l10n.markAllRead,
-                  mini: true,
-                  child: const Icon(Icons.done_all_rounded),
+                  icon: const Icon(Icons.done_all_rounded),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
       body: Column(
         children: [
           NotificationBanner(key: _bannerKey),
           Expanded(
             child: _loading
                 ? Center(
-                    child:
-                        SpinningRefreshIcon(size: 40, color: scheme.primary))
+                    child: SpinningRefreshIcon(size: 40, color: scheme.primary))
                 : _buildList(l10n, scheme),
           ),
         ],
@@ -411,11 +432,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+            // The glyph this state was missing. Every other empty state in
+            // the app pairs one with its copy, and a bare line of text in the
+            // middle of a screen reads as a list that failed to load rather
+            // than as a list with nothing in it.
+            //
+            // The Alerts destination's own bell, at `illustration`, 48dp,
+            // 12dp clear of the copy — the same three numbers Bookmarks and
+            // the keyword panels use. Matching an existing pattern; not
+            // inventing one.
+            Icon(Icons.notifications_none_rounded,
+                size: 48, color: Theme.of(context).flashColors.illustration),
+            const SizedBox(height: 12),
             Text(
               l10n.alertsTabEmpty,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: scheme.onSurface.withValues(alpha: 0.5),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
             ),
           ],
@@ -449,24 +482,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
           }
 
           final entry = (row as KeywordEntryRow).entry;
-          final article = entry.toArticle();
+          // Saved state comes from the set resolved at load, not from a
+          // per-row lookup: this closure runs for every row the list builds
+          // and rebuilds, and a query in here would scale with the list.
+          final article = entry.toArticle(
+            isSaved: _savedKeys.contains(savedKey(entry.feedId, entry.guid)),
+          );
           final needsDivider = i > 0 && rows[i - 1] is KeywordEntryRow;
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (needsDivider)
-                const Divider(height: 1, indent: 16, endIndent: 16),
+                // Full-bleed: this is an article list.
+                const Divider(height: 1),
               ArticleCard(
                 article: article,
-                // Off, and not a style choice: the Dismissible keys on the
-                // article id, which is null for every entry here, so a
-                // swipe-enabled card is a duplicate-key crash rather than a
-                // gesture.
-                enableSwipeActions: false,
                 alertKeywords: entry.keywords,
                 onTap: () => _openEntry(article),
-                onMarkRead: () => _setEntryRead(article, isRead: true),
-                onMarkUnread: () => _setEntryRead(article, isRead: false),
                 onShare: () => _shareService.shareArticle(article),
                 onBookmark: () => _toggleSaved(article),
                 // The bin is offered here and nowhere else. An alert match
@@ -521,8 +553,7 @@ class _KeywordSectionHeader extends StatelessWidget {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeInOut,
               child: Icon(Icons.expand_more_rounded,
-                  size: 20,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.6)),
+                  size: 20, color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
         ),

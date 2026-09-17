@@ -1,6 +1,6 @@
 name: flash
 description: A fast, local-first RSS reader with AI-powered filtering.
-version: 0.1.0+6
+version: 0.9.9+34
 publish_to: none
 
 environment:
@@ -114,3 +114,69 @@ flutter:
       fonts:
         - asset: assets/fonts/PlayfairDisplay-VF.ttf
           weight: 700
+    # Quiet Ink. Variable fonts, one asset per family: three families of
+    # static weight sets would add several hundred KB to an APK that is
+    # about to go back through Play review.
+    #
+    # Literata is subset. Google ships it with Greek-ext (polytonic) and
+    # Vietnamese as well, which nothing Flash renders needs, and the full
+    # file is 933 KB raw / 498 KB deflated.
+    #
+    # THE SUBSET IS NOT ABOUT FLASH'S FIVE LOCALES. It is about what a FEED
+    # can contain, which is any language at all. The locales pick the UI
+    # strings; the clean view renders whatever the article is written in.
+    # Latin-only shipped through 0.9.6 and a Russian article in clean view
+    # came out in the platform's fallback grotesque — no tofu, fully
+    # readable, and simply not Literata, with a line height tuned for a face
+    # that was not on screen.
+    #
+    # So: Latin + Cyrillic + Greek. U+0301 and U+2116 come with the Cyrillic
+    # because Google's own cyrillic range carries them — the combining acute
+    # is the Russian stress mark and the numero sign is ordinary punctuation
+    # there.
+    #
+    #   Latin only              474 KB raw / 273 KB deflated
+    #   + Cyrillic + Greek      740 KB raw / 416 KB deflated   <- shipped
+    #   + polytonic Greek       786 KB raw / 434 KB deflated
+    #
+    # Polytonic (U+1F00-1FFF) is excluded on the same reasoning as CJK, at a
+    # far smaller price: 270 glyphs and 46 KB for Ancient Greek, which modern
+    # monotonic feeds do not use. Add U+1F00-1FFF to the line below if a feed
+    # ever proves otherwise. CJK stays out for the original reason — megabytes
+    # rather than kilobytes, and the platform fallback there is correct.
+    #
+    # Both variable axes stay intact (opsz 7-72, wght 200-900). Regenerate
+    # with the command below: run against Google's Literata[opsz,wght].ttf it
+    # reproduces the shipped file BYTE FOR BYTE, which is how this was checked
+    # rather than assumed.
+    #
+    #   python -m fontTools.subset Literata[opsz,wght].ttf \
+    #     --output-file=assets/fonts/Literata.ttf \
+    #     --unicodes="U+0000-00FF,U+0100-017F,U+0180-024F,U+2000-206F,U+20A0-20BF,U+2122,U+2212,U+0301,U+0400-04FF,U+2116,U+0370-03FF" \
+    #     --layout-features="*"
+    - family: Literata
+      fonts:
+        - asset: assets/fonts/Literata.ttf
+          weight: 400
+        - asset: assets/fonts/Literata.ttf
+          weight: 500
+        - asset: assets/fonts/Literata.ttf
+          weight: 600
+        - asset: assets/fonts/Literata.ttf
+          weight: 700
+    - family: Instrument Sans
+      fonts:
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 400
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 500
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 600
+        - asset: assets/fonts/InstrumentSans-VF.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-VF.ttf
+          weight: 500

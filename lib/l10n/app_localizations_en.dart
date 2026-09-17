@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appTitle => 'Flash';
 
   @override
-  String get markAllRead => 'Mark all as read';
+  String get markAllRead => 'Mark all read';
 
   @override
   String get refresh => 'Refresh';
@@ -80,6 +80,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editFeed => 'Edit feed';
 
   @override
+  String get feedOptions => 'Feed options';
+
+  @override
   String get feedName => 'Feed name';
 
   @override
@@ -138,7 +141,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get manualOnly => 'Never';
 
   @override
-  String get keywordBlocklist => 'Keyword Blocklist';
+  String get keywordBlocklist => 'Keyword blocklist';
 
   @override
   String get keywordBlocklistSubtitle =>
@@ -160,7 +163,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'This will replace all your current feeds, categories and keywords with the saved backup. Articles will be re-fetched on next refresh.';
+      'This will replace your current feeds, categories, blocked keywords and bookmarks with the saved backup. Keyword alerts are not part of a backup and are left untouched. Articles will be re-fetched on next refresh.';
 
   @override
   String get restore => 'Restore';
@@ -176,24 +179,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get themeDark => 'Dark';
-
-  @override
-  String get colorPalette => 'Color palette';
-
-  @override
-  String get paletteGreen => 'Green & Gold';
-
-  @override
-  String get paletteBlue => 'Blue & Terracotta';
-
-  @override
-  String get paletteOrange => 'Orange & Forest';
-
-  @override
-  String get paletteRed => 'Red & Indigo';
-
-  @override
-  String get paletteTealOrange => 'Teal & Orange';
 
   @override
   String get addKeyword => 'Add keyword';
@@ -321,6 +306,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchArticles => 'Search articles…';
 
   @override
+  String get searchPrompt => 'Type a word to find it in your articles';
+
+  @override
   String noSearchResults(String query) {
     return 'No articles match \"$query\"';
   }
@@ -336,10 +324,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'No bookmarks yet.\nLong-press any article to save it.';
+      'No bookmarks yet.\nTap the bookmark on any article to save it.';
 
   @override
   String get bookmark => 'Bookmark';
+
+  @override
+  String get bookmarkRemoved => 'Removed from Bookmarks';
 
   @override
   String get keywordAlerts => 'Keyword alerts';
@@ -494,9 +485,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'No alerts yet.\nArticles matching your alert keywords will appear here.';
 
   @override
-  String get alertsFilterAll => 'All';
-
-  @override
   String get alertsManageKeywords => 'Manage keywords';
 
   @override
@@ -563,6 +551,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count keyword alerts',
+      one: '1 keyword alert',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -573,6 +572,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get selectAnArticle => 'Select an article to read it here';
+
+  @override
+  String get articlesAppearHere => 'Articles you open appear here';
 
   @override
   String get builtInViewer => 'Open articles in the built-in viewer';
@@ -720,6 +722,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'There are no feeds to export yet.';
+
+  @override
+  String get adSponsored => 'Sponsored';
 
   @override
   String get swapSides => 'Swap sides';

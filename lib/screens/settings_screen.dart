@@ -2,11 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../widgets/spinning_refresh_icon.dart';
+import '../widgets/flash_switch.dart';
 import '../widgets/notification_banner.dart';
 import '../widgets/refresh_interval_field.dart';
 import '../l10n/app_localizations.dart';
 import '../models/feed.dart';
 import '../models/settings.dart';
+import '../repositories/article_repository.dart';
 import '../repositories/feed_repository.dart';
 import '../repositories/folder_repository.dart';
 import '../repositories/keyword_repository.dart';
@@ -18,6 +20,7 @@ import '../services/refresh_service.dart';
 import '../services/local_backup_service.dart';
 import '../services/opml_service.dart';
 import '../services/settings_notifier.dart';
+import '../theme/app_theme.dart';
 
 /// The hosted privacy policy.
 ///
@@ -41,6 +44,23 @@ const String kSupportUrl = 'https://flashrssapp.github.io/support.html';
 /// launched by the Email us row. A const for the same reason as the two URLs
 /// above: pinned by a test rather than retyped.
 const String kContactEmail = 'flashrssapp@gmail.com';
+
+/// Ad-privacy row copy, **English only and deliberately not an ARB key**.
+///
+/// Serving ads in the EEA and the UK requires a Google-certified CMP, and any
+/// consent a user gives has to be withdrawable afterwards — which means a
+/// permanent entry point rather than a first-launch dialog. This is that entry
+/// point, standing empty.
+///
+/// It is a constant rather than a localised string because the wording is not
+/// settled: the real one ships with the ads pass, alongside the UMP SDK that
+/// gives it something to open. Putting a placeholder through de, es, fr and it
+/// now means paying for the same row twice, and `arb_parity_test.dart` would
+/// then hold four translations of a sentence nobody has agreed to.
+///
+/// **Delete both of these in the ads pass** and replace them with real keys.
+const String kAdPrivacyRowLabelEn = 'Ad privacy choices';
+const String kAdPrivacyRowSubtitleEn = 'Available when ads are introduced';
 
 /// The full settings screen.
 ///
@@ -120,10 +140,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final folders = await FolderRepository().getAll();
         final feeds = await FeedRepository().getAll();
         final keywords = await KeywordRepository().getAll();
+        // Bookmarks are stored in the file by value, so this is the whole of
+        // what a restore can bring back. Read state is deliberately not
+        // collected -- see BackupSerializer.toMap.
+        final bookmarks = await ArticleRepository().getSaved();
         return LocalBackupService.exportBackup(
           folders: folders,
           feeds: feeds,
           keywords: keywords,
+          bookmarks: bookmarks,
           dialogTitle: l10n.exportDialogTitle,
         );
       }, label: 'Exporting');
@@ -154,12 +179,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(l10n.cancel),
           ),
+          // No red on a confirmation, the same decision
+          // `confirm_sheet_no_red_test.dart` records for the two sheets and
+          // B5 made for mark-all-read. `restoreConfirmMessage` already says
+          // what restoring does; red on top of the sentence reads as though
+          // something had gone wrong, when the user is being asked a
+          // question. Inherits `filledButtonTheme` — primary under onPrimary.
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(ctx).colorScheme.error,
-              foregroundColor: Theme.of(ctx).colorScheme.onError,
-            ),
             child: Text(l10n.restore),
           ),
         ],
@@ -173,10 +200,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           .run(() => LocalBackupService.importBackup(), label: 'Restoring');
       if (!mounted) return;
       if (count == -1) return; // user cancelled picker
-      _bannerKey.currentState?.show(l10n.restoreSuccess(count));
+      // Same shape as starterPackAddedBanner: the count can be zero. A
+      // backup whose feeds list is empty, or whose every feed named a folder
+      // that is not in the file, restores nothing -- and "0 feeds restored"
+      // beside a tick reads as "success: nothing happened".
+      _bannerKey.currentState?.show(l10n.restoreSuccess(count),
+          kind: count == 0 ? BannerKind.failure : BannerKind.confirmation);
     } on FormatException {
       if (mounted) {
-        _bannerKey.currentState?.show(AppLocalizations.of(context)!.invalidBackupFile);
+        _bannerKey.currentState?.show(
+            AppLocalizations.of(context)!.invalidBackupFile,
+            kind: BannerKind.failure);
       }
     } catch (e) {
       if (mounted) {
@@ -208,89 +242,148 @@ class _SettingsScreenState extends State<SettingsScreen> {
           NotificationBanner(key: _bannerKey),
           Expanded(
             child: ListView(
-        children: [
-          // ── Reading ──
-          _sectionHeader(l10n.reading),
-          // Label-only, matching the Icon badge precedent: the off state is
-          // "opens in Chrome instead", which is what anyone flicking this
-          // already expects from a viewer toggle.
-          SwitchListTile(
-            title: Text(l10n.builtInViewer),
-            value: s.useEmbeddedWebView,
-            onChanged: _setUseEmbeddedWebView,
-          ),
-          // Subtitled, unlike the toggle above: "clean reading view" does not
-          // on its own say that the offer only appears when a page can
-          // actually be extracted, and a switch that looks inert on some
-          // articles needs to say why up front.
-          SwitchListTile(
-            title: Text(l10n.cleanModeSettingTitle),
-            subtitle: Text(l10n.cleanModeSettingSubtitle),
-            value: s.cleanModeEnabled,
-            onChanged: _setCleanModeEnabled,
-          ),
+              children: [
+                // ── Reading ──
+                _sectionHeader(l10n.reading),
+                // Label-only, matching the Icon badge precedent: the off state is
+                // "opens in Chrome instead", which is what anyone flicking this
+                // already expects from a viewer toggle.
+                FlashSwitchListTile(
+                  title: Text(l10n.builtInViewer),
+                  value: s.useEmbeddedWebView,
+                  onChanged: _setUseEmbeddedWebView,
+                ),
+                // Subtitled, unlike the toggle above: "clean reading view" does not
+                // on its own say that the offer only appears when a page can
+                // actually be extracted, and a switch that looks inert on some
+                // articles needs to say why up front.
+                FlashSwitchListTile(
+                  title: Text(l10n.cleanModeSettingTitle),
+                  subtitle: Text(l10n.cleanModeSettingSubtitle),
+                  value: s.cleanModeEnabled,
+                  onChanged: _setCleanModeEnabled,
+                ),
 
-          // ── Refresh ──
-          // Reuses the existing `refresh` string, which already reads
-          // "Refresh" and is translated in all five locales for the FAB
-          // tooltip; a second key for the same word would be an orphan.
-          _sectionHeader(l10n.refresh),
-          RefreshIntervalField(
-            value: s.refreshIntervalMinutes,
-            onChanged: _setRefreshInterval,
-          ),
-          SwitchListTile(
-            title: Text(l10n.refreshOnWifiOnly),
-            subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
-            value: s.refreshOnWifiOnly,
-            onChanged: _setRefreshOnWifiOnly,
-          ),
+                // ── Refresh ──
+                // Reuses the existing `refresh` string, which already reads
+                // "Refresh" and is translated in all five locales for the FAB
+                // tooltip; a second key for the same word would be an orphan.
+                _sectionHeader(l10n.refresh),
+                RefreshIntervalField(
+                  value: s.refreshIntervalMinutes,
+                  onChanged: _setRefreshInterval,
+                ),
+                FlashSwitchListTile(
+                  title: Text(l10n.refreshOnWifiOnly),
+                  subtitle: Text(l10n.refreshOnWifiOnlySubtitle),
+                  value: s.refreshOnWifiOnly,
+                  onChanged: _setRefreshOnWifiOnly,
+                ),
 
-          // ── Local backup file ──
-          _sectionHeader(l10n.localBackup),
-          _buildLocalBackupSection(l10n),
+                // ── Local backup file ──
+                _sectionHeader(l10n.localBackup),
+                _buildLocalBackupSection(l10n),
 
-          // ── OPML ──
-          _sectionHeader(l10n.opml),
-          _buildOpmlSection(l10n),
+                // ── OPML ──
+                _sectionHeader(l10n.opml),
+                _buildOpmlSection(l10n),
 
-          // ── About ──
-          _sectionHeader(l10n.about),
-          // Above the privacy policy, not below it: Play requires contact
-          // details a user can actually reach, and burying them under a legal
-          // link is how they stop being reachable in practice.
-          ListTile(
-            leading: const Icon(Icons.support_agent_outlined),
-            title: Text(l10n.contactSupport),
-            subtitle: const Text(kContactEmail),
-            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _openSupportPage,
-          ),
-          ListTile(
-            leading: const Icon(Icons.mail_outline_rounded),
-            title: Text(l10n.emailUs),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _sendSupportEmail,
-          ),
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: Text(l10n.privacyPolicy),
-            trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            onTap: _openPrivacyPolicy,
-          ),
+                // ── About ──
+                _sectionHeader(l10n.about),
+                // Above the privacy policy, not below it: Play requires contact
+                // details a user can actually reach, and burying them under a legal
+                // link is how they stop being reachable in practice.
+                ListTile(
+                  leading: const Icon(Icons.support_agent_outlined),
+                  title: Text(l10n.contactSupport),
+                  subtitle: const Text(kContactEmail),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _openSupportPage,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.mail_outline_rounded),
+                  title: Text(l10n.emailUs),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _sendSupportEmail,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: Text(l10n.privacyPolicy),
+                  trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _openPrivacyPolicy,
+                ),
+                // **A placeholder with nothing behind it, on purpose.**
+                //
+                // Serving ads in the EEA and the UK needs a Google-certified
+                // CMP, and consent that can be given has to be withdrawable
+                // afterwards — which means a permanent way back in, not a
+                // one-time dialog at first launch. Settings is that way back
+                // in, and Settings is being touched tonight and will not be
+                // touched again before the ads work, so the row goes in now
+                // and the plumbing arrives with the SDK.
+                //
+                // Directly under the privacy policy because that is the
+                // sentence it modifies: the policy says what is collected,
+                // this changes what the reader agreed to. Last in About, so
+                // nothing legal sits below it.
+                //
+                // The label is a deliberate English-only constant, NOT an ARB
+                // key. The real string ships with the ads pass, and putting a
+                // placeholder through five locales now means translating the
+                // same row twice.
+                ListTile(
+                  leading: const Icon(Icons.tune_rounded),
+                  title: const Text(kAdPrivacyRowLabelEn),
+                  subtitle: Text(
+                    kAdPrivacyRowSubtitleEn,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).flashColors.onSurfaceMuted,
+                        ),
+                  ),
+                  // Inert rather than absent: the row is visible so the
+                  // position is reviewable, and unpressable so nobody can
+                  // reach a consent form that does not exist. `onTap: null`
+                  // is what greys a ListTile through `inert`'s own reasoning
+                  // — see `_onAdPrivacy`.
+                  enabled: false,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  onTap: _onAdPrivacy,
+                ),
 
-          const SizedBox(height: 24),
-        ],
-      ),
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  /// The consent-withdrawal entry point, with nothing behind it yet.
+  ///
+  /// **A documented no-op, not an oversight.** When the ads pass lands this
+  /// calls the UMP SDK's privacy-options form, which is the mechanism the EEA
+  /// and UK rules require for taking back consent already given. Until then
+  /// there is no SDK, no consent to withdraw, and nothing to show — so the
+  /// row is `enabled: false` and this never runs.
+  ///
+  /// It exists rather than the row simply having `onTap: null` so the
+  /// replacement is a one-line body change with the call site, the position
+  /// and the copy already reviewed. The row is the part that was expensive to
+  /// get right; the form behind it is the part the SDK provides.
+  ///
+  /// Deliberately does not touch `LoadingController`, show a banner, or log:
+  /// an unreachable handler that has side effects is worse than one that does
+  /// not, because the side effects are what someone later mistakes for it
+  /// working.
+  void _onAdPrivacy() {
+    // Intentionally empty. See the doc comment above before filling it in.
   }
 
   /// Opens the policy in the browser, not the built-in reader.
@@ -368,18 +461,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Not awaited — an import of fifty feeds is fifty favicon round trips,
       // and the banner should not wait behind them.
       unawaited(service.warmFavicons(result.addedFeeds));
-      _bannerKey.currentState?.show(l10n.opmlImportedBanner(
-        result.feedsImported,
-        result.foldersCreated,
-        result.skipped,
-      ));
+      // And again, with the most reachable version of it: re-importing a
+      // file you already imported skips every entry, so this reads
+      // "Feeds added: 0 - Folders created: 0 - Skipped: 12". The suite
+      // already covers that exact case as "re-importing the same file changes
+      // nothing", which is precisely when a tick is wrong.
+      final importedNothing =
+          result.feedsImported == 0 && result.foldersCreated == 0;
+      _bannerKey.currentState?.show(
+          l10n.opmlImportedBanner(
+            result.feedsImported,
+            result.foldersCreated,
+            result.skipped,
+          ),
+          kind: importedNothing
+              ? BannerKind.failure
+              : BannerKind.confirmation);
     } on OpmlParseException {
       // The file was not usable and nothing was written. One message for every
       // flavour of bad file: the distinction between "not XML", "not OPML" and
       // "unreadable" is not something the user can act on differently.
       if (mounted) {
-        _bannerKey.currentState
-            ?.show(AppLocalizations.of(context)!.opmlImportFailed);
+        _bannerKey.currentState?.show(
+            AppLocalizations.of(context)!.opmlImportFailed,
+            kind: BannerKind.failure);
       }
     } catch (e) {
       if (mounted) _bannerKey.currentState?.show(e.toString());
@@ -413,7 +518,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // An empty file is a worse outcome than being told there is nothing
         // to write: the user would hand it to another reader and find out
         // there.
-        _bannerKey.currentState?.show(l10n.opmlExportEmpty);
+        _bannerKey.currentState?.show(l10n.opmlExportEmpty, kind: BannerKind.failure);
         return;
       }
       // Same as the backup export: silence on a cancel, which is a deliberate
@@ -435,10 +540,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             l10n.opmlSubtitle,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 10),
@@ -475,7 +577,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             l10n.localBackupSubtitle,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: 10),

@@ -65,8 +65,6 @@ Future<void> _pump(WidgetTester tester,
       body: ArticleCard(
         article: _article(isRead: isRead),
         onTap: () {},
-        onMarkRead: () {},
-        onMarkUnread: () {},
         onShare: () {},
         onBookmark: () {},
       ),
@@ -80,11 +78,11 @@ Color? _thumbBase(WidgetTester tester) {
   final boxes = tester.widgetList<ColoredBox>(find.byType(ColoredBox));
   for (final b in boxes) {
     if (b.color ==
-            flashPaletteTheme(palette: 'orange', brightness: Brightness.dark)
+            flashQuietInkTheme(brightness: Brightness.dark)
                 .colorScheme
                 .surfaceContainerHighest ||
         b.color ==
-            flashPaletteTheme(palette: 'orange', brightness: Brightness.light)
+            flashQuietInkTheme(brightness: Brightness.light)
                 .colorScheme
                 .surfaceContainerHighest) {
       return b.color;
@@ -95,8 +93,8 @@ Color? _thumbBase(WidgetTester tester) {
 
 void main() {
   for (final (name, theme) in [
-    ('dark', flashPaletteTheme(palette: 'orange', brightness: Brightness.dark)),
-    ('light', flashPaletteTheme(palette: 'orange', brightness: Brightness.light)),
+    ('dark', flashQuietInkTheme(brightness: Brightness.dark)),
+    ('light', flashQuietInkTheme(brightness: Brightness.light)),
   ]) {
     group('$name theme', () {
       testWidgets('an undecoded thumbnail sits on the theme surface colour, '
@@ -159,7 +157,7 @@ void main() {
   // asserted directly instead, which is the stronger claim.
   testWidgets('an unread thumbnail is not desaturated and not dimmed',
       (tester) async {
-    await _pump(tester, isRead: false, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
+    await _pump(tester, isRead: false, theme: flashQuietInkTheme(brightness: Brightness.dark));
 
     for (final f in tester.widgetList<ColorFiltered>(
         find.byType(ColorFiltered))) {
@@ -179,10 +177,10 @@ void main() {
     // the image never being torn down and re-resolved. Animating by swapping
     // between two separately-filtered subtrees would reintroduce exactly
     // that. Element identity is the direct test of it.
-    await _pump(tester, isRead: false, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
+    await _pump(tester, isRead: false, theme: flashQuietInkTheme(brightness: Brightness.dark));
     final before = tester.element(find.byType(CachedNetworkImage));
 
-    await _pump(tester, isRead: true, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
+    await _pump(tester, isRead: true, theme: flashQuietInkTheme(brightness: Brightness.dark));
     await tester.pump(const Duration(milliseconds: 90)); // mid-fade
     final midway = tester.element(find.byType(CachedNetworkImage));
     await tester.pumpAndSettle();
@@ -196,7 +194,7 @@ void main() {
 
   testWidgets('legacy guard: the greyscale filter is still a matrix, never a '
       'backdrop-mixing blend mode', (tester) async {
-    await _pump(tester, isRead: true, theme: flashPaletteTheme(palette: 'orange', brightness: Brightness.dark));
+    await _pump(tester, isRead: true, theme: flashQuietInkTheme(brightness: Brightness.dark));
     await tester.pumpAndSettle();
 
     final filters = tester.widgetList<ColorFiltered>(find.byType(ColorFiltered));

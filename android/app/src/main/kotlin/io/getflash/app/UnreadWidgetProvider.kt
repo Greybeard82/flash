@@ -68,11 +68,21 @@ class UnreadWidgetProvider : HomeWidgetProvider() {
         const val KEY_COUNT = "unread_count"
 
         /**
-         * Above this the widget reads "99+". Same cutoff as `kMaxBadgeCount`,
-         * which the launcher badge already caps at — but this one can render
-         * the plus, because it is a TextView we draw rather than an int handed
-         * to the OS.
+         * Above this the widget reads "999+".
+         *
+         * **Deliberately NOT `kMaxBadgeCount`, which is 99.** That cap exists
+         * because a launcher badge is a small circle drawn by the OS over an
+         * icon, with no room for a third digit. This is a TextView we draw
+         * ourselves in a 1x1 cell, and three digits plus a plus fit " " so
+         * clamping here at 99 was borrowing a constraint from a surface that
+         * has nothing to do with this one, and telling a reader with 400
+         * unread the same thing it tells one with 100.
+         *
+         * The layout's `autoSizeTextType` is what makes the clamp work rather
+         * than merely truncate: without it "999+" at a fixed 28sp overflows
+         * 64dp of usable width and the TextView ellipsises, which is a worse
+         * answer than either number.
          */
-        const val MAX_SHOWN = 99
+        const val MAX_SHOWN = 999
     }
 }

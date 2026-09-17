@@ -82,6 +82,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get editFeed => 'Feed bearbeiten';
 
   @override
+  String get feedOptions => 'Feed-Optionen';
+
+  @override
   String get feedName => 'Feed-Name';
 
   @override
@@ -162,7 +165,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get restoreConfirmMessage =>
-      'Dadurch werden alle aktuellen Feeds, Kategorien und gesperrten Stichwörter durch die gespeicherte Sicherung ersetzt. Artikel werden beim nächsten Aktualisieren abgerufen.';
+      'Dadurch werden alle aktuellen Feeds, Kategorien, gesperrten Stichwörter und gespeicherten Artikel durch die gespeicherte Sicherung ersetzt. Stichwort-Benachrichtigungen sind nicht Teil einer Sicherung und bleiben unverändert. Artikel werden beim nächsten Aktualisieren abgerufen.';
 
   @override
   String get restore => 'Wiederherstellen';
@@ -178,24 +181,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get themeDark => 'Dunkel';
-
-  @override
-  String get colorPalette => 'Farbpalette';
-
-  @override
-  String get paletteGreen => 'Grün & Gold';
-
-  @override
-  String get paletteBlue => 'Blau & Terrakotta';
-
-  @override
-  String get paletteOrange => 'Orange & Waldgrün';
-
-  @override
-  String get paletteRed => 'Rot & Indigo';
-
-  @override
-  String get paletteTealOrange => 'Petrol & Orange';
 
   @override
   String get addKeyword => 'Stichwort hinzufügen';
@@ -324,6 +309,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get searchArticles => 'Artikel suchen…';
 
   @override
+  String get searchPrompt =>
+      'Gib ein Wort ein, um es in deinen Artikeln zu finden';
+
+  @override
   String noSearchResults(String query) {
     return 'Keine Artikel zu \"$query\" gefunden';
   }
@@ -339,10 +328,13 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get noBookmarks =>
-      'Noch nichts gespeichert.\nArtikel lang drücken, um ihn zu speichern.';
+      'Noch nichts gespeichert.\nTippe bei einem Artikel auf das Speichern-Symbol.';
 
   @override
   String get bookmark => 'Speichern';
+
+  @override
+  String get bookmarkRemoved => 'Aus Gespeichert entfernt';
 
   @override
   String get keywordAlerts => 'Stichwort-Benachrichtigungen';
@@ -499,9 +491,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Noch keine Treffer.\nArtikel, die deine Stichwörter enthalten, erscheinen hier.';
 
   @override
-  String get alertsFilterAll => 'Alle';
-
-  @override
   String get alertsManageKeywords => 'Stichwörter verwalten';
 
   @override
@@ -570,6 +559,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String alertNotificationSummary(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Stichwort-Benachrichtigungen',
+      one: '1 Stichwort-Benachrichtigung',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get keywordListSeparator => ', ';
 
   @override
@@ -580,6 +580,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get selectAnArticle => 'Wähle einen Artikel, um ihn hier zu lesen';
+
+  @override
+  String get articlesAppearHere => 'Geöffnete Artikel erscheinen hier';
 
   @override
   String get builtInViewer => 'Artikel im integrierten Viewer öffnen';
@@ -728,6 +731,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get opmlExportEmpty => 'Es gibt noch keine Feeds zum Exportieren.';
+
+  @override
+  String get adSponsored => 'Gesponsert';
 
   @override
   String get swapSides => 'Seiten tauschen';

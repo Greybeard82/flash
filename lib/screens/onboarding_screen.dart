@@ -148,7 +148,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         l10n.onboardingTagline,
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurfaceVariant,
                           height: 1.5,
                         ),
                       ),
@@ -164,7 +164,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       Text(
                         l10n.onboardingStarterSubtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          color: colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -182,16 +182,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
               FilledButton(
                 onPressed: (count == 0 || _seeding) ? null : _startReading,
+                // Radius comes from `filledButtonTheme` now. The local
+                // r14 was the card radius applied to a button, and it made
+                // the one screen a new user sees first the only one whose
+                // primary action is a different shape from every other
+                // primary action in the app. The full-width 52dp minimum is
+                // kept: that is this button being a CTA, not a drift.
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
                 ),
                 child: Text(
                   l10n.startReadingButton,
-                  style:
-                      const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
               const SizedBox(height: 4),

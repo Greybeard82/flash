@@ -82,6 +82,33 @@ The four main screens are kept alive in an `IndexedStack`, so they learn about c
 | `AlertsChangedNotifier` | Alert matches added, read or removed. |
 | `SettingsNotifier` | A setting changed elsewhere. |
 
+### 4.4 The renderer
+
+**Impeller, the Flutter default. Done 2026-09-15 in 0.9.7.**
+
+Flash carried `io.flutter.embedding.android.EnableImpeller = false` from
+`3d5e449`, a six-bullet omnibus commit that does not mention it, with no
+comment beside it and no note anywhere in the repo. **Nobody recorded why**,
+and the flag is deprecated upstream: Flutter logs `[Action Required]` on every
+launch and is removing it, so the pin was going to lapse on somebody else's
+schedule, in a build with no related change, with whatever bug prompted it
+returning with nothing to connect it to.
+
+Verified before removal, on the Lenovo Tab M11: the Impeller Vulkan backend,
+no errors, no visual difference **including the WebView inside the reader**,
+and the suite unchanged. It also fixed a rendering failure Skia caused on an
+emulator. Re-verified on all three devices when the opt-out actually came out.
+
+**Why now rather than after launch:** 25 testers get two weeks on it before
+production, which is exactly the exposure a renderer change wants and exactly
+the exposure it would never get if it were deferred. Once the opt-out was
+known to be undocumented and deprecated, staying on it was the unusual choice.
+
+The benefit to watch for is animation smoothness on first run, which is what
+Impeller exists for: shader compilation happens ahead of time rather than as
+a jank on the first play of each effect. The read fade, the radial menu, the
+banner slide and the summary sheet are the four places that shows.
+
 ---
 
 ## 5. Navigation and layout
@@ -477,7 +504,7 @@ iOS; accounts and sync across devices; in-app language choice; per-feed refresh 
 ## 12. Decided, not built
 
 - **Monetisation.** A free tier with a banner ad while reading and a daily cap on AI summaries; a one-time unlock of about €4 removes both. No subscription. Premium limits lock gracefully rather than blocking the app. Anyone who installs before the paid version keeps everything permanently (promised on the website). Google Play Billing is not integrated yet.
-- **Portrait tablets.** Tablets are landscape-locked for now. Targeting API 37 removes the ability to lock orientation on large screens, so portrait tablet layouts must be supported before the app moves to API 37.
+- **Portrait tablets — dated, not open-ended.** Tablets are landscape-locked for now. `targetSdk` is **pinned at 36** in `android/app/build.gradle.kts` rather than inherited from the Flutter SDK, so the lock cannot be lost in a toolchain upgrade. **API 37 lands ~August 2027 and makes adaptive UI mandatory on large screens**, at which point portrait tablet stops being optional: tablets and foldables can no longer opt out of resizability, and `PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY` stops holding the lock. Android 17 shipped 16 June 2026; Google Play will require new apps and updates to target API 37 from August 2027, so a portrait tablet layout has to exist before the app can ship an update after that date. Recorded 2026-09-14.
 - **Phone split view** (being specified). A mode on phones that puts the reading pane on top and the article list below it, reusing the tablet reading pane. Open questions: minimum screen height, default split, Clean mode as default, and its interaction with mark-read-on-scroll.
 - **Google TV redesign** (mocked up). D-pad grid, a focused summary view, cloud summaries (no Nano on TV).
 

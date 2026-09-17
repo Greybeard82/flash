@@ -61,9 +61,24 @@ class AlertEntry {
   /// keys off (feedId, guid) and looks the articles row up only when it needs
   /// one, tolerating its absence. `fetchedAt` carries [matchedAt] because the
   /// match is the only fetch-shaped timestamp the snapshot has.
-  Article toArticle() {
+  /// [isSaved] is a parameter rather than a field, and that is the fix for a
+  /// bug that destroyed bookmarks.
+  ///
+  /// It used to default to `false` and nothing ever passed otherwise, so an
+  /// article the user had saved showed an **unsaved** bookmark in the Alerts
+  /// tab. Tapping it looked like "save this" and ran a toggle that read the
+  /// real row, found it saved, and unsaved it. The bookmark was gone, the user
+  /// had asked for the opposite, and nothing said so.
+  ///
+  /// A snapshot cannot know this on its own — saved state lives on the
+  /// `articles` row, which is exactly what a snapshot does not have. So the
+  /// caller resolves it, once for the whole visible set, and passes it in. The
+  /// invariant that matters: **whatever draws the glyph and whatever performs
+  /// the write must read the same source**, and that source is the real row.
+  Article toArticle({bool isSaved = false}) {
     return Article(
       id: null,
+      isSaved: isSaved,
       feedId: feedId,
       guid: guid,
       title: title,
