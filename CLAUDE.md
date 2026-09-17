@@ -37,6 +37,24 @@ the check afterwards was shallow enough to report success — "Wi-Fi is
 enabled" proved the radio had power and nothing else — so the damage was
 found by him, not by me.
 
+## No local builder on Flash. Not until David lifts it.
+
+The global `~/.claude/CLAUDE.md` has a "Local builder" section that hands
+small, testable changes to the local Qwen model through `/delegate` and the
+llama.cpp server at 127.0.0.1:8080. **It does not apply to this repository.**
+
+Do not run `/delegate`, do not call `delegate.py`, do not send any file,
+diff or task from this repo to the local server. Do every change yourself.
+If a task looks like a good fit for delegation, do it anyway and do not ask.
+
+This holds until David lifts it explicitly in a message. A launch date
+passing does not lift it.
+
+Why: Flash's regressions have come from rules that interact (read state,
+retirement, scroll offset, the orientation lock). Those diffs look correct
+and fail on a device. A model without this project's history is the most
+likely author of the next one, and a passing test here does not rule it out.
+
 ## Commands that are never to be run against any device
 
 Named because each one has already caused damage. The list is illustrative,

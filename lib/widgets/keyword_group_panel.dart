@@ -395,6 +395,11 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                 AnimatedRotation(
                   turns: isExpanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 200),
+                  // Explicit, because ImplicitlyAnimatedWidget defaults to
+                  // Curves.linear: without it the chevron turns at a steady
+                  // rate while the section below eases, so the two agree only
+                  // at the first and last frame.
+                  curve: Curves.easeInOut,
                   child: Icon(Icons.expand_more_rounded,
                       size: 20,
                       color: theme.colorScheme.onSurfaceVariant),
@@ -403,14 +408,18 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
             ),
           ),
         ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          child: isExpanded
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (int i = 0; i < articles.length; i++) ...[
+        // Was an `AnimatedSize` with the same two faults reported on the
+        // Categories screen on 17 September: centre-aligned, so it opened
+        // outward from the middle, and handed a `SizedBox.shrink()` the
+        // moment `isExpanded` went false, so a collapse had nothing left to
+        // animate. See [_Collapsible].
+        _Collapsible(
+          key: ValueKey(entry.id),
+          expanded: isExpanded,
+          builder: () => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (int i = 0; i < articles.length; i++) ...[
                       if (i > 0)
                         const Divider(height: 1, indent: 16, endIndent: 16),
                       ListTile(
@@ -439,10 +448,9 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
                             : null,
                         onTap: () => _openArticle(articles[i]),
                       ),
-                    ],
-                  ],
-                )
-              : const SizedBox.shrink(),
+              ],
+            ],
+          ),
         ),
       ],
     );
@@ -497,6 +505,100 @@ class _KeywordGroupPanelState extends State<KeywordGroupPanel> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A vertical expand/collapse that animates in **both** directions and takes
+/// its child back out of the tree once it is closed.
+///
+/// `AnimatedSize` cannot do the second of those. It animates between the sizes
+/// of whatever child it is handed, so a caller that drops the child on the
+/// toggling frame leaves it shrinking a box that is already empty: the content
+/// disappears at once and only whitespace closes behind it. It also aligns on
+/// `Alignment.center`, so growing from a zero-WIDTH `SizedBox.shrink()` opens
+/// the content outward from the middle as well as downward.
+///
+/// Both faults were reported on the Categories screen on 17 September 2026 and
+/// this panel had the identical pair. `_FolderSectionState` in
+/// `feeds_screen.dart` fixes them inline because it already owns an
+/// `AnimationController` for its chevron and the two must share one. Here a
+/// single state object drives N keyword rows, so the controller belongs per
+/// row — which is this widget.
+class _Collapsible extends StatefulWidget {
+  final bool expanded;
+
+  /// A builder, not a `Widget`, so a closed row does not pay to describe rows
+  /// it is not showing. The `AnimatedSize` this replaced got that for free
+  /// from the ternary in its caller; taking the decision in here would
+  /// otherwise have quietly given it up.
+  final Widget Function() builder;
+
+  const _Collapsible({
+    super.key,
+    required this.expanded,
+    required this.builder,
+  });
+
+  @override
+  State<_Collapsible> createState() => _CollapsibleState();
+}
+
+class _CollapsibleState extends State<_Collapsible>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final CurvedAnimation _reveal;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      // Matches the AnimatedRotation on the row's chevron, so the turn and
+      // the unroll start and stop on the same frame.
+      duration: const Duration(milliseconds: 200),
+      value: widget.expanded ? 1.0 : 0.0,
+    );
+    _reveal = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _controller.addStatusListener(_onStatus);
+  }
+
+  @override
+  void didUpdateWidget(_Collapsible oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.expanded == oldWidget.expanded) return;
+    if (widget.expanded) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeStatusListener(_onStatus);
+    _reveal.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  /// The one rebuild that unmounts the child, fired when the collapse ends
+  /// rather than when it starts.
+  void _onStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed && mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Held until the controller is fully dismissed, so the collapse has
+    // something to show; dropped exactly then, because a zero-height
+    // SizeTransition still lays its child out.
+    final mounted =
+        widget.expanded || _controller.status != AnimationStatus.dismissed;
+    return SizeTransition(
+      sizeFactor: _reveal,
+      axisAlignment: -1.0,
+      child: mounted ? widget.builder() : const SizedBox.shrink(),
     );
   }
 }

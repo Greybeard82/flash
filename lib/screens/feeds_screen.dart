@@ -559,6 +559,14 @@ class _FolderSectionState extends State<_FolderSection>
   bool _expanded = false;
   late final AnimationController _chevronController;
 
+  /// One eased animation for the chevron **and** the rows.
+  ///
+  /// They used to be two: the chevron ran 200ms off this controller while the
+  /// rows ran 220ms off an `AnimatedSize`. Nothing enforced the match and
+  /// nothing could — two durations that disagree by 20ms land apart, and the
+  /// chevron finished turning while the section was still moving.
+  late final CurvedAnimation _reveal;
+
   @override
   void initState() {
     super.initState();
@@ -567,13 +575,42 @@ class _FolderSectionState extends State<_FolderSection>
       duration: const Duration(milliseconds: 200),
       value: 0.0, // starts collapsed, matching _expanded
     );
+    _reveal = CurvedAnimation(
+      parent: _chevronController,
+      curve: Curves.easeInOut,
+    );
+    _chevronController.addStatusListener(_onRevealStatus);
   }
 
   @override
   void dispose() {
+    _chevronController.removeStatusListener(_onRevealStatus);
+    _reveal.dispose();
     _chevronController.dispose();
     super.dispose();
   }
+
+  /// The one rebuild that takes the rows back out of the tree, fired when the
+  /// collapse actually finishes rather than when it starts. See [_rowsMounted]
+  /// for why those are not the same frame.
+  void _onRevealStatus(AnimationStatus status) {
+    if (status == AnimationStatus.dismissed && mounted) setState(() {});
+  }
+
+  /// Whether the feed rows belong in the tree this frame.
+  ///
+  /// **Deliberately not just [_expanded].** That was the second of the two
+  /// faults reported on 17 September: on collapse the flag flipped and the
+  /// rows left the tree in the same frame, so the box shrinking behind them
+  /// was already empty. The whitespace closed smoothly and the rows
+  /// themselves simply went out, which reads as no animation at all.
+  ///
+  /// Holding them until the controller is fully `dismissed` gives the
+  /// collapse something to show. Dropping them exactly then is what stops a
+  /// screen of closed categories from carrying every row it is not showing —
+  /// a zero-height [SizeTransition] still lays its child out.
+  bool get _rowsMounted =>
+      _expanded || _chevronController.status != AnimationStatus.dismissed;
 
   void _toggle() {
     setState(() => _expanded = !_expanded);
@@ -664,8 +701,10 @@ class _FolderSectionState extends State<_FolderSection>
                           size: 18, color: theme.colorScheme.onSurfaceVariant),
                     ),
                     RotationTransition(
-                      turns: Tween(begin: -0.25, end: 0.0)
-                          .animate(_chevronController),
+                      // Driven by the same eased animation as the section
+                      // below, not by the bare controller, so the turn and
+                      // the unroll move at one rate and stop on one frame.
+                      turns: Tween(begin: -0.25, end: 0.0).animate(_reveal),
                       // Neutral, not teal at 70%. Alpha on `primary` is the
                       // same faked ink the guard bans on `onSurface`, one role
                       // over and out of the pattern's sight — and it made the
@@ -685,11 +724,25 @@ class _FolderSectionState extends State<_FolderSection>
             );
           },
         ),
-        // Animated expand/collapse
-        AnimatedSize(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeInOut,
-          child: _expanded
+        // Animated expand/collapse.
+        //
+        // `SizeTransition`, not `AnimatedSize`, and the difference is the
+        // whole fix. `AnimatedSize` animates between the sizes of whatever
+        // child it is handed, which means it can only animate a collapse if
+        // the outgoing child is still there — and it aligns on
+        // `Alignment.center` by default, so growing from a zero-WIDTH
+        // `SizedBox.shrink()` opened the rows outward from the middle as well
+        // as downward.
+        //
+        // `SizeTransition` scales one axis against an animation we already
+        // own. `axisAlignment: -1.0` pins the top edge, so the section unrolls
+        // from under the header and the rows never move; width comes from the
+        // incoming constraints, so it is full width on the first frame. It
+        // clips internally, so no `ClipRect` is needed around it.
+        SizeTransition(
+          sizeFactor: _reveal,
+          axisAlignment: -1.0,
+          child: _rowsMounted
               ? Column(
                   children: [
                     _FeedDropSlot(
